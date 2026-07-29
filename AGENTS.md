@@ -85,3 +85,27 @@ uv run --no-editable mypy shared categories authoring/*.py
 
 When a financial convention is unclear, stop and ask. A plausible guess is worse than an explicit
 blocker in this project.
+
+## Delivery policy
+
+This folder is the independent `maximus-POL/DefinedQuant-components` repository. After a
+completed task changes tracked source, contracts, evidence, tests, documentation, dependencies,
+or CI, publish the coherent change automatically unless the user explicitly requested local-only
+work, no commit, or no PR.
+
+1. Inspect `git status` and the complete diff. Do not absorb unrelated or pre-existing manual
+   changes.
+2. Run the relevant checks above; component, schema, shared-runtime, and authoring changes require
+   the catalog checker and the proportionate Python test/lint/type gates.
+3. Create or reuse an `agent/<short-task-name>` branch. Never commit directly to `main`.
+4. Stage explicit intended paths, commit the coherent change, push the branch, and open a draft
+   PR against `main`.
+5. Update an existing PR for the same task instead of opening a duplicate.
+6. If the private website must change too, publish that work as a separate PR in
+   `maximus-POL/DefinedQuant-website` and cross-reference both PRs.
+7. Never merge, enable auto-merge, publish a release, or delete a branch without a separate user
+   request.
+
+Read-only work, planning, generated catalogs, caches, failed validation, and unfinished
+experiments do not create PRs. If GitHub authentication or networking is unavailable, keep the
+local change and report the exact blocker.
