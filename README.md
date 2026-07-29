@@ -1,0 +1,140 @@
+# Defined Quant components
+
+Defined Quant is a public catalog of deterministic, inspectable financial calculations for
+humans and agents. Each component keeps its code, contract, evidence, tests, and explanation
+together in one small folder.
+
+> **Experimental Technical Preview**
+>
+> Components are reference implementations, not certified models, production prices, or
+> investment advice. Engineering checks, numerical evidence, provenance, and domain review are
+> reported separately.
+
+## Find a component
+
+Start in [`categories/`](categories/). Categories are ordinary folders with a `README.md` that
+explains their scope. The first working component is:
+
+[`categories/market_data/simple_return/`](categories/market_data/simple_return/)
+
+```text
+categories/
+└── market_data/
+    ├── README.md
+    └── simple_return/
+        ├── README.md
+        ├── component.py
+        ├── contract.yaml
+        ├── evidence.yaml
+        └── test_component.py
+```
+
+There is no generated folder maze and no profile-specific template tree. A component always has
+the same five visible files.
+
+## Repository map
+
+```text
+components/
+├── categories/             browseable financial topics and components
+├── shared/                 reusable types, validation, catalog loading, and charts
+├── authoring/              one template, two schemas, and explicit Python tools
+├── .agents/                optional repository-wide agent integration
+├── .github/                contribution and CI configuration
+├── pyproject.toml
+└── README.md
+```
+
+`categories` and `shared` are source folders. Packaging projects them into the installed Python
+namespace `defined_quant`, so the product name remains stable without forcing contributors to
+browse through a `src/defined_quant/` wrapper.
+
+`.agents/` is integration metadata for agent hosts such as Codex. It is not a financial category
+and it does not implement a calculation. Its single catalog-wide skill discovers, inspects, and
+runs any component through the same canonical contracts used by Python callers. Component-specific
+formulas and guidance remain beside the component under `categories/`; the integration layer must
+not hard-code one component.
+
+## Run the working example
+
+From this folder:
+
+```bash
+uv sync
+uv run python - <<'PY'
+from defined_quant.market_data.simple_return.component import simple_return
+
+result = simple_return(
+    prices=[100, 103, 101, 105],
+    price_kind="adjusted",
+    timestamps=[
+        "2026-07-20T00:00:00Z",
+        "2026-07-21T00:00:00Z",
+        "2026-07-22T00:00:00Z",
+        "2026-07-23T00:00:00Z",
+    ],
+)
+print(result.returns)
+PY
+```
+
+The result is a typed object, not a bare number. It includes units, assumptions, warnings,
+provenance, and a renderer-neutral visualization specification. The shared chart renderer can
+turn that specification into deterministic SVG without adding a plotting-library dependency.
+
+## Check the catalog
+
+The project intentionally exposes plain commands rather than a fictional `dq` CLI:
+
+```bash
+uv run pytest
+uv run python authoring/check_component.py
+uv run python authoring/search_catalog.py "calculate returns from prices"
+uv run ruff check shared categories authoring
+uv run --no-editable mypy shared categories authoring/*.py
+```
+
+Normal development uses an editable install. The type-check command asks `uv` to check the same
+merged package layout users receive in the wheel, because static type checkers do not execute the
+small runtime path extension used by the readable two-source layout.
+
+To add a component:
+
+```bash
+uv run python authoring/create_category.py --id performance --title "Performance"
+uv run python authoring/create_component.py \
+  --category performance \
+  --group risk_adjusted_performance \
+  --slug sortino_ratio \
+  --profile statistic
+```
+
+The generator copies the one canonical folder in
+[`authoring/component-template/`](authoring/component-template/). See
+[`authoring/README.md`](authoring/README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Website boundary
+
+The website is a separate private project. Components CI exports deterministic static catalog
+JSON; the website consumes a pinned copy of that artifact and never imports or executes component
+Python. Adding a component therefore requires no website code change.
+
+## Trust model
+
+- Pydantic `Inputs` and `Output` in `component.py` are canonical for types, units, and defaults.
+- `contract.yaml` contains identity, scope, declarative guidance, and display metadata, but never
+  duplicates the Pydantic interface.
+- Required discovery aliases and stable intent/input/output concepts make the same catalog
+  searchable by humans, developer tools, websites, and autonomous agents without loading every
+  calculation.
+- `evidence.yaml` names executable evidence and binds it to the exact behavior hash.
+- Constraints use a closed operator vocabulary; no contract content is evaluated as Python.
+- Anything that changes the answer must be supplied or declared explicitly.
+
+See [`VALIDATION.md`](VALIDATION.md) for the exact meaning of each trust claim.
+
+## Licence
+
+Code is Apache-2.0. Component explanations, documentation, and visuals are CC BY 4.0. The Defined
+Quant and Defined Flow names and visual identity are not granted by those licences; see
+[`TRADEMARKS.md`](TRADEMARKS.md).

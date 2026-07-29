@@ -1,0 +1,33 @@
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+Copyright (c) 2026 Maksymilian Tylek
+
+This licence applies to the DOCUMENTATION AND EXPLANATORY CONTENT of Defined Quant:
+
+  - every component and category README.md
+  - explanatory references and documentation
+  - generated explanatory visuals distributed as content
+  - the repository documentation (README.md, ARCHITECTURE.md, VALIDATION.md,
+    CONTRIBUTING.md, SECURITY.md, TRADEMARKS.md, AGENTS.md)
+  - catalog editorial copy exported for the separate website
+
+It does NOT apply to:
+
+  - source code, which is licensed Apache-2.0 (see LICENSE)
+  - the Defined Quant and Defined Flow names, logos and visual identity,
+    which are reserved (see TRADEMARKS.md)
+
+You are free to share and adapt this material for any purpose, including
+commercially, provided you give appropriate credit, link to the licence, and
+indicate if changes were made.
+
+Full licence text: https://creativecommons.org/licenses/by/4.0/legalcode
+Human-readable summary: https://creativecommons.org/licenses/by/4.0/
+
+Attribution format:
+
+  "Defined Quant" by Maksymilian Tylek, licensed under CC BY 4.0.
+  https://github.com/maximus-POL/DefinedQuant
+
+Where content is adapted from a cited source, that source's terms apply to the
+adapted portion and are recorded in the component's references.

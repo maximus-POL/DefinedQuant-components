@@ -1,0 +1,324 @@
+{
+  "schema_version": 0,
+  "component_id": "dq.market_data.simple_return",
+  "validated_subject_hash": "fd761abf82599273671928ac925fea39753822fe754bf17879c20a0e39d8f2c2",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "test_id": "test_evidence_ka_001",
+      "description": "Two hand-derived simple returns from three prices.",
+      "inputs": {
+        "prices": [
+          100.0,
+          105.0,
+          102.9
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected": {
+        "returns": [
+          0.05,
+          -0.02
+        ],
+        "return_kind": "simple"
+      },
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "Compounding every simple return reproduces the terminal-to-initial price ratio.",
+      "kind": "cumulative_price_ratio",
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      }
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "Multiplying every price by the same positive scale leaves returns unchanged.",
+      "kind": "scale_invariance",
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      }
+    },
+    {
+      "id": "inv_003",
+      "test_id": "test_evidence_inv_003",
+      "description": "A constant positive price series produces exact zero returns.",
+      "kind": "constant_series"
+    },
+    {
+      "id": "inv_004",
+      "test_id": "test_evidence_inv_004",
+      "description": "Visualization values, units, labels, assumptions, and warnings match the canonical output.",
+      "kind": "visualization_fidelity"
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "test_id": "test_evidence_bc_001",
+      "description": "Two prices produce exactly one return.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected": {
+        "returns": [
+          0.01
+        ]
+      },
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      }
+    },
+    {
+      "id": "bc_002",
+      "test_id": "test_evidence_bc_002",
+      "description": "Each return timestamp is the end of its price interval.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0,
+          102.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-24T00:00:00Z",
+          "2026-07-27T00:00:00Z",
+          "2026-07-28T00:00:00Z"
+        ]
+      },
+      "expected": {
+        "return_timestamp_indices": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "bc_003",
+      "test_id": "test_evidence_bc_003",
+      "description": "Price and timestamp length mismatch is blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0,
+          102.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-24T00:00:00Z",
+          "2026-07-27T00:00:00Z"
+        ]
+      },
+      "expected_error": "timestamp_length_mismatch"
+    },
+    {
+      "id": "bc_004",
+      "test_id": "test_evidence_bc_004",
+      "description": "Duplicate timestamps are blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-24T00:00:00Z",
+          "2026-07-24T00:00:00Z"
+        ]
+      },
+      "expected_error": "duplicate_timestamps"
+    },
+    {
+      "id": "bc_005",
+      "test_id": "test_evidence_bc_005",
+      "description": "Reverse-ordered timestamps are refused rather than sorted.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-28T00:00:00Z",
+          "2026-07-27T00:00:00Z"
+        ]
+      },
+      "expected_error": "non_increasing_timestamps"
+    },
+    {
+      "id": "bc_006",
+      "test_id": "test_evidence_bc_006",
+      "description": "Missing timestamps preserve order but visibly mark chronology and gaps unassessed.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_warning": "ordering_unverified"
+    },
+    {
+      "id": "bc_007",
+      "test_id": "test_evidence_bc_007",
+      "description": "A frequency declaration without timestamps is blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted",
+        "declared_frequency": "daily"
+      },
+      "expected_error": "frequency_without_timestamps"
+    },
+    {
+      "id": "bc_008",
+      "test_id": "test_evidence_bc_008",
+      "description": "A frequency label is retained but never mistaken for a market-calendar gap policy.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-24T00:00:00Z",
+          "2026-07-27T00:00:00Z"
+        ],
+        "declared_frequency": "daily"
+      },
+      "expected_warning": "gap_check_not_assessed"
+    },
+    {
+      "id": "bc_009",
+      "test_id": "test_evidence_bc_009",
+      "description": "Fewer than two prices is blocking.",
+      "inputs": {
+        "prices": [
+          100.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_error": "insufficient_prices"
+    },
+    {
+      "id": "bc_010",
+      "test_id": "test_evidence_bc_010",
+      "description": "Zero and negative prices are blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          0.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_error": "non_positive_prices"
+    },
+    {
+      "id": "bc_011",
+      "test_id": "test_evidence_bc_011",
+      "description": "NaN and infinite prices are blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          "non-finite"
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_error": "non_finite_prices"
+    },
+    {
+      "id": "bc_012",
+      "test_id": "test_evidence_bc_012",
+      "description": "Unadjusted prices are valid but carry a total-return interpretation warning.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "unadjusted"
+      },
+      "expected_warning": "unadjusted_price_interpretation"
+    }
+  ],
+  "cross_checks": [],
+  "agent_cases": [
+    {
+      "id": "complete_adjusted_request",
+      "prompt": "Calculate and chart simple returns for adjusted prices 100, 105, and 102.9 in that order.",
+      "expected_action": "compute",
+      "expected_fields": [
+        "returns",
+        "return_kind",
+        "price_kind",
+        "warnings",
+        "visualizations",
+        "component_id",
+        "version",
+        "subject_hash"
+      ],
+      "rationale": "The prices, order, and interpretation-bearing convention are explicit."
+    },
+    {
+      "id": "missing_price_kind",
+      "prompt": "Calculate simple returns for prices 100 and 105.",
+      "expected_action": "ask",
+      "expected_fields": [],
+      "rationale": "Adjusted versus unadjusted semantics must never be inferred."
+    },
+    {
+      "id": "reverse_ordered_timestamps",
+      "prompt": "Calculate returns for 100 then 105 at timestamps 2026-07-28 then 2026-07-27 using adjusted prices.",
+      "expected_action": "refuse",
+      "expected_fields": [],
+      "rationale": "The component refuses reversed chronology and never silently sorts observations."
+    },
+    {
+      "id": "total_return_construction",
+      "prompt": "Use unadjusted closes to construct dividend-reinvested total returns.",
+      "expected_action": "refuse",
+      "expected_fields": [],
+      "rationale": "Dividend reinvestment and total-return construction are outside this component's scope."
+    },
+    {
+      "id": "no_timestamps",
+      "prompt": "Use adjusted prices 100 and 101 in the supplied order; no timestamps are available.",
+      "expected_action": "compute",
+      "expected_fields": [
+        "returns",
+        "ordering_status",
+        "gap_check",
+        "warnings"
+      ],
+      "rationale": "The arithmetic remains meaningful, but unverified ordering and unassessed gaps must be visible."
+    },
+    {
+      "id": "frequency_without_calendar",
+      "prompt": "Chart daily adjusted-price returns and assume all missing dates are bad data.",
+      "expected_action": "ask",
+      "expected_fields": [],
+      "rationale": "A frequency label cannot substitute for an explicit exchange calendar and gap policy."
+    }
+  ]
+}

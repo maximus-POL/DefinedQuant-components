@@ -1,0 +1,58 @@
+[project]
+name = "defined-quant"
+version = "0.1.0"
+description = "Deterministic, inspectable financial components for humans and agents."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {file = "LICENSE"}
+dependencies = ["pydantic>=2.7,<3"]
+
+[dependency-groups]
+dev = [
+  "hypothesis",
+  "jsonschema",
+  "mypy",
+  "pytest",
+  "pyyaml",
+  "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["shared", "categories"]
+exclude = [
+  "**/__pycache__/**",
+  "**/*.pyc",
+  "**/*.pyo",
+  "shared/__init__.py",
+  "shared/py.typed",
+  "shared/README.md",
+]
+dev-mode-dirs = ["shared", "categories"]
+
+[tool.hatch.build.targets.wheel.sources]
+"shared" = "defined_quant"
+"categories" = "defined_quant"
+
+[tool.hatch.build.targets.wheel.force-include]
+"shared/__init__.py" = "defined_quant/__init__.py"
+"shared/py.typed" = "defined_quant/py.typed"
+
+[tool.pytest.ini_options]
+testpaths = ["categories", "authoring/tests", ".agents/skills"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

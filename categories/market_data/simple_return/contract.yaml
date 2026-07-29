@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "id": "dq.market_data.simple_return",
+  "slug": "simple_return",
+  "title": "Simple Return",
+  "category": "market_data",
+  "group": "return_transformations",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {
+    "profile": "time_series",
+    "version": 1
+  },
+  "callable": "defined_quant.market_data.simple_return.component:simple_return",
+  "summary": "Computes decimal simple returns between successive caller-supplied price observations.",
+  "discovery": {
+    "aliases": [
+      "arithmetic return",
+      "discrete return",
+      "period price return",
+      "simple price return"
+    ],
+    "intents": [
+      "calculate_simple_returns",
+      "measure_period_price_change",
+      "transform_prices_to_returns"
+    ],
+    "input_concepts": [
+      "observation_frequency",
+      "observation_timestamps",
+      "price_adjustment_kind",
+      "price_series"
+    ],
+    "output_concepts": [
+      "calculation_diagnostics",
+      "return_timestamps",
+      "simple_return_series",
+      "visualization_specifications"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Maksymilian Tylek",
+      "github": "makstylek"
+    }
+  ],
+  "tags": ["market_data", "returns", "time_series", "visualization"],
+  "assumptions": [
+    "Successive observations refer to the same instrument and price unit.",
+    "Caller order is meaningful when timestamps are absent.",
+    "Adjusted-price semantics are defined by the upstream data provider and accepted as supplied."
+  ],
+  "limitations": [
+    "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
+    "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
+    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in v0.1."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "foundational",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-07-28",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "price_convention_change",
+    "gap_policy_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller needs simple decimal returns between successive explicit price observations.",
+      "The caller can state whether the supplied prices are adjusted or unadjusted.",
+      "Caller order should be preserved exactly rather than repaired or inferred."
+    ],
+    "do_not_use_when": [
+      "The adjusted or unadjusted price convention is unknown.",
+      "The request requires log returns, total-return construction, annualization, or risk estimation.",
+      "Observations need sorting, reversal, imputation, currency conversion, or corporate-action adjustment."
+    ],
+    "unsupported_scope": [
+      "Fetching, cleaning, validating, sorting, reversing, or imputing market observations.",
+      "Dividend reinvestment or total-return construction.",
+      "Currency conversion or corporate-action adjustment.",
+      "Exchange-calendar, holiday, or trading-session inference.",
+      "Calendar-aware gap classification without an explicit future gap-policy contract."
+    ],
+    "required_questions": [
+      {
+        "id": "price_kind",
+        "ask": "Are these adjusted or unadjusted prices?",
+        "why": "The convention changes the economic interpretation even when the arithmetic is identical.",
+        "resolves_to": "price_kind",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "timestamps",
+        "ask": "Are strictly increasing timestamps available for these observations?",
+        "why": "Without timestamps the component preserves order but cannot verify chronology."
+      },
+      {
+        "id": "upstream_adjustment_policy",
+        "ask": "What adjustment methodology did the data provider apply?",
+        "why": "The adjusted label is provider-defined and is not audited by this component."
+      },
+      {
+        "id": "gap_policy",
+        "ask": "Is there an explicit market calendar and gap policy upstream?",
+        "why": "A frequency label alone cannot identify weekends, holidays, or missing sessions."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "insufficient_prices",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "prices", "measure": "count"},
+          "op": "lt",
+          "right": {"value": 2}
+        },
+        "message": "insufficient_prices: At least two ordered prices are required."
+      },
+      {
+        "id": "non_finite_prices",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "prices", "measure": "all_finite"},
+          "op": "eq",
+          "right": {"value": false}
+        },
+        "message": "non_finite_prices: Every price must be finite."
+      },
+      {
+        "id": "non_positive_prices",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "prices", "measure": "count"},
+              "op": "gt",
+              "right": {"value": 0}
+            },
+            {
+              "left": {"field": "prices", "measure": "min"},
+              "op": "le",
+              "right": {"value": 0}
+            }
+          ]
+        },
+        "message": "non_positive_prices: Prices must be strictly positive."
+      },
+      {
+        "id": "timestamp_length_mismatch",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "timestamps"},
+              "op": "ne",
+              "right": {"value": null}
+            },
+            {
+              "left": {"field": "timestamps", "measure": "count"},
+              "op": "ne",
+              "right": {"field": "prices", "measure": "count"}
+            }
+          ]
+        },
+        "message": "timestamp_length_mismatch: Timestamps and prices must align one-to-one."
+      },
+      {
+        "id": "duplicate_timestamps",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "timestamps"},
+              "op": "ne",
+              "right": {"value": null}
+            },
+            {
+              "left": {"field": "timestamps", "measure": "has_duplicates"},
+              "op": "eq",
+              "right": {"value": true}
+            }
+          ]
+        },
+        "message": "duplicate_timestamps: Duplicate timestamps are not accepted."
+      },
+      {
+        "id": "non_increasing_timestamps",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "timestamps"},
+              "op": "ne",
+              "right": {"value": null}
+            },
+            {
+              "left": {"field": "timestamps", "measure": "has_duplicates"},
+              "op": "eq",
+              "right": {"value": false}
+            },
+            {
+              "left": {"field": "timestamps", "measure": "is_strictly_increasing"},
+              "op": "eq",
+              "right": {"value": false}
+            }
+          ]
+        },
+        "message": "non_increasing_timestamps: Timestamps must be strictly increasing; observations are never silently reversed or sorted."
+      },
+      {
+        "id": "frequency_without_timestamps",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "declared_frequency"},
+              "op": "ne",
+              "right": {"value": null}
+            },
+            {
+              "left": {"field": "timestamps"},
+              "op": "eq",
+              "right": {"value": null}
+            }
+          ]
+        },
+        "message": "frequency_without_timestamps: A declared frequency is meaningful only with aligned timestamps."
+      },
+      {
+        "id": "ordering_unverified",
+        "severity": "warning",
+        "when": {
+          "left": {"field": "timestamps"},
+          "op": "eq",
+          "right": {"value": null}
+        },
+        "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
+      },
+      {
+        "id": "gap_check_not_assessed",
+        "severity": "warning",
+        "when": {
+          "left": {"value": true},
+          "op": "eq",
+          "right": {"value": true}
+        },
+        "message": "gap_check_not_assessed: No calendar-aware gap policy was supplied, so gaps were not assessed."
+      },
+      {
+        "id": "unadjusted_price_interpretation",
+        "severity": "warning",
+        "when": {
+          "left": {"field": "price_kind"},
+          "op": "eq",
+          "right": {"value": "unadjusted"}
+        },
+        "message": "unadjusted_price_interpretation: Unadjusted price changes exclude reinvested distributions and are not total returns."
+      }
+    ],
+    "interpretation": "Report decimal simple returns between successive supplied observations, the adjusted or unadjusted price convention, ordering status, unassessed gap status, warnings, and provenance. Do not call an unadjusted price change a total return or imply that this component validated the source data."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "rₜ = Pₜ / Pₜ₋₁ − 1",
+    "intent": "Use when a downstream calculation needs simple returns and the caller can state whether prices are adjusted or unadjusted.",
+    "output": "A return series of length n − 1 with return kind, ordering status, gap assessment, warnings, and provenance.",
+    "section_order": [
+      "intuition",
+      "formula",
+      "worked_example",
+      "visualization",
+      "common_mistakes",
+      "limitations"
+    ],
+    "visible_optional_facets": ["visualizations"],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

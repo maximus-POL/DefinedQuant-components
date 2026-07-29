@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://definedquant.org/schemas/contract.schema.json",
+  "title": "Defined Quant component contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "slug",
+    "title",
+    "category",
+    "group",
+    "version",
+    "lifecycle",
+    "template",
+    "callable",
+    "summary",
+    "discovery",
+    "authors",
+    "tags",
+    "assumptions",
+    "limitations",
+    "depends_on",
+    "references",
+    "owner",
+    "materiality",
+    "supported_python",
+    "last_material_review",
+    "next_review_trigger",
+    "incident_status",
+    "incident_url",
+    "guidance",
+    "display"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"$ref": "#/$defs/componentId"},
+    "slug": {"$ref": "#/$defs/identifier"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "category": {"$ref": "#/$defs/identifier"},
+    "group": {"$ref": "#/$defs/identifier"},
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "lifecycle": {"enum": ["draft", "published", "deprecated"]},
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "version"],
+      "properties": {
+        "profile": {"$ref": "#/$defs/profile"},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "callable": {
+      "type": "string",
+      "pattern": "^defined_quant\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.component:[a-z][a-z0-9_]*$"
+    },
+    "summary": {"type": "string", "minLength": 1, "maxLength": 240},
+    "discovery": {"$ref": "#/$defs/discovery"},
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "github"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "github": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "assumptions": {"$ref": "#/$defs/nonEmptyStringArray"},
+    "limitations": {"$ref": "#/$defs/nonEmptyStringArray"},
+    "depends_on": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "url"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "format": "uri", "pattern": "^https://"}
+        }
+      }
+    },
+    "owner": {"type": "string", "minLength": 1},
+    "materiality": {
+      "enum": ["foundational", "analytical", "pricing", "risk", "backtesting"]
+    },
+    "supported_python": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "last_material_review": {"type": "string", "format": "date"},
+    "next_review_trigger": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "incident_status": {"enum": ["none", "open", "resolved"]},
+    "incident_url": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "format": "uri", "pattern": "^https://"}
+      ]
+    },
+    "guidance": {"$ref": "#/$defs/guidance"},
+    "display": {"$ref": "#/$defs/display"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"incident_status": {"const": "none"}},
+        "required": ["incident_status"]
+      },
+      "then": {"properties": {"incident_url": {"type": "null"}}},
+      "else": {
+        "properties": {
+          "incident_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "componentId": {
+      "type": "string",
+      "pattern": "^dq\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    },
+    "profile": {
+      "enum": ["convention", "statistic", "pricing_model", "time_series", "diagnostic"]
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aliases", "intents", "input_concepts", "output_concepts"],
+      "properties": {
+        "aliases": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          }
+        },
+        "intents": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "input_concepts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "output_concepts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "jsonValue": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "boolean"},
+        {"type": "number"},
+        {"type": "string"},
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "boolean"},
+              {"type": "number"},
+              {"type": "string"}
+            ]
+          }
+        }
+      ]
+    },
+    "operand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "properties": {"value": {"$ref": "#/$defs/jsonValue"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field"],
+          "properties": {
+            "field": {"$ref": "#/$defs/identifier"},
+            "measure": {
+              "enum": [
+                "identity",
+                "count",
+                "stdev",
+                "min",
+                "max",
+                "all_finite",
+                "has_duplicates",
+                "is_strictly_increasing"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "op", "right"],
+      "properties": {
+        "left": {"$ref": "#/$defs/operand"},
+        "op": {"enum": ["lt", "le", "gt", "ge", "eq", "ne", "in_set", "not_in_set"]},
+        "right": {"$ref": "#/$defs/operand"}
+      }
+    },
+    "condition": {
+      "oneOf": [
+        {"$ref": "#/$defs/comparison"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/condition"}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/condition"}
+            }
+          }
+        }
+      ]
+    },
+    "requiredQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ask", "why", "resolves_to", "default"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "ask": {"type": "string", "minLength": 1},
+        "why": {"type": "string", "minLength": 1},
+        "resolves_to": {"$ref": "#/$defs/identifier"},
+        "default": {"$ref": "#/$defs/jsonValue"}
+      }
+    },
+    "advisoryQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ask", "why"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "ask": {"type": "string", "minLength": 1},
+        "why": {"type": "string", "minLength": 1}
+      }
+    },
+    "allowedDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "value", "rationale"],
+      "properties": {
+        "field": {"$ref": "#/$defs/identifier"},
+        "value": {"$ref": "#/$defs/jsonValue"},
+        "rationale": {"type": "string", "minLength": 1},
+        "only_if": {"$ref": "#/$defs/condition"}
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "when", "message"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "severity": {"enum": ["blocking", "warning"]},
+        "when": {"$ref": "#/$defs/condition"},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "guidance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "use_when",
+        "do_not_use_when",
+        "unsupported_scope",
+        "required_questions",
+        "allowed_defaults",
+        "constraints",
+        "interpretation"
+      ],
+      "properties": {
+        "use_when": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "do_not_use_when": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "unsupported_scope": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "required_questions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/requiredQuestion"}
+        },
+        "advisory_questions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/advisoryQuestion"}
+        },
+        "allowed_defaults": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/allowedDefault"}
+        },
+        "constraints": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/constraint"}
+        },
+        "interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "formula",
+        "intent",
+        "output",
+        "section_order",
+        "visible_optional_facets",
+        "example_emphasis",
+        "layout_density"
+      ],
+      "properties": {
+        "profile": {"$ref": "#/$defs/profile"},
+        "formula": {"type": "string", "minLength": 1},
+        "intent": {"type": "string", "minLength": 1},
+        "output": {"type": "string", "minLength": 1},
+        "section_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "intuition",
+              "formula",
+              "worked_example",
+              "visualization",
+              "common_mistakes",
+              "limitations"
+            ]
+          }
+        },
+        "visible_optional_facets": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["examples", "visualizations", "resources", "agent_evals"]
+          }
+        },
+        "featured_visualization": {
+          "type": "string",
+          "pattern": "^visuals/(?!.*\\.\\.)[A-Za-z0-9._/-]+\\.(?:svg|png|pdf)$"
+        },
+        "example_emphasis": {"enum": ["none", "worked_example"]},
+        "layout_density": {"enum": ["compact", "comfortable"]}
+      }
+    }
+  }
+}

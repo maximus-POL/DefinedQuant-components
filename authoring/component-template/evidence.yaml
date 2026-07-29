@@ -1,0 +1,10 @@
+{
+  "schema_version": 0,
+  "component_id": "dq.{{CATEGORY}}.{{SLUG}}",
+  "validated_subject_hash": null,
+  "known_answers": [],
+  "invariants": [],
+  "boundary_cases": [],
+  "cross_checks": [],
+  "agent_cases": []
+}

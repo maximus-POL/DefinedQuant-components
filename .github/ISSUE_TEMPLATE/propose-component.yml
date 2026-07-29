@@ -1,0 +1,118 @@
+name: Propose a component
+description: Suggest a new component for the catalog. Discussion comes before code.
+title: "[Proposal] "
+labels: ["proposal", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a component.
+
+        Proposals are discussed **before** implementation so that conventions, scope and schema
+        fit are agreed first. Please do not open a pull request with the implementation yet —
+        it risks wasted work if the scope changes.
+
+  - type: input
+    id: name
+    attributes:
+      label: Component name
+      placeholder: Sortino ratio
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: If none of these fit, choose "New category needed" and explain below.
+      options:
+        - conventions
+        - market_data
+        - statistics
+        - performance
+        - risk
+        - derivatives
+        - data_quality
+        - New category needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: The financial question, not the formula.
+    validations:
+      required: true
+
+  - type: textarea
+    id: definition
+    attributes:
+      label: Canonical definition
+      description: |
+        The mathematical definition you propose as canonical. If several legitimate definitions
+        exist, say so and say which one this component should implement — the others may deserve
+        their own component rather than a parameter.
+    validations:
+      required: true
+
+  - type: textarea
+    id: conventions
+    attributes:
+      label: Conventions and units
+      description: |
+        Every input that carries a convention. For example: units and scale (0.20 vs 20%), day
+        count, compounding, return kind (simple/log), annualisation, currency, quote convention,
+        exercise style, observation and fixing rules, missing-data policy.
+      placeholder: |
+        - returns: periodic simple returns, decimal
+        - annualisation: caller supplies periods per year; nothing inferred
+    validations:
+      required: true
+
+  - type: textarea
+    id: ambiguities
+    attributes:
+      label: Known ambiguities
+      description: |
+        Which unstated assumptions would materially change the answer? These become required
+        questions or refusal conditions in the agent contract. This is the most valuable field
+        in the form.
+    validations:
+      required: true
+
+  - type: textarea
+    id: unsupported
+    attributes:
+      label: What it is definitively NOT for
+      description: Instruments, regimes or exercise styles outside its scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: Papers, standards or textbook references. Include anything you would use as a known-answer source.
+    validations:
+      required: true
+
+  - type: textarea
+    id: prior_art
+    attributes:
+      label: Prior art
+      description: Existing implementations (QuantLib, published examples) usable as an independent cross-check.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read CONTRIBUTING.md
+          required: true
+        - label: I understand nothing is published without maintainer review
+          required: true
+        - label: Any test data I contribute will be synthetic or openly licensed — never vendor or scraped market data
+          required: true

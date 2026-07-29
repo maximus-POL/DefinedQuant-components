@@ -1,0 +1,274 @@
+"""Executable evidence and contract tests for ``dq.market_data.simple_return``."""
+
+from __future__ import annotations
+
+import math
+from datetime import UTC, datetime
+
+import pytest
+from defined_quant import preflight, render_svg, subject_hash
+from defined_quant.market_data.simple_return.component import Inputs, Output, simple_return
+from defined_quant.types import (
+    AmbiguousInput,
+    DomainError,
+    Frequency,
+    NumberFormat,
+    PriceKind,
+    ReturnKind,
+    Unit,
+)
+from pydantic import ValidationError
+
+
+def _timestamp(day: int) -> datetime:
+    return datetime(2026, 7, day, tzinfo=UTC)
+
+
+def _rules(error: DomainError) -> set[str]:
+    violations = error.details.get("violations", [])
+    assert isinstance(violations, list)
+    return {
+        str(item["rule"])
+        for item in violations
+        if isinstance(item, dict) and "rule" in item
+    }
+
+
+def test_contract_exports_are_present() -> None:
+    assert Inputs is not None
+    assert Output is not None
+    assert callable(simple_return)
+
+
+def test_evidence_ka_001() -> None:
+    result = simple_return(
+        [100.0, 105.0, 102.9],
+        price_kind=PriceKind.ADJUSTED,
+    )
+
+    assert result.returns == pytest.approx((0.05, -0.02), rel=1e-12, abs=1e-12)
+    assert result.return_kind is ReturnKind.SIMPLE
+
+
+def test_evidence_inv_001() -> None:
+    prices = (80.0, 84.0, 79.8, 91.77)
+    result = simple_return(prices, price_kind=PriceKind.ADJUSTED)
+
+    compounded = math.prod(1.0 + value for value in result.returns)
+    assert compounded == pytest.approx(prices[-1] / prices[0], rel=1e-12, abs=1e-12)
+
+
+def test_evidence_inv_002() -> None:
+    prices = (10.0, 10.5, 9.75, 11.25)
+    scale = 137.0
+    original = simple_return(prices, price_kind=PriceKind.ADJUSTED)
+    scaled = simple_return(
+        tuple(scale * value for value in prices),
+        price_kind=PriceKind.ADJUSTED,
+    )
+
+    assert scaled.returns == pytest.approx(original.returns, rel=1e-12, abs=1e-12)
+
+
+def test_evidence_inv_003() -> None:
+    result = simple_return((42.0, 42.0, 42.0), price_kind=PriceKind.ADJUSTED)
+
+    assert result.returns == (0.0, 0.0)
+
+
+def test_evidence_inv_004() -> None:
+    timestamps = (_timestamp(24), _timestamp(27), _timestamp(28))
+    result = simple_return(
+        (100.0, 105.0, 102.9),
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=timestamps,
+    )
+    visualization = result.visualizations[0]
+
+    assert visualization.series[0].values == result.returns
+    assert visualization.categories == tuple(value.isoformat() for value in timestamps[1:])
+    assert visualization.y_axis.unit is Unit.DECIMAL
+    assert visualization.y_axis.number_format is NumberFormat.PERCENT
+    assert visualization.assumptions == result.assumptions
+    assert visualization.warnings == result.warnings
+
+
+def test_evidence_bc_001() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    assert len(result.returns) == 1
+    assert result.returns[0] == pytest.approx(0.01, rel=1e-12, abs=1e-12)
+
+
+def test_evidence_bc_002() -> None:
+    timestamps = (_timestamp(24), _timestamp(27), _timestamp(28))
+    result = simple_return(
+        (100.0, 101.0, 102.0),
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=timestamps,
+    )
+
+    assert result.return_timestamps == timestamps[1:]
+    assert result.ordering_status == "verified"
+
+
+def test_evidence_bc_003() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return(
+            (100.0, 101.0, 102.0),
+            price_kind=PriceKind.ADJUSTED,
+            timestamps=(_timestamp(24), _timestamp(27)),
+        )
+
+    assert "timestamp_length_mismatch" in _rules(caught.value)
+
+
+def test_evidence_bc_004() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return(
+            (100.0, 101.0),
+            price_kind=PriceKind.ADJUSTED,
+            timestamps=(_timestamp(24), _timestamp(24)),
+        )
+
+    assert "duplicate_timestamps" in _rules(caught.value)
+
+
+def test_evidence_bc_005() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return(
+            (100.0, 101.0),
+            price_kind=PriceKind.ADJUSTED,
+            timestamps=(_timestamp(28), _timestamp(27)),
+        )
+
+    assert "non_increasing_timestamps" in _rules(caught.value)
+
+
+def test_evidence_bc_006() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    assert result.ordering_status == "unverified"
+    assert result.gap_check == "not_assessed"
+    assert any(message.startswith("ordering_unverified:") for message in result.warnings)
+    assert any(message.startswith("gap_check_not_assessed:") for message in result.warnings)
+
+
+def test_evidence_bc_007() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return(
+            (100.0, 101.0),
+            price_kind=PriceKind.ADJUSTED,
+            declared_frequency=Frequency.DAILY,
+        )
+
+    assert "frequency_without_timestamps" in _rules(caught.value)
+
+
+def test_evidence_bc_008() -> None:
+    result = simple_return(
+        (100.0, 101.0),
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=(_timestamp(24), _timestamp(27)),
+        declared_frequency=Frequency.DAILY,
+    )
+
+    assert result.declared_frequency is Frequency.DAILY
+    assert result.gap_check == "not_assessed"
+    assert any(message.startswith("gap_check_not_assessed:") for message in result.warnings)
+
+
+def test_evidence_bc_009() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return((100.0,), price_kind=PriceKind.ADJUSTED)
+
+    assert "insufficient_prices" in _rules(caught.value)
+
+
+@pytest.mark.parametrize("price", [0.0, -1.0])
+def test_evidence_bc_010(price: float) -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return((100.0, price), price_kind=PriceKind.ADJUSTED)
+
+    assert "non_positive_prices" in _rules(caught.value)
+
+
+@pytest.mark.parametrize("price", [math.nan, math.inf, -math.inf])
+def test_evidence_bc_011(price: float) -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return((100.0, price), price_kind=PriceKind.ADJUSTED)
+
+    assert "non_finite_prices" in _rules(caught.value)
+
+
+def test_evidence_bc_012() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.UNADJUSTED)
+
+    assert any(
+        message.startswith("unadjusted_price_interpretation:")
+        for message in result.warnings
+    )
+
+
+def test_models_are_frozen_and_reject_extra_fields() -> None:
+    inputs = Inputs(prices=(100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    with pytest.raises(ValidationError):
+        inputs.__setattr__("prices", (100.0, 102.0))
+    with pytest.raises(ValidationError):
+        Inputs.model_validate(
+            {
+                "prices": [100.0, 101.0],
+                "price_kind": "adjusted",
+                "undeclared": True,
+            }
+        )
+
+
+def test_output_provenance_and_subject_binding() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    assert result.component_id == "dq.market_data.simple_return"
+    assert result.version == "0.1.0"
+    assert result.subject_hash == subject_hash(result.component_id)
+    assert len(result.subject_hash) == 64
+    assert result.unit is Unit.DECIMAL
+
+
+def test_result_and_svg_are_deterministic() -> None:
+    prices = (100.0, 105.0, 102.9)
+    timestamps = (_timestamp(24), _timestamp(27), _timestamp(28))
+    first = simple_return(
+        prices,
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=timestamps,
+    )
+    second = simple_return(
+        prices,
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=timestamps,
+    )
+
+    assert first.model_dump_json() == second.model_dump_json()
+    assert render_svg(first.visualizations[0]) == render_svg(second.visualizations[0])
+
+
+def test_missing_price_kind_is_an_explicit_question() -> None:
+    with pytest.raises(AmbiguousInput) as caught:
+        preflight(
+            "dq.market_data.simple_return",
+            prices=(100.0, 101.0),
+            timestamps=None,
+            declared_frequency=None,
+        )
+
+    assert caught.value.details["questions"][0]["field"] == "price_kind"
+
+
+def test_naive_timestamp_is_rejected_by_the_canonical_input_model() -> None:
+    with pytest.raises(ValidationError):
+        simple_return(
+            (100.0, 101.0),
+            price_kind=PriceKind.ADJUSTED,
+            timestamps=(datetime(2026, 7, 24), datetime(2026, 7, 25)),
+        )

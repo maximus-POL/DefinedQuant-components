@@ -1,0 +1,21 @@
+# Component identity is immutable. A component ID is never renamed in place and never reused.
+#
+# When a component is superseded, renamed or withdrawn, it gets an entry here. The site renders
+# a notice on the old component's page and redirects the registry entry; agents resolving an old
+# ID get the replacement plus the reason.
+#
+# Historical behavior must remain traceable. Never silently replace it in place.
+
+schema_version: 0
+deprecations: []
+
+# Example of the shape — do not uncomment, this is documentation:
+#
+# deprecations:
+#   - id: dq.performance.sharpe                 # the retired ID
+#     deprecated_in: 0.4.0
+#     reason: >
+#       Renamed for consistency with the <category>.<slug> convention. Behaviour unchanged.
+#     replacement: dq.performance.sharpe_ratio  # null if there is no replacement
+#     behaviour_changed: false                  # true requires release notes and a major bump
+#     removed_in: null                          # version where the old ID stops resolving

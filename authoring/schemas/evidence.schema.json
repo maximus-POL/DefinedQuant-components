@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://definedquant.org/schemas/evidence.schema.json",
+  "title": "Defined Quant component evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "component_id",
+    "validated_subject_hash",
+    "known_answers",
+    "invariants",
+    "boundary_cases",
+    "cross_checks",
+    "agent_cases"
+  ],
+  "properties": {
+    "schema_version": {"const": 0},
+    "component_id": {"$ref": "#/$defs/componentId"},
+    "validated_subject_hash": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(?:sha256:)?[a-f0-9]{64}$"}
+      ]
+    },
+    "known_answers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/knownAnswer"}
+    },
+    "invariants": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/invariant"}
+    },
+    "boundary_cases": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/boundaryCase"}
+    },
+    "cross_checks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/crossCheck"}
+    },
+    "agent_cases": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/agentCase"}
+    }
+  },
+  "$defs": {
+    "componentId": {
+      "type": "string",
+      "pattern": "^dq\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "jsonValue": {
+      "type": ["null", "boolean", "number", "string", "array", "object"]
+    },
+    "tolerance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rtol", "atol"],
+      "properties": {
+        "rtol": {"type": "number", "minimum": 0},
+        "atol": {"type": "number", "minimum": 0}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "produced_by", "citation"],
+      "properties": {
+        "kind": {
+          "enum": ["author_derivation", "published", "external_implementation"]
+        },
+        "produced_by": {"type": "string", "minLength": 1},
+        "citation": {"type": "string", "minLength": 1}
+      }
+    },
+    "knownAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "test_id",
+        "description",
+        "inputs",
+        "expected",
+        "tolerance",
+        "provenance"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
+        "description": {"type": "string", "minLength": 1},
+        "inputs": {"$ref": "#/$defs/jsonValue"},
+        "expected": {"$ref": "#/$defs/jsonValue"},
+        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "invariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "test_id", "description", "kind"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
+        "description": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "tolerance": {"$ref": "#/$defs/tolerance"}
+      }
+    },
+    "boundaryCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "test_id", "description", "inputs"],
+      "anyOf": [
+        {"required": ["expected"]},
+        {"required": ["expected_error"]},
+        {"required": ["expected_warning"]}
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
+        "description": {"type": "string", "minLength": 1},
+        "inputs": {"$ref": "#/$defs/jsonValue"},
+        "expected": {"$ref": "#/$defs/jsonValue"},
+        "expected_error": {"type": "string", "minLength": 1},
+        "expected_warning": {"type": "string", "minLength": 1},
+        "tolerance": {"$ref": "#/$defs/tolerance"}
+      }
+    },
+    "crossCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "test_id",
+        "description",
+        "inputs",
+        "expected",
+        "tolerance",
+        "provenance"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
+        "description": {"type": "string", "minLength": 1},
+        "inputs": {"$ref": "#/$defs/jsonValue"},
+        "expected": {"$ref": "#/$defs/jsonValue"},
+        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "agentCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "prompt",
+        "expected_action",
+        "expected_fields",
+        "rationale"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "prompt": {"type": "string", "minLength": 1},
+        "expected_action": {"enum": ["compute", "ask", "refuse"]},
+        "expected_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "dq.{{CATEGORY}}.{{SLUG}}",
+  "slug": "{{SLUG}}",
+  "title": {{TITLE_JSON}},
+  "category": "{{CATEGORY}}",
+  "group": "{{GROUP}}",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {
+    "profile": "{{PROFILE}}",
+    "version": 1
+  },
+  "callable": "defined_quant.{{CATEGORY}}.{{SLUG}}.component:COMPONENT_FUNCTION",
+  "summary": "TODO: summarize the calculation in one sentence.",
+  "discovery": {
+    "aliases": ["TODO alias phrase"],
+    "intents": ["todo_intent"],
+    "input_concepts": ["todo_input_concept"],
+    "output_concepts": ["todo_output_concept"]
+  },
+  "authors": [
+    {
+      "name": {{AUTHOR_NAME_JSON}},
+      "github": {{AUTHOR_GITHUB_JSON}}
+    }
+  ],
+  "tags": ["{{CATEGORY}}", "{{SLUG}}"],
+  "assumptions": [
+    "TODO: state an assumption that affects interpretation."
+  ],
+  "limitations": [
+    "TODO: state an important limitation or unsupported use."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": {{AUTHOR_GITHUB_JSON}},
+  "materiality": "analytical",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "{{TODAY}}",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "TODO: state a request this component can answer."
+    ],
+    "do_not_use_when": [
+      "TODO: state a request this component must not answer."
+    ],
+    "unsupported_scope": [
+      "TODO: state an adjacent calculation that is out of scope."
+    ],
+    "required_questions": [],
+    "advisory_questions": [],
+    "allowed_defaults": [],
+    "constraints": [],
+    "interpretation": "TODO: state how an agent must report and qualify the result."
+  },
+  "display": {
+    "profile": "{{PROFILE}}",
+    "formula": "TODO: provide a concise display formula.",
+    "intent": "TODO: provide a concise display intent.",
+    "output": "TODO: describe the displayed output and unit.",
+    "section_order": [
+      "intuition",
+      "formula",
+      "worked_example",
+      "limitations"
+    ],
+    "visible_optional_facets": [],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

@@ -1,0 +1,23 @@
+# Public components repository ownership
+
+*                                      @maximus-POL
+
+# Shared runtime and authoring policy
+/shared/                               @maximus-POL
+/authoring/                            @maximus-POL
+/.github/                              @maximus-POL
+/pyproject.toml                        @maximus-POL
+/uv.lock                               @maximus-POL
+
+# Category creation and repository policy
+/categories/README.md                  @maximus-POL
+/categories/*/README.md                @maximus-POL
+/VALIDATION.md                         @maximus-POL
+/SECURITY.md                           @maximus-POL
+/TRADEMARKS.md                         @maximus-POL
+/CONTRIBUTING.md                       @maximus-POL
+/AGENTS.md                             @maximus-POL
+/ARCHITECTURE.md                       @maximus-POL
+
+# Any future independent review record remains protected.
+**/review.yaml                         @maximus-POL

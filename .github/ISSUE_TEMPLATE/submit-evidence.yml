@@ -1,0 +1,93 @@
+name: Submit evidence, a test, or a source
+description: Independent verification, an additional test case, or a reference worth citing.
+title: "[Evidence] "
+labels: ["evidence", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Independent evidence is the most valuable contribution to this project. An independent
+        cross-check is the one claim a solo maintainer genuinely cannot produce alone.
+
+  - type: input
+    id: component_id
+    attributes:
+      label: Component ID
+      placeholder: dq.derivatives.black_scholes_merton
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Component version this applies to
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: evidence_type
+    attributes:
+      label: Type of evidence
+      options:
+        - Known-answer value (published or independently derived)
+        - Independent implementation cross-check
+        - Mathematical identity or invariant
+        - Boundary or limiting case
+        - Property-based / randomised test
+        - Convergence or numerical-stability result
+        - A source, paper or tutorial worth citing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: values
+    attributes:
+      label: Inputs and expected outputs
+      description: Exact values for numerical evidence or tests. Include every convention-bearing input. Leave blank when submitting only a source or tutorial.
+      render: yaml
+    validations:
+      required: false
+
+  - type: input
+    id: tolerance
+    attributes:
+      label: Tolerance
+      description: Required for numerical evidence and tests. An assertion without a stated tolerance is not evidence. Leave blank for a source or tutorial.
+      placeholder: rtol=1e-10, atol=1e-12
+    validations:
+      required: false
+
+  - type: textarea
+    id: independence
+    attributes:
+      label: Independence and relationship to the implementation
+      description: |
+        Which implementation, publication or derivation produced these values — and how it is
+        independent of this repository's code. "I ran the component and copied the output" is not
+        independent evidence; say so honestly if that is what happened. State separately whether
+        you are a component author. A component author may run an implementation-independent
+        comparison, but it is not an independent human review.
+    validations:
+      required: true
+
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Source and permitted use
+      description: |
+        Citation for published values. Confirm any data is synthetic, openly licensed or yours to
+        contribute — vendor and scraped market data cannot be accepted.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am not the author of the implementation this evidence checks, or I have said so above
+          required: true
+        - label: Any data included is synthetic, openly licensed, or mine to contribute
+          required: true
