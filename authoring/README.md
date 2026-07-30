@@ -89,8 +89,9 @@ uv run python authoring/search_catalog.py "period price change" --json
 
 Ranking is deterministic and returns explicit positive matches separately from boundary matches.
 Values within one filter facet are ORed; populated facets are ANDed. Blank search lists the
-filtered catalog. The result limit is bounded to 100. Catalog schema version 1 binds both the
-exported discovery shape and these ranking semantics; changing either requires a schema-version
+filtered catalog. The result limit is bounded to 100. Catalog schema version 2 binds the exported
+discovery shape, canonical component schemas, operation protocol, and these ranking semantics;
+changing any of them requires a schema-version
 decision so agent and website clients cannot silently diverge.
 
 ## Check the catalog
@@ -147,12 +148,13 @@ uv run python authoring/export_catalog.py \
   --release-label "Experimental Technical Preview"
 ```
 
-The default output is `dist/catalog/catalog.json`. Catalog schema v1 contains no timestamp or
+The default output is `dist/catalog/catalog.json`. Catalog schema v2 contains no timestamp or
 local filesystem path, and its component order and JSON keys are stable. Each component exposes
 group, tags, discovery metadata, positive use cases, negative boundaries, assumptions,
-limitations, and trust data. Top-level sorted facet arrays cover categories, groups, tags,
-intents, input concepts, output concepts, lifecycles, and profiles. The private website can pin
-and consume that file as data.
+limitations, trust data, and canonical Pydantic input/output JSON Schemas. The top-level
+`agent_protocol` publishes the generic request, success, failure, and manifest schemas. Sorted
+facet arrays cover categories, groups, tags, intents, input concepts, output concepts,
+lifecycles, and profiles. The private website can pin and consume that file as static data.
 
 The exporter reports `exact_sha_attestation: none`. A future CI attestation step
 must derive and replace that value only after proving that the checks ran for the

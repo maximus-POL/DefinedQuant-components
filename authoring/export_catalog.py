@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
+from defined_quant import component_models, operation_protocol_schema
 from defined_quant.catalog import iter_components
 from defined_quant.discovery import catalog_facets
 
@@ -128,6 +129,7 @@ def _component_record(component_dir: Path) -> dict[str, Any]:
     discovery = contract.get("discovery")
     if not isinstance(discovery, Mapping):
         raise ValueError(f"{component_dir / 'contract.yaml'} discovery must be an object")
+    inputs_model, output_model = component_models(component_dir)
 
     return {
         "id": contract["id"],
@@ -156,6 +158,10 @@ def _component_record(component_dir: Path) -> dict[str, Any]:
         "limitations": contract.get("limitations", []),
         "unsupported": guidance.get("unsupported_scope", []),
         "callable": contract["callable"],
+        "schemas": {
+            "input": inputs_model.model_json_schema(),
+            "output": output_model.model_json_schema(),
+        },
         "evidence": _evidence_summary(evidence),
     }
 
@@ -199,8 +205,9 @@ def main() -> int:
         return 1
     records.sort(key=lambda item: item["id"])
     catalog = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "defined_quant_catalog",
+        "agent_protocol": operation_protocol_schema(),
         "release": {
             "version": args.release_version,
             "label": args.release_label,

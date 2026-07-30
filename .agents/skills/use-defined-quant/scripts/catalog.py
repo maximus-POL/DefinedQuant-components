@@ -10,9 +10,18 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from defined_quant import component_models, component_record, subject_hash
-from defined_quant.catalog import ComponentRecord
-from defined_quant.discovery import (
+from _source_runtime import activate_source_runtime
+
+activate_source_runtime()
+
+from defined_quant import (  # noqa: E402
+    component_models,
+    component_record,
+    operation_protocol_schema,
+    subject_hash,
+)
+from defined_quant.catalog import ComponentRecord  # noqa: E402
+from defined_quant.discovery import (  # noqa: E402
     DiscoveryFilters,
     FieldMatch,
     SearchHit,
@@ -20,7 +29,7 @@ from defined_quant.discovery import (
     component_facets,
     search_components,
 )
-from defined_quant.types import DQError
+from defined_quant.types import DQError  # noqa: E402
 
 _SUMMARY_FIELDS = (
     "title",
@@ -243,6 +252,7 @@ def _show(identifier: str, root: Path | None) -> dict[str, Any]:
         "subject_hash": subject_hash(record),
         "input_schema": inputs.model_json_schema(),
         "output_schema": output.model_json_schema(),
+        "operation_protocol": operation_protocol_schema(),
     }
 
 

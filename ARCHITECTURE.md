@@ -165,17 +165,33 @@ The adapter is a host convenience layer, not another source of truth. It cannot 
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
 
+`shared/agent.py` defines the closed catalog-wide operation protocol. An `OperationRequest`
+contains a selected component ID, its candidate input object, explicit interpretation provenance,
+host view capabilities, and host-local output settings. The adapter validates the request and the
+selected component's Pydantic `Inputs`, then emits a typed `OperationSuccess` or
+`OperationFailure`. Its `OperationManifest` binds the semantic request independently of local
+paths, the normalized input, validated result, component subject, selected view, renderers, and
+materialized files.
+
+Natural-language understanding remains a host responsibility. When a caller authorizes AI
+interpretation, the host may map prompt or attachment data into the canonical input, but it must
+record that mapping as unverified provenance and list inferred conventions. A future provider
+adapter replaces only that ingestion step; component behavior and presentation do not change.
+
 ## 9. Static publication
 
 `authoring/export_catalog.py` runs in the public components project after validation. It emits a
 deterministic, website-safe catalog artifact containing sanitized component metadata and trust
-bindings. Catalog schema v1 also exports component groups, tags, discovery fields, use/do-not-use
-boundaries, limitations, and deterministic top-level facet values.
+bindings. Catalog schema v2 also exports each component's canonical Pydantic input/output JSON
+Schemas and the generic operation request, success, failure, and manifest schemas, alongside
+component groups, tags, discovery fields, use/do-not-use boundaries, limitations, and
+deterministic top-level facet values.
 
 The private website:
 
 - pins an immutable catalog release and checksum;
 - consumes JSON/static assets only;
+- publishes a well-known agent manifest and per-component schema-bearing records;
 - never imports or executes component Python;
 - contains no manually maintained component list.
 

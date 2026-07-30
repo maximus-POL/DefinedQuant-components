@@ -1,4 +1,4 @@
 interface:
-  display_name: "Defined Quant Discovery"
-  short_description: "Discover, compose, run, and render quant components"
-  default_prompt: "Use $use-defined-quant to discover and compare supported components for my financial task, resolve required inputs, and execute the best fit."
+  display_name: "Defined Quant"
+  short_description: "Turn financial requests and data into trusted component views"
+  default_prompt: "Use $use-defined-quant to interpret my supplied financial data, discover and run the best supported component, preserve provenance, and display its prescribed view."

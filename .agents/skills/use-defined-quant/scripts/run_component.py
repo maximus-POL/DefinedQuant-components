@@ -11,14 +11,34 @@ import sys
 from pathlib import Path
 from typing import Any, Literal
 
-from defined_quant import (
+from _source_runtime import activate_source_runtime
+from pydantic import BaseModel, ValidationError
+
+activate_source_runtime()
+
+from defined_quant import (  # noqa: E402
+    AdapterIdentity,
+    ComponentIdentity,
     DashboardSpec,
+    FileDigest,
+    InterpretationMethod,
+    OperationError,
+    OperationFailure,
+    OperationManifest,
+    OperationProvenance,
+    OperationReceipt,
+    OperationRequest,
+    OperationSuccess,
+    OperationViewRequest,
+    SourceKind,
+    VerificationStatus,
     ViewBundleSpec,
     __version__,
     component_models,
     component_record,
     dashboard_hash,
     load_component,
+    operation_hash,
     save_dashboard_html,
     save_dashboard_svg,
     save_svg,
@@ -27,12 +47,15 @@ from defined_quant import (
     view_hash,
     visualization_hash,
 )
-from defined_quant.catalog import ComponentRecord
-from defined_quant.types import ComponentContractError, ComponentOutput, DQError
-from pydantic import BaseModel, ValidationError
+from defined_quant.catalog import ComponentRecord  # noqa: E402
+from defined_quant.types import (  # noqa: E402
+    ComponentContractError,
+    ComponentOutput,
+    DQError,
+)
 
 _ADAPTER_NAME = "use-defined-quant"
-_ADAPTER_SCHEMA_VERSION = 1
+_ADAPTER_SCHEMA_VERSION = 2
 
 
 class AdapterError(Exception):
@@ -70,9 +93,23 @@ def _parser() -> argparse.ArgumentParser:
             "component-declared visualization."
         )
     )
-    parser.add_argument("--component", required=True, help="Stable component ID or component path.")
-    parser.add_argument("--input", required=True, help="Input JSON object path, or - for stdin.")
-    parser.add_argument("--output-dir", required=True, type=Path)
+    request_source = parser.add_mutually_exclusive_group(required=True)
+    request_source.add_argument(
+        "--request",
+        help=(
+            "Canonical OperationRequest JSON path, or - for stdin. This is the preferred "
+            "agent-facing interface."
+        ),
+    )
+    request_source.add_argument(
+        "--component",
+        help="Stable component ID or component path for the legacy flag interface.",
+    )
+    parser.add_argument(
+        "--input",
+        help="Legacy component input JSON object path, or - for stdin.",
+    )
+    parser.add_argument("--output-dir", type=Path, help="Legacy output directory.")
     parser.add_argument(
         "--catalog-root",
         type=Path,
@@ -115,6 +152,22 @@ def _read_payload(path: str) -> dict[str, Any]:
             details={"type": type(value).__name__},
         )
     return value
+
+
+def _read_operation_request(path: str) -> OperationRequest:
+    try:
+        if path == "-":
+            value = json.load(sys.stdin)
+        else:
+            with Path(path).expanduser().open(encoding="utf-8") as handle:
+                value = json.load(handle)
+        return OperationRequest.model_validate(value)
+    except ValidationError as exc:
+        raise AdapterError(
+            "invalid_operation_request",
+            "Request does not satisfy the canonical OperationRequest schema.",
+            details={"errors": _validation_details(exc)},
+        ) from exc
 
 
 def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
@@ -237,16 +290,28 @@ def _assert_targets_available(paths: list[Path], *, overwrite: bool) -> None:
 
 def _materialize(
     record: ComponentRecord,
+    operation_request: OperationRequest,
     validated_input: BaseModel,
     result: ComponentOutput,
     output_dir_argument: Path,
     *,
     expected_subject_hash: str,
     overwrite: bool,
-    view_use_case: Literal["chat", "portable", "print"],
-    supported_media_types: tuple[str, ...],
-) -> dict[str, Any]:
+) -> OperationManifest:
+    view_use_case: Literal["chat", "portable", "print"] = (
+        operation_request.view.use_case.value
+    )
+    supported_media_types = tuple(
+        media_type.value for media_type in operation_request.view.supported_media_types
+    )
     output_dir = output_dir_argument.expanduser().resolve()
+    if output_dir in {Path(output_dir.anchor), Path.home().resolve()}:
+        raise AdapterError(
+            "invalid_output_directory",
+            "Output directory must not be a filesystem root or the user home directory.",
+            component_id=record.component_id,
+            details={"path": str(output_dir)},
+        )
     normalized_input_path = output_dir / "input.json"
     result_path = output_dir / "result.json"
     manifest_path = output_dir / "manifest.json"
@@ -421,24 +486,28 @@ def _materialize(
                 }
             )
 
-        manifest: dict[str, Any] = {
+        manifest_data: dict[str, Any] = {
             "schema_version": _ADAPTER_SCHEMA_VERSION,
-            "adapter": {"name": _ADAPTER_NAME, "version": _ADAPTER_SCHEMA_VERSION},
-            "component": {
-                "id": record.component_id,
-                "title": record.metadata.get("title"),
-                "version": record.version,
-                "callable": record.callable_path,
-                "subject_hash": expected_subject_hash,
-            },
-            "input": {
-                "path": str(normalized_input_path),
-                "sha256": hashlib.sha256(input_bytes).hexdigest(),
-            },
-            "result": {
-                "path": str(result_path),
-                "sha256": hashlib.sha256(result_bytes).hexdigest(),
-            },
+            "operation": OperationReceipt(
+                operation_hash=operation_hash(operation_request),
+                provenance=operation_request.provenance,
+            ),
+            "adapter": AdapterIdentity(version=_ADAPTER_SCHEMA_VERSION),
+            "component": ComponentIdentity(
+                id=record.component_id,
+                title=record.metadata.get("title"),
+                version=record.version,
+                callable=record.callable_path,
+                subject_hash=expected_subject_hash,
+            ),
+            "input": FileDigest(
+                path=str(normalized_input_path),
+                sha256=hashlib.sha256(input_bytes).hexdigest(),
+            ),
+            "result": FileDigest(
+                path=str(result_path),
+                sha256=hashlib.sha256(result_bytes).hexdigest(),
+            ),
             "manifest_path": str(manifest_path),
             "artifacts": artifacts,
         }
@@ -448,7 +517,7 @@ def _materialize(
                 and selected_view.id == view_bundle.default_chat_view_id
             )
             use_case_match = view_use_case in selected_view.use_cases
-            manifest["view_selection"] = {
+            manifest_data["view_selection"] = {
                 "use_case": view_use_case,
                 "selected_view_id": selected_view.id,
                 "selection_reason": (
@@ -462,7 +531,12 @@ def _materialize(
                     list(supported_media_types) if supported_media_types else ["*"]
                 ),
             }
-        _write_bytes(manifest_path, _json_bytes(manifest), overwrite=overwrite)
+        manifest = OperationManifest.model_validate(manifest_data)
+        _write_bytes(
+            manifest_path,
+            _json_bytes(manifest.model_dump(mode="json", exclude_none=True)),
+            overwrite=overwrite,
+        )
     except AdapterError:
         raise
     except OSError as exc:
@@ -477,17 +551,16 @@ def _materialize(
 
 def _run(
     component_identifier: str,
-    input_path: str,
-    output_dir: Path,
-    *,
-    catalog_root: Path | None,
-    overwrite: bool,
-    view_use_case: Literal["chat", "portable", "print"],
-    supported_media_types: tuple[str, ...],
-) -> dict[str, Any]:
+    payload: dict[str, Any],
+    operation_request: OperationRequest,
+) -> OperationManifest:
+    catalog_root = (
+        Path(operation_request.catalog_root)
+        if operation_request.catalog_root is not None
+        else None
+    )
     record = component_record(component_identifier, root=catalog_root)
     inputs_model, output_model = component_models(record)
-    payload = _read_payload(input_path)
     validated_input = _validate_input(
         inputs_model,
         payload,
@@ -503,13 +576,43 @@ def _run(
     )
     return _materialize(
         record,
+        operation_request,
         validated_input,
         result,
-        output_dir,
+        Path(operation_request.output_dir),
         expected_subject_hash=expected_subject_hash,
-        overwrite=overwrite,
-        view_use_case=view_use_case,
-        supported_media_types=supported_media_types,
+        overwrite=operation_request.overwrite,
+    )
+
+
+def _legacy_request(args: argparse.Namespace) -> OperationRequest:
+    if args.component is None or args.input is None or args.output_dir is None:
+        raise AdapterError(
+            "invalid_adapter_arguments",
+            "Legacy execution requires --component, --input, and --output-dir.",
+        )
+    record = component_record(args.component, root=args.catalog_root)
+    source_kind = SourceKind.USER_PROMPT if args.input == "-" else SourceKind.USER_ATTACHMENT
+    return OperationRequest(
+        component_id=record.component_id,
+        input=_read_payload(args.input),
+        provenance=OperationProvenance(
+            source_kind=source_kind,
+            interpretation_method=InterpretationMethod.CALLER_STRUCTURED,
+            verification_status=VerificationStatus.UNVERIFIED,
+            label=(
+                "Structured component input from standard input"
+                if args.input == "-"
+                else f"Structured component input from {Path(args.input).name}"
+            ),
+        ),
+        view=OperationViewRequest(
+            use_case=args.view_use_case,
+            supported_media_types=args.supported_media_type,
+        ),
+        output_dir=str(args.output_dir),
+        catalog_root=str(args.catalog_root) if args.catalog_root is not None else None,
+        overwrite=args.overwrite,
     )
 
 
@@ -533,20 +636,36 @@ def _error(exc: Exception) -> dict[str, Any]:
 
 def main() -> int:
     args = _parser().parse_args()
+    request_mode = args.request is not None
     try:
+        request = (
+            _read_operation_request(args.request)
+            if request_mode
+            else _legacy_request(args)
+        )
         manifest = _run(
-            args.component,
-            args.input,
-            args.output_dir,
-            catalog_root=args.catalog_root,
-            overwrite=args.overwrite,
-            view_use_case=args.view_use_case,
-            supported_media_types=tuple(args.supported_media_type),
+            request.component_id,
+            request.input,
+            request,
         )
     except (AdapterError, DQError, json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-        print(json.dumps({"error": _error(exc)}, indent=2, sort_keys=True), file=sys.stderr)
+        error = _error(exc)
+        response = (
+            OperationFailure(error=OperationError.model_validate(error)).model_dump(
+                mode="json",
+                exclude_none=True,
+            )
+            if request_mode
+            else {"error": error}
+        )
+        print(json.dumps(response, indent=2, sort_keys=True), file=sys.stderr)
         return 2
-    print(json.dumps(manifest, indent=2, sort_keys=True))
+    response = (
+        OperationSuccess(manifest=manifest).model_dump(mode="json", exclude_none=True)
+        if request_mode
+        else manifest.model_dump(mode="json", exclude_none=True)
+    )
+    print(json.dumps(response, indent=2, sort_keys=True))
     return 0
 
 

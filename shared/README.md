@@ -12,6 +12,8 @@ Small, reusable foundations used by every component:
 - `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG, combines an opt-in
   `DashboardSpec` with selected charts and a typed table, and applies closed `ViewBundleSpec`
   negotiation between responsive chat HTML and portable SVG.
+- `agent.py` defines the typed operation request, interpretation provenance, success/failure
+  envelopes, and hash-bound execution manifest used by catalog-wide agent adapters.
 
 The folder is called `shared` so its purpose is clear when browsing the repository. Packaging maps
 it to the public Python package name `defined_quant`; component code therefore imports

@@ -25,6 +25,7 @@ COMPONENT_KEYS = {
     "output",
     "profile",
     "required_questions",
+    "schemas",
     "slug",
     "summary",
     "tags",
@@ -52,6 +53,9 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["do_not_use_when"]
     assert record["limitations"]
     assert record["unsupported"]
+    assert record["schemas"]["input"]["type"] == "object"
+    assert record["schemas"]["output"]["type"] == "object"
+    assert "prices" in record["schemas"]["input"]["properties"]
 
 
 def test_catalog_v1_has_deterministic_top_level_facet_values(
@@ -85,6 +89,7 @@ def test_catalog_v1_has_deterministic_top_level_facet_values(
 
     assert set(artifact) == {
         "artifact_kind",
+        "agent_protocol",
         "categories",
         "components",
         "facets",
@@ -92,7 +97,10 @@ def test_catalog_v1_has_deterministic_top_level_facet_values(
         "schema_version",
         "source",
     }
-    assert artifact["schema_version"] == 1
+    assert artifact["schema_version"] == 2
+    assert artifact["agent_protocol"]["name"] == "defined_quant_operation"
+    assert artifact["agent_protocol"]["request_schema"]["type"] == "object"
+    assert artifact["agent_protocol"]["manifest_schema"]["type"] == "object"
     assert list(artifact["facets"]) == sorted(artifact["facets"])
     assert set(artifact["facets"]) == {
         "categories",

@@ -1,6 +1,6 @@
 ---
 name: use-defined-quant
-description: Autonomously discover, compare, compose, inspect, execute, and render deterministic Defined Quant financial components through their canonical contracts. Use when Codex needs to turn a user's financial intent into candidate calculations, search or filter a large component catalog, choose one or more compatible methods, reject unsupported or boundary-only matches, resolve required conventions, run selected components, preserve provenance and warnings, or display component-declared visualizations.
+description: Autonomously turn natural-language financial requests, pasted data, and readable attachments into validated Defined Quant component operations and deterministic views. Use when Codex needs to interpret caller-supplied financial data, discover or compare catalog components, resolve required conventions, run selected calculations, preserve provenance and warnings, or display component-declared visualizations without requiring the user to know component IDs, schemas, adapters, or rendering commands.
 ---
 
 # Use Defined Quant
@@ -10,6 +10,20 @@ component's formula, invent a substitute calculation, alter a result, suppress a
 declared visualization, or create an alternative dashboard from a separate transformation.
 
 Run the bundled commands from the public `components/` project root.
+The bundled scripts activate that checkout as the runtime package before importing components, so
+they do not silently execute a stale installed `defined_quant` build.
+
+## Keep the user interface financial
+
+Accept ordinary requests such as “compare the earnings in this file and show me.” Do not require
+the user to name a component, mention normalization, construct JSON, choose a renderer, or know the
+operation protocol.
+
+When the user authorizes AI interpretation, inspect readable prompt data or attachments and map
+them into the selected component's canonical input. Make every inferred convention explicit in the
+operation input and provenance assumptions. Mark the interpretation `unverified`; do not describe
+it as validated source data. Ask only when an unresolved convention materially changes the answer
+and cannot reasonably be inferred under the user's authorization.
 
 ## Discover candidates autonomously
 
@@ -83,30 +97,41 @@ questions may improve interpretation but do not become blockers unless the contr
 
 1. Prepare an input object that satisfies the inspected schema. The serialized input is transport
    only; the selected component's `Inputs` model remains the source of truth.
-2. Run the generic adapter with the stable component ID:
+2. Create one `OperationRequest` object. Record how the values were obtained:
+   - prompt or pasted values: `source_kind: user_prompt`;
+   - attached files: `source_kind: user_attachment`;
+   - provider tools: `source_kind: external_provider`;
+   - component fixtures: `source_kind: synthetic`.
+
+   Use `interpretation_method: ai_interpreted` for model mapping,
+   `caller_structured` for already-canonical input, and `adapter_normalized` only for a deterministic
+   source adapter. Use `verification_status: unverified` unless caller confirmation or hash-bound
+   source verification actually occurred.
+3. Run the generic adapter with the request envelope:
 
 ```bash
 uv run python .agents/skills/use-defined-quant/scripts/run_component.py \
-  --component dq.category.component \
-  --input /absolute/path/to/input.json \
-  --output-dir /absolute/path/to/new-output-directory
+  --request /absolute/path/to/operation-request.json
 ```
 
-Pass `-` to `--input` to read the object from standard input. Use `--overwrite` only when the
-caller explicitly intends to replace files at the selected output path.
+The request contains `component_id`, `input`, `provenance`, host `view` capabilities, and an
+absolute `output_dir`. Pass `-` to `--request` to read it from standard input. Set `overwrite: true`
+only when the caller explicitly intends to replace files at the selected output path.
 
-The default `--view-use-case chat` selects a component-declared responsive HTML view when the
-component and host support it. Use repeated `--supported-media-type` arguments when host
-capabilities are known; deterministic selection falls back to the component-declared portable
-view. For an inline Codex chat view, choose the current thread-scoped visualization directory as
-`--output-dir` so the selected HTML file can be embedded without copying or rewriting it.
+The default `view.use_case: chat` selects a component-declared responsive HTML view when the
+component and host support it. Declare `view.supported_media_types` when host capabilities are
+known; deterministic selection falls back to the component-declared portable view. For an inline
+Codex chat view, choose the current thread-scoped visualization directory as `output_dir` so the
+selected HTML file can be embedded without copying or rewriting it.
 
-3. Treat a non-zero exit as a refusal or failure. Report the structured error; do not calculate a
-fallback answer.
-4. Read `result.json` and `manifest.json`. Present the result with its component ID, version,
-subject hash, unit, assumptions, transformations, warnings, and any component-specific
-interpretation fields.
-5. When the manifest contains an artifact with `role: "primary"`, display that artifact first and
+4. Treat a non-zero exit as a refusal or failure. Parse the typed `OperationFailure`; do not
+   calculate a
+   fallback answer.
+5. Parse the typed `OperationSuccess`, then read the hash-bound `result.json` and `manifest.json`.
+   Present the result with its component ID, version, subject hash, operation hash, source
+   provenance, unit, assumptions, transformations, warnings, and component-specific interpretation
+   fields.
+6. When the manifest contains an artifact with `role: "primary"`, display that artifact first and
    use it as the prescribed component view. Do not restyle, redraw, reorder, summarize into a new
    dashboard, or replace it with an AI-authored presentation. Display supporting artifacts only
    when the caller requests individual charts or no prescribed dashboard exists. For a selected
@@ -115,8 +140,9 @@ interpretation fields.
    absolute `path` from the manifest with Markdown image syntax. Preserve its title and alt text
    when describing it.
 
-The adapter validates the canonical `Inputs`, invokes the catalog-declared callable, validates the
-canonical `Output`, verifies identity and subject-hash provenance, and renders every declared
+The adapter validates the closed operation request and canonical `Inputs`, invokes the
+catalog-declared callable, validates the canonical `Output`, verifies identity and subject-hash
+provenance, binds the semantic operation independently of local paths, and renders every declared
 visualization with the shared trusted SVG renderer. When a component declares a deterministic
 dashboard, the adapter also renders the prescribed chart order, table columns, formatting, notes,
 and layout in every declared format. A closed `ViewBundleSpec` selects responsive HTML by default
@@ -127,6 +153,9 @@ visualizations still produce normalized input, structured result, and manifest f
 
 - Keep data acquisition separate from calculation. A host tool may supply observations, but
   never claim that Defined Quant fetched or validated them unless the selected component says so.
+- Treat AI interpretation as an explicit, replaceable ingestion layer. Preserve its assumptions in
+  `OperationProvenance`; a future trusted adapter can replace that layer without changing the
+  component or renderer.
 - Preserve caller order and source semantics unless the component explicitly declares a
   transformation.
 - Describe synthetic inputs as synthetic and sourced inputs with their actual provenance.
