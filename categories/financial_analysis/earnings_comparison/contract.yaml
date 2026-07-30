@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "id": "dq.financial_analysis.earnings_comparison",
+  "slug": "earnings_comparison",
+  "title": "Earnings Comparison",
+  "category": "financial_analysis",
+  "group": "earnings_analysis",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {
+    "profile": "time_series",
+    "version": 1
+  },
+  "callable": "defined_quant.financial_analysis.earnings_comparison.component:earnings_comparison",
+  "summary": "Compares one aligned monetary earnings metric across companies with normalized tables, descriptive statistics, endpoint changes, rankings, and a deterministic dashboard.",
+  "discovery": {
+    "aliases": [
+      "earnings peer comparison",
+      "hyperscaler earnings chart",
+      "company financial comparison",
+      "revenue comparison",
+      "net income comparison"
+    ],
+    "intents": [
+      "compare_company_earnings",
+      "compare_financial_statement_metric",
+      "create_earnings_charts",
+      "summarize_earnings_panel"
+    ],
+    "input_concepts": [
+      "company_earnings_series",
+      "fiscal_period_alignment",
+      "monetary_metric",
+      "ordered_period_labels",
+      "reporting_currency",
+      "source_label",
+      "value_scale"
+    ],
+    "output_concepts": [
+      "company_comparison_table",
+      "company_descriptive_statistics",
+      "deterministic_earnings_dashboard",
+      "interactive_chat_dashboard",
+      "earnings_change_chart",
+      "earnings_trend_chart",
+      "latest_company_leaders",
+      "latest_company_ranking",
+      "normalized_earnings_observations",
+      "peer_set_composition",
+      "period_cross_sectional_statistics"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Maksymilian Tylek",
+      "github": "makstylek"
+    }
+  ],
+  "tags": [
+    "earnings",
+    "financial_analysis",
+    "financial_statements",
+    "peer_comparison",
+    "time_series",
+    "visualization"
+  ],
+  "assumptions": [
+    "Every company series uses the same monetary metric definition, reporting currency, scale, and ordered period labels.",
+    "Caller-supplied observations are complete, aligned, and already reconciled to the declared fiscal-period basis.",
+    "Sample standard deviation uses denominator n-1 and endpoint growth is reported only for a strictly positive starting value.",
+    "The source label is caller-declared provenance and is not independently verified by this component."
+  ],
+  "limitations": [
+    "No filing retrieval, parsing, restatement detection, currency conversion, inflation adjustment, missing-data treatment, or fiscal-calendar reconciliation is included.",
+    "No EPS, per-share, margin, surprise, consensus, CAGR, valuation, quality-of-earnings, causal, or forecast calculation is included.",
+    "Peer-set share is composition within the supplied companies and must not be presented as market share.",
+    "Descriptive comparison does not establish accounting comparability, investment merit, statistical significance, or future performance."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "analytical",
+  "supported_python": [
+    ">=3.11",
+    "<3.14"
+  ],
+  "last_material_review": "2026-07-30",
+  "next_review_trigger": [
+    "accounting_scope_change",
+    "chart_schema_change",
+    "implementation_change",
+    "metric_scope_expansion",
+    "period_alignment_policy_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller wants to compare one monetary earnings metric across two to twelve companies over at least two aligned periods.",
+      "Every company has one finite observation per period and the common currency, scale, period basis, and source label are explicit.",
+      "The requested outputs are normalized rows, descriptive statistics, endpoint changes, rankings, and a prescribed deterministic dashboard with responsive chat and portable formats."
+    ],
+    "do_not_use_when": [
+      "Companies use different metric definitions, currencies, scales, or unreconciled period mappings.",
+      "The request requires missing-data repair, filing ingestion, accounting normalization, EPS, margins, consensus surprises, valuation, causal explanation, or forecasting.",
+      "The result would be used as proof of market share, accounting comparability, investment quality, or future performance."
+    ],
+    "unsupported_scope": [
+      "Filing acquisition, spreadsheet parsing, restatement handling, source verification, fiscal-calendar reconciliation, FX translation, and inflation adjustment.",
+      "Per-share metrics, ratios, margins, CAGR, earnings surprises, analyst estimates, segment attribution, valuation multiples, and forecasts.",
+      "Imputation, interpolation, statistical significance, causal inference, event annotation, and narrative explanation."
+    ],
+    "required_questions": [
+      {
+        "id": "metric_name",
+        "ask": "Which single monetary metric is being compared?",
+        "why": "Mixing revenue, operating income, net income, or different accounting definitions makes the comparison invalid.",
+        "resolves_to": "metric_name",
+        "default": null
+      },
+      {
+        "id": "reporting_currency",
+        "ask": "Which common three-letter reporting currency applies to every value?",
+        "why": "Currency changes the meaning and comparability of every monetary value.",
+        "resolves_to": "reporting_currency",
+        "default": null
+      },
+      {
+        "id": "value_scale",
+        "ask": "Are the supplied values in units, thousands, millions, or billions?",
+        "why": "Scale changes every reported number and chart label.",
+        "resolves_to": "value_scale",
+        "default": null
+      },
+      {
+        "id": "period_basis",
+        "ask": "Are periods calendar-aligned or company-reported fiscal periods?",
+        "why": "The same quarter label may cover different dates across companies.",
+        "resolves_to": "period_basis",
+        "default": null
+      },
+      {
+        "id": "periods",
+        "ask": "What unique period labels define the intended comparison order?",
+        "why": "The component preserves caller order and never infers or sorts periods.",
+        "resolves_to": "periods",
+        "default": null
+      },
+      {
+        "id": "series",
+        "ask": "What complete company-by-period value series should be compared?",
+        "why": "A rectangular aligned panel is required for comparable statistics and charts.",
+        "resolves_to": "series",
+        "default": null
+      },
+      {
+        "id": "source_label",
+        "ask": "What source or synthetic-fixture label should accompany these observations?",
+        "why": "The output must preserve declared provenance without implying source verification.",
+        "resolves_to": "source_label",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "accounting_comparability",
+        "ask": "Have metric definitions, restatements, and fiscal cutoffs been reviewed across all companies?",
+        "why": "Numerically aligned values may still differ in accounting scope or reporting dates."
+      },
+      {
+        "id": "peer_set_scope",
+        "ask": "Does the supplied company set match the intended peer universe?",
+        "why": "Rankings and peer-set shares change when companies are added or removed."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "insufficient_periods",
+        "severity": "blocking",
+        "when": {
+          "left": {
+            "field": "periods",
+            "measure": "count"
+          },
+          "op": "lt",
+          "right": {
+            "value": 2
+          }
+        },
+        "message": "insufficient_periods: At least two ordered periods are required for an earnings comparison."
+      },
+      {
+        "id": "too_many_periods",
+        "severity": "blocking",
+        "when": {
+          "left": {
+            "field": "periods",
+            "measure": "count"
+          },
+          "op": "gt",
+          "right": {
+            "value": 500
+          }
+        },
+        "message": "too_many_periods: At most 500 periods can be represented by the closed chart contract."
+      },
+      {
+        "id": "duplicate_periods",
+        "severity": "blocking",
+        "when": {
+          "left": {
+            "field": "periods",
+            "measure": "has_duplicates"
+          },
+          "op": "eq",
+          "right": {
+            "value": true
+          }
+        },
+        "message": "duplicate_periods: Period labels must be unique and supplied in intended order."
+      },
+      {
+        "id": "insufficient_companies",
+        "severity": "blocking",
+        "when": {
+          "left": {
+            "field": "series",
+            "measure": "count"
+          },
+          "op": "lt",
+          "right": {
+            "value": 2
+          }
+        },
+        "message": "insufficient_companies: At least two companies are required for a peer comparison."
+      },
+      {
+        "id": "too_many_companies",
+        "severity": "blocking",
+        "when": {
+          "left": {
+            "field": "series",
+            "measure": "count"
+          },
+          "op": "gt",
+          "right": {
+            "value": 12
+          }
+        },
+        "message": "too_many_companies: At most twelve companies can be represented by the closed chart contract."
+      },
+      {
+        "id": "company_reported_periods",
+        "severity": "warning",
+        "when": {
+          "left": {
+            "field": "period_basis"
+          },
+          "op": "eq",
+          "right": {
+            "value": "company_reported"
+          }
+        },
+        "message": "company_reported_periods: Period labels may cover different fiscal cutoffs; cross-company comparisons require caller review."
+      }
+    ],
+    "interpretation": "Display the component-selected default chat dashboard when responsive HTML is supported, otherwise use its declared SVG fallback. Never redraw, restyle, reorder, or replace either view. Report the declared metric, currency, scale, period basis, source label, normalized observations, company table, period statistics, all tied latest leaders, and eligible supporting charts. Distinguish absolute change from percentage growth, call peer composition a supplied-set share rather than market share, surface omitted growth or composition values, and do not infer causal explanations."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "meanᵢ = Σₜxᵢₜ/n; sᵢ = √[Σₜ(xᵢₜ−meanᵢ)²/(n−1)]; Δᵢ = xᵢₙ−xᵢ₁; gᵢ = xᵢₙ/xᵢ₁−1 when xᵢ₁>0",
+    "intent": "Compare one aligned monetary financial-statement metric across a declared company peer set.",
+    "output": "A prescribed deterministic dashboard with default responsive HTML and SVG fallback, plus normalized data rows, statistics, ranking, and supporting charts.",
+    "section_order": [
+      "intuition",
+      "formula",
+      "worked_example",
+      "common_mistakes",
+      "limitations"
+    ],
+    "visible_optional_facets": [
+      "agent_evals"
+    ],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

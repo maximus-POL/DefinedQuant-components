@@ -117,6 +117,13 @@ adapter can invoke every component uniformly: every `Inputs` field must be accep
 component callable as a keyword (or through `**kwargs`), with no positional-only parameters or
 hidden required arguments. Legacy split contracts and empty optional files are rejected.
 
+A component that requires one reproducible primary view may add a `DashboardSpec` field to its
+own `Output`. Build the dashboard from component-calculated values and declared
+`VisualizationSpec` IDs. Add a `ViewBundleSpec` when the component should declare responsive HTML
+as its default chat representation and SVG as its portable fallback. The generic adapter performs
+format selection and renders the primary artifact before supporting charts; do not add arbitrary
+HTML, component-supplied JavaScript, component-specific host dispatch, or a sixth component file.
+
 Once all referenced evidence tests pass, bind the evidence to the exact current
 behaviour:
 

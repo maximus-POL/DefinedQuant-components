@@ -9,15 +9,22 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from defined_quant import (
+    DashboardSpec,
+    ViewBundleSpec,
     __version__,
     component_models,
     component_record,
+    dashboard_hash,
     load_component,
+    save_dashboard_html,
+    save_dashboard_svg,
     save_svg,
+    select_view,
     subject_hash,
+    view_hash,
     visualization_hash,
 )
 from defined_quant.catalog import ComponentRecord
@@ -75,6 +82,22 @@ def _parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Replace generated files with matching names in the output directory.",
+    )
+    parser.add_argument(
+        "--view-use-case",
+        choices=("chat", "portable", "print"),
+        default="chat",
+        help="Deterministic view-selection intent. Defaults to the component's chat view.",
+    )
+    parser.add_argument(
+        "--supported-media-type",
+        action="append",
+        choices=("text/html", "image/svg+xml"),
+        default=[],
+        help=(
+            "Repeat to constrain host-supported view media types. "
+            "When omitted, every component-declared type is supported."
+        ),
     )
     return parser
 
@@ -220,11 +243,60 @@ def _materialize(
     *,
     expected_subject_hash: str,
     overwrite: bool,
+    view_use_case: Literal["chat", "portable", "print"],
+    supported_media_types: tuple[str, ...],
 ) -> dict[str, Any]:
     output_dir = output_dir_argument.expanduser().resolve()
     normalized_input_path = output_dir / "input.json"
     result_path = output_dir / "result.json"
     manifest_path = output_dir / "manifest.json"
+    dashboard = getattr(result, "dashboard", None)
+    if dashboard is not None and not isinstance(dashboard, DashboardSpec):
+        raise ComponentContractError(
+            "an output field named dashboard must satisfy defined_quant.charts.DashboardSpec",
+            component_id=record.component_id,
+        )
+    view_bundle = getattr(result, "view_bundle", None)
+    if view_bundle is not None and not isinstance(view_bundle, ViewBundleSpec):
+        raise ComponentContractError(
+            "an output field named view_bundle must satisfy "
+            "defined_quant.charts.ViewBundleSpec",
+            component_id=record.component_id,
+        )
+    if view_bundle is not None and dashboard is None:
+        raise ComponentContractError(
+            "view_bundle requires a component-declared DashboardSpec",
+            component_id=record.component_id,
+        )
+    selected_view = (
+        select_view(
+            view_bundle,
+            use_case=view_use_case,
+            supported_media_types=supported_media_types,
+        )
+        if view_bundle is not None
+        else None
+    )
+    legacy_dashboard_path = (
+        output_dir / f"00-{_safe_stem(dashboard.id)}.svg"
+        if dashboard is not None and view_bundle is None
+        else None
+    )
+    view_paths = (
+        [
+            (
+                view,
+                output_dir
+                / (
+                    f"00-{_safe_stem(view.id)}"
+                    + (".html" if view.media_type == "text/html" else ".svg")
+                ),
+            )
+            for view in view_bundle.views
+        ]
+        if view_bundle is not None
+        else []
+    )
     artifact_paths = [
         output_dir / f"{index:02d}-{_safe_stem(spec.id)}.svg"
         for index, spec in enumerate(result.visualizations, start=1)
@@ -233,7 +305,18 @@ def _materialize(
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         _assert_targets_available(
-            [normalized_input_path, result_path, manifest_path, *artifact_paths],
+            [
+                normalized_input_path,
+                result_path,
+                manifest_path,
+                *(
+                    [legacy_dashboard_path]
+                    if legacy_dashboard_path is not None
+                    else []
+                ),
+                *(path for _, path in view_paths),
+                *artifact_paths,
+            ],
             overwrite=overwrite,
         )
 
@@ -245,6 +328,76 @@ def _materialize(
         _write_bytes(result_path, result_bytes, overwrite=overwrite)
 
         artifacts: list[dict[str, Any]] = []
+        if dashboard is not None and legacy_dashboard_path is not None:
+            save_dashboard_svg(
+                dashboard,
+                result.visualizations,
+                legacy_dashboard_path,
+                overwrite=overwrite,
+            )
+            dashboard_bytes = legacy_dashboard_path.read_bytes()
+            artifacts.append(
+                {
+                    "kind": "image",
+                    "role": "primary",
+                    "dashboard_id": dashboard.id,
+                    "title": dashboard.title,
+                    "alt_text": dashboard.alt_text,
+                    "media_type": "image/svg+xml",
+                    "path": str(legacy_dashboard_path),
+                    "dashboard_hash": dashboard_hash(
+                        dashboard,
+                        result.visualizations,
+                    ),
+                    "artifact_sha256": hashlib.sha256(dashboard_bytes).hexdigest(),
+                    "renderer": "defined_quant.charts:render_dashboard_svg",
+                    "renderer_version": __version__,
+                }
+            )
+        if dashboard is not None and view_bundle is not None and selected_view is not None:
+            for view, view_path in view_paths:
+                if view.renderer == "dashboard_html":
+                    save_dashboard_html(
+                        dashboard,
+                        result.visualizations,
+                        view_path,
+                        overwrite=overwrite,
+                    )
+                    renderer = "defined_quant.charts:render_dashboard_html"
+                    kind = "interactive"
+                else:
+                    save_dashboard_svg(
+                        dashboard,
+                        result.visualizations,
+                        view_path,
+                        overwrite=overwrite,
+                    )
+                    renderer = "defined_quant.charts:render_dashboard_svg"
+                    kind = "image"
+                artifact_bytes = view_path.read_bytes()
+                artifacts.append(
+                    {
+                        "kind": kind,
+                        "role": (
+                            "primary" if view.id == selected_view.id else "alternative"
+                        ),
+                        "view_id": view.id,
+                        "dashboard_id": dashboard.id,
+                        "title": dashboard.title,
+                        "alt_text": dashboard.alt_text,
+                        "media_type": view.media_type,
+                        "interactive": view.interactive,
+                        "path": str(view_path),
+                        "view_hash": view_hash(
+                            view,
+                            dashboard,
+                            result.visualizations,
+                        ),
+                        "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                        "renderer": renderer,
+                        "renderer_version": __version__,
+                    }
+                )
         for spec, artifact_path in zip(
             result.visualizations,
             artifact_paths,
@@ -255,6 +408,7 @@ def _materialize(
             artifacts.append(
                 {
                     "kind": "image",
+                    "role": "supporting" if dashboard is not None else "primary",
                     "visualization_id": spec.id,
                     "title": spec.title,
                     "alt_text": spec.alt_text,
@@ -267,7 +421,7 @@ def _materialize(
                 }
             )
 
-        manifest = {
+        manifest: dict[str, Any] = {
             "schema_version": _ADAPTER_SCHEMA_VERSION,
             "adapter": {"name": _ADAPTER_NAME, "version": _ADAPTER_SCHEMA_VERSION},
             "component": {
@@ -288,6 +442,26 @@ def _materialize(
             "manifest_path": str(manifest_path),
             "artifacts": artifacts,
         }
+        if view_bundle is not None and selected_view is not None:
+            default_selected = (
+                view_use_case == "chat"
+                and selected_view.id == view_bundle.default_chat_view_id
+            )
+            use_case_match = view_use_case in selected_view.use_cases
+            manifest["view_selection"] = {
+                "use_case": view_use_case,
+                "selected_view_id": selected_view.id,
+                "selection_reason": (
+                    "default_chat"
+                    if default_selected
+                    else "use_case_match"
+                    if use_case_match
+                    else "fallback"
+                ),
+                "supported_media_types": (
+                    list(supported_media_types) if supported_media_types else ["*"]
+                ),
+            }
         _write_bytes(manifest_path, _json_bytes(manifest), overwrite=overwrite)
     except AdapterError:
         raise
@@ -308,6 +482,8 @@ def _run(
     *,
     catalog_root: Path | None,
     overwrite: bool,
+    view_use_case: Literal["chat", "portable", "print"],
+    supported_media_types: tuple[str, ...],
 ) -> dict[str, Any]:
     record = component_record(component_identifier, root=catalog_root)
     inputs_model, output_model = component_models(record)
@@ -332,6 +508,8 @@ def _run(
         output_dir,
         expected_subject_hash=expected_subject_hash,
         overwrite=overwrite,
+        view_use_case=view_use_case,
+        supported_media_types=supported_media_types,
     )
 
 
@@ -362,6 +540,8 @@ def main() -> int:
             args.output_dir,
             catalog_root=args.catalog_root,
             overwrite=args.overwrite,
+            view_use_case=args.view_use_case,
+            supported_media_types=tuple(args.supported_media_type),
         )
     except (AdapterError, DQError, json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         print(json.dumps({"error": _error(exc)}, indent=2, sort_keys=True), file=sys.stderr)

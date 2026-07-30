@@ -28,7 +28,24 @@ from defined_quant.catalog import (  # noqa: E402
     subject_hash,
     subject_manifest,
 )
-from defined_quant.charts import render_svg, save_svg, visualization_hash  # noqa: E402
+from defined_quant.charts import (  # noqa: E402
+    DashboardSpec,
+    RenderTarget,
+    TableColumn,
+    TableRow,
+    TableSpec,
+    ViewBundleSpec,
+    dashboard_hash,
+    render_dashboard_html,
+    render_dashboard_svg,
+    render_svg,
+    save_dashboard_html,
+    save_dashboard_svg,
+    save_svg,
+    select_view,
+    view_hash,
+    visualization_hash,
+)
 from defined_quant.discovery import (  # noqa: E402
     DiscoveryFilters,
     FacetValue,
@@ -46,11 +63,17 @@ __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
+    "DashboardSpec",
     "DiscoveryFilters",
     "FacetValue",
     "FieldMatch",
     "SearchHit",
     "SearchResults",
+    "RenderTarget",
+    "TableColumn",
+    "TableRow",
+    "TableSpec",
+    "ViewBundleSpec",
     "catalog_facets",
     "component_models",
     "component_record",
@@ -58,12 +81,19 @@ __all__ = [
     "iter_components",
     "load_component",
     "preflight",
+    "dashboard_hash",
+    "render_dashboard_html",
+    "render_dashboard_svg",
     "render_svg",
+    "save_dashboard_html",
+    "save_dashboard_svg",
     "save_svg",
     "search_components",
     "subject_hash",
     "subject_manifest",
+    "select_view",
     "tokenize",
+    "view_hash",
     "visualization_hash",
 ]
 

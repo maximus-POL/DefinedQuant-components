@@ -5,9 +5,9 @@ description: Autonomously discover, compare, compose, inspect, execute, and rend
 
 # Use Defined Quant
 
-Treat the catalog as the source of financial behavior. Never reproduce a component's formula,
-invent a substitute calculation, alter a result, suppress a warning, or redraw a declared
-visualization from a separate transformation.
+Treat the catalog as the source of financial behavior and presentation. Never reproduce a
+component's formula, invent a substitute calculation, alter a result, suppress a warning, redraw a
+declared visualization, or create an alternative dashboard from a separate transformation.
 
 Run the bundled commands from the public `components/` project root.
 
@@ -95,18 +95,33 @@ uv run python .agents/skills/use-defined-quant/scripts/run_component.py \
 Pass `-` to `--input` to read the object from standard input. Use `--overwrite` only when the
 caller explicitly intends to replace files at the selected output path.
 
+The default `--view-use-case chat` selects a component-declared responsive HTML view when the
+component and host support it. Use repeated `--supported-media-type` arguments when host
+capabilities are known; deterministic selection falls back to the component-declared portable
+view. For an inline Codex chat view, choose the current thread-scoped visualization directory as
+`--output-dir` so the selected HTML file can be embedded without copying or rewriting it.
+
 3. Treat a non-zero exit as a refusal or failure. Report the structured error; do not calculate a
 fallback answer.
 4. Read `result.json` and `manifest.json`. Present the result with its component ID, version,
 subject hash, unit, assumptions, transformations, warnings, and any component-specific
 interpretation fields.
-5. Display each artifact listed by the manifest. For an SVG artifact, embed its absolute `path`
-from the manifest with Markdown image syntax. Preserve its title and alt text when describing it.
+5. When the manifest contains an artifact with `role: "primary"`, display that artifact first and
+   use it as the prescribed component view. Do not restyle, redraw, reorder, summarize into a new
+   dashboard, or replace it with an AI-authored presentation. Display supporting artifacts only
+   when the caller requests individual charts or no prescribed dashboard exists. For a selected
+   `text/html` artifact in the current Codex thread visualization directory, emit
+   `::codex-inline-vis{file="<artifact filename>"}` on its own line. For an SVG artifact, embed its
+   absolute `path` from the manifest with Markdown image syntax. Preserve its title and alt text
+   when describing it.
 
 The adapter validates the canonical `Inputs`, invokes the catalog-declared callable, validates the
 canonical `Output`, verifies identity and subject-hash provenance, and renders every declared
-visualization with the shared trusted SVG renderer. Components without visualizations still
-produce normalized input, structured result, and manifest files.
+visualization with the shared trusted SVG renderer. When a component declares a deterministic
+dashboard, the adapter also renders the prescribed chart order, table columns, formatting, notes,
+and layout in every declared format. A closed `ViewBundleSpec` selects responsive HTML by default
+for supported chat hosts and retains SVG as the portable fallback. Components without
+visualizations still produce normalized input, structured result, and manifest files.
 
 ## Data and interpretation boundaries
 

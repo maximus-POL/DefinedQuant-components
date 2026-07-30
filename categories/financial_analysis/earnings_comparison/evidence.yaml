@@ -1,0 +1,250 @@
+{
+  "schema_version": 0,
+  "component_id": "dq.financial_analysis.earnings_comparison",
+  "validated_subject_hash": "510656838fc0890e8153910fbd6b956a6f92a4aff0cb5baf4261464eda90cf6e",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "test_id": "test_evidence_ka_001",
+      "description": "Two synthetic companies over three periods produce hand-checkable descriptive, growth, rank, share, and period statistics.",
+      "inputs": {
+        "metric_name": "Net income",
+        "reporting_currency": "USD",
+        "value_scale": "millions",
+        "period_basis": "calendar_aligned",
+        "periods": [
+          "P1",
+          "P2",
+          "P3"
+        ],
+        "series": [
+          {
+            "key": "alpha",
+            "label": "Alpha",
+            "values": [
+              10.0,
+              20.0,
+              30.0
+            ]
+          },
+          {
+            "key": "beta",
+            "label": "Beta",
+            "values": [
+              5.0,
+              10.0,
+              10.0
+            ]
+          }
+        ],
+        "source_label": "Synthetic hand-checkable fixture"
+      },
+      "expected": {
+        "latest_period": "P3",
+        "latest_total": 40.0,
+        "latest_leader_keys": [
+          "alpha"
+        ],
+        "alpha_mean": 20.0,
+        "alpha_sample_standard_deviation": 10.0,
+        "alpha_absolute_change": 20.0,
+        "alpha_percentage_change": 2.0,
+        "alpha_latest_peer_share": 0.75,
+        "beta_mean": 8.333333333333334,
+        "beta_absolute_change": 5.0,
+        "beta_percentage_change": 1.0,
+        "beta_latest_peer_share": 0.25
+      },
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md and test_evidence_ka_001."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "A common positive scaling multiplies level statistics and absolute changes while preserving growth, ranks, and peer shares.",
+      "kind": "positive_scale_equivariance",
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      }
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "Permuting company input order preserves keyed company statistics, period statistics, and the set of latest leaders.",
+      "kind": "company_permutation_invariance",
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      }
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "test_id": "test_evidence_bc_001",
+      "description": "Insufficient, duplicate, misaligned, duplicate-company, and non-finite panels are blocking.",
+      "inputs": {
+        "periods": [
+          "P1"
+        ],
+        "series": [
+          {
+            "key": "alpha",
+            "label": "Alpha",
+            "values": [
+              1.0
+            ]
+          },
+          {
+            "key": "beta",
+            "label": "Beta",
+            "values": [
+              2.0
+            ]
+          }
+        ]
+      },
+      "expected_error": "insufficient_periods"
+    },
+    {
+      "id": "bc_002",
+      "test_id": "test_evidence_bc_002",
+      "description": "Zero or negative starting values omit percentage growth while retaining valid non-negative latest peer shares.",
+      "inputs": {
+        "series": [
+          {
+            "key": "lossco",
+            "values": [
+              -10.0,
+              5.0
+            ]
+          },
+          {
+            "key": "flatco",
+            "values": [
+              0.0,
+              2.0
+            ]
+          }
+        ]
+      },
+      "expected_warning": "non_positive_growth_base"
+    },
+    {
+      "id": "bc_003",
+      "test_id": "test_evidence_bc_003",
+      "description": "A negative latest value omits peer-set shares and the composition chart.",
+      "inputs": {
+        "latest_values": [
+          -2.0,
+          3.0
+        ]
+      },
+      "expected_warning": "peer_share_unavailable"
+    },
+    {
+      "id": "bc_004",
+      "test_id": "test_evidence_bc_004",
+      "description": "Company-reported fiscal periods carry an explicit calendar-comparability warning.",
+      "inputs": {
+        "period_basis": "company_reported"
+      },
+      "expected_warning": "company_reported_periods"
+    }
+  ],
+  "cross_checks": [
+    {
+      "id": "cc_001",
+      "test_id": "test_evidence_cc_001",
+      "description": "Every period total and mean match an independent reduction over normalized long-form observation rows.",
+      "inputs": {
+        "normalized_period_values": [
+          [
+            10.0,
+            5.0
+          ],
+          [
+            20.0,
+            10.0
+          ],
+          [
+            30.0,
+            10.0
+          ]
+        ]
+      },
+      "expected": {
+        "totals": [
+          15.0,
+          30.0,
+          40.0
+        ],
+        "means": [
+          7.5,
+          15.0,
+          20.0
+        ]
+      },
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 1e-12
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Independent normalized-row reductions in test_evidence_cc_001."
+      }
+    }
+  ],
+  "agent_cases": [
+    {
+      "id": "complete_hyperscaler_comparison",
+      "prompt": "Compare quarterly revenue for Microsoft, Amazon, Meta, Alphabet, and another hyperscaler using this complete USD-million calendar-aligned panel and label it as synthetic.",
+      "expected_action": "compute",
+      "expected_fields": [
+        "observations",
+        "company_statistics",
+        "dashboard",
+        "view_bundle",
+        "period_statistics",
+        "latest_leader_keys",
+        "visualizations",
+        "warnings",
+        "component_id",
+        "subject_hash"
+      ],
+      "rationale": "The metric, data panel, currency, scale, alignment basis, and source label are explicit."
+    },
+    {
+      "id": "missing_alignment_basis",
+      "prompt": "Compare these companies' Q1 through Q4 revenue in USD millions.",
+      "expected_action": "ask",
+      "expected_fields": [],
+      "rationale": "Calendar-aligned versus company-reported periods cannot be inferred."
+    },
+    {
+      "id": "mixed_currency_request",
+      "prompt": "Compare these USD, EUR, and JPY net-income values directly without converting them.",
+      "expected_action": "refuse",
+      "expected_fields": [],
+      "rationale": "The component requires one common reporting currency and does not perform FX conversion."
+    },
+    {
+      "id": "causal_explanation_request",
+      "prompt": "Use this earnings table to prove why one hyperscaler's earnings increased.",
+      "expected_action": "refuse",
+      "expected_fields": [],
+      "rationale": "Descriptive comparison does not establish causal explanations."
+    }
+  ]
+}

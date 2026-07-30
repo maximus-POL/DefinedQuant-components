@@ -117,8 +117,18 @@ None of these dimensions is collapsed into a single trust badge.
 ## 6. Visualization boundary
 
 Components return declarative `VisualizationSpec` data. `shared/charts.py` renders trusted SVG from
-that closed model. A component never returns arbitrary HTML, JavaScript, remote resources, or a
-third-party figure object.
+that closed model. A component may also add a typed `DashboardSpec` field to its own `Output` when
+one primary composition must be identical across hosts. That specification binds chart order,
+primary-versus-secondary layout, table rows and columns, numeric formats, captions, and notes. The
+component may pair it with a closed `ViewBundleSpec` that declares responsive HTML as the default
+chat view and SVG as the portable fallback. The generic adapter applies deterministic
+capability-and-use-case selection, renders each declared format, and marks exactly one as primary
+before the supporting charts.
+
+A component never returns arbitrary HTML, JavaScript, remote resources, or a third-party figure
+object. Trusted shared renderers own the fixed HTML, CSS, and permitted interaction behavior; all
+component text and values are escaped into that template. Hosts and agents must not replace a
+declared dashboard with a separately generated presentation.
 
 Transformations that change the analytical answer belong in typed component inputs and outputs,
 not in the renderer. Renderer choices such as output path are host concerns.
@@ -144,9 +154,10 @@ of the financial category hierarchy.
 The integration exposes one catalog-wide workflow. It discovers components from
 `shared/catalog.py` and ranks their contracts through `shared/discovery.py`, obtains the selected
 component's canonical Pydantic interface, invokes the declared callable, and renders typed
-visualization specifications through `shared/charts.py`. Discovery never imports calculation
-code. It returns stable scores, positive field matches, and separate boundary matches from
-do-not-use and unsupported-scope fields. A boundary-only match never recommends a component.
+visualization and optional dashboard specifications through `shared/charts.py`. Discovery never
+imports calculation code. It returns stable scores, positive field matches, and separate boundary
+matches from do-not-use and unsupported-scope fields. A boundary-only match never recommends a
+component.
 The integration must not describe or special-case an individual component in production code. A
 component's financial instructions remain in its own `contract.yaml`.
 

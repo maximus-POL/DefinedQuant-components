@@ -9,7 +9,9 @@ Small, reusable foundations used by every component:
 - `discovery.py` searches contract metadata without importing calculations. It provides
   deterministic ranking, positive-versus-boundary match explanations, exact facets, and bounded
   results for both developer tools and agent adapters.
-- `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG.
+- `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG, combines an opt-in
+  `DashboardSpec` with selected charts and a typed table, and applies closed `ViewBundleSpec`
+  negotiation between responsive chat HTML and portable SVG.
 
 The folder is called `shared` so its purpose is clear when browsing the repository. Packaging maps
 it to the public Python package name `defined_quant`; component code therefore imports
