@@ -41,10 +41,15 @@ jobs:
         run: uv run pytest
 
       - name: Lint
-        run: uv run ruff check shared categories authoring
+        run: |
+          uv run ruff check protocol shared categories authoring \
+            .agents/skills/use-defined-quant/scripts \
+            .agents/skills/use-defined-quant/tests
 
       - name: Type-check installed package projection
-        run: uv run --no-editable mypy shared categories authoring/*.py
+        run: |
+          uv run --no-editable mypy shared categories authoring/*.py
+          uv run --no-editable mypy -p defined_quant_protocol
 
       - name: Build wheel and source archive
         run: uv build
@@ -53,7 +58,7 @@ jobs:
         run: |
           uv venv .wheel-check
           uv pip install --python .wheel-check/bin/python dist/*.whl
-          .wheel-check/bin/python -c 'from defined_quant import iter_components; from defined_quant.market_data.simple_return.component import simple_return; assert [item.component_id for item in iter_components()] == ["dq.market_data.simple_return"]; assert simple_return(prices=[100, 101], price_kind="adjusted").returns == (0.01,)'
+          .wheel-check/bin/python -c 'from math import isclose; from defined_quant import iter_components; from defined_quant.market_data.simple_return.component import simple_return; from defined_quant_protocol import PROTOCOL_VERSION; assert PROTOCOL_VERSION == "0.1.0"; assert [item.component_id for item in iter_components()] == ["dq.market_data.simple_return"]; values = simple_return(prices=[100, 101], price_kind="adjusted").returns; assert len(values) == 1 and isclose(values[0], 0.01, rel_tol=0.0, abs_tol=1e-15)'
 
       - name: Export static catalog for this commit
         run: |

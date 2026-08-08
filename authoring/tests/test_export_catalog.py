@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from defined_quant_protocol import operation_protocol_schema
+
 from authoring import export_catalog
 
 COMPONENT_KEYS = {
@@ -25,6 +27,7 @@ COMPONENT_KEYS = {
     "output",
     "profile",
     "required_questions",
+    "schemas",
     "slug",
     "summary",
     "tags",
@@ -52,14 +55,18 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["do_not_use_when"]
     assert record["limitations"]
     assert record["unsupported"]
+    assert record["schemas"]["input"]["type"] == "object"
+    assert record["schemas"]["output"]["type"] == "object"
+    assert "prices" in record["schemas"]["input"]["properties"]
 
 
-def test_catalog_v1_has_deterministic_top_level_facet_values(
+def test_catalog_v2_has_deterministic_schemas_and_top_level_facets(
     tmp_path: Path,
     monkeypatch: object,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     output = tmp_path / "catalog.json"
+    second_output = tmp_path / "catalog-again.json"
 
     def successful_check(*args: object, **kwargs: object) -> SimpleNamespace:
         del args, kwargs
@@ -88,11 +95,31 @@ def test_catalog_v1_has_deterministic_top_level_facet_values(
         "categories",
         "components",
         "facets",
+        "operation_protocol",
         "release",
         "schema_version",
         "source",
     }
-    assert artifact["schema_version"] == 1
+    assert artifact["schema_version"] == 2
+    protocol = artifact["operation_protocol"]
+    assert protocol == operation_protocol_schema()
+    assert protocol["package"] == "defined_quant_protocol"
+    assert protocol["execution_mode"] == "unmanaged"
+    assert protocol["protocol_version"]
+    assert protocol["canonicalization_id"] == "dq-tagged-json-v1"
+    assert protocol["operation_request_domain"] == "operation.request.v1"
+    assert set(protocol["schemas"]) == {
+        "failure",
+        "manifest",
+        "request",
+        "result",
+        "success",
+    }
+    assert protocol["schemas"]["request"]["type"] == "object"
+    assert protocol["schemas"]["manifest"]["type"] == "object"
+    assert protocol["schemas"]["failure"]["type"] == "object"
+    assert protocol["schemas"]["result"]["discriminator"]["propertyName"] == "status"
+    assert len(protocol["schemas"]["result"]["oneOf"]) == 2
     assert list(artifact["facets"]) == sorted(artifact["facets"])
     assert set(artifact["facets"]) == {
         "categories",
@@ -106,3 +133,23 @@ def test_catalog_v1_has_deterministic_top_level_facet_values(
     }
     for values in artifact["facets"].values():
         assert values == sorted(set(values))
+
+    serialized = output.read_text(encoding="utf-8")
+    assert str(root) not in serialized
+    assert "file://" not in serialized
+
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        sys,
+        "argv",
+        [
+            "export_catalog.py",
+            "--root",
+            str(root),
+            "--commit-sha",
+            "a" * 40,
+            "--output",
+            str(second_output),
+        ],
+    )
+    assert export_catalog.main() == 0
+    assert second_output.read_bytes() == output.read_bytes()
