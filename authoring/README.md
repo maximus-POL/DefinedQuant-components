@@ -89,9 +89,11 @@ uv run python authoring/search_catalog.py "period price change" --json
 
 Ranking is deterministic and returns explicit positive matches separately from boundary matches.
 Values within one filter facet are ORed; populated facets are ANDed. Blank search lists the
-filtered catalog. The result limit is bounded to 100. Catalog schema version 1 binds both the
-exported discovery shape and these ranking semantics; changing either requires a schema-version
-decision so agent and website clients cannot silently diverge.
+filtered catalog. The result limit is bounded to 100. Static catalog schema version 2 binds the
+exported discovery shape and the ranking semantics it declares. The repo-local adapter responses
+remain adapter schema version 1; that transport version is separate from the static export schema.
+Changing either public shape requires an explicit version decision so clients cannot silently
+diverge.
 
 ## Check the catalog
 
@@ -140,16 +142,25 @@ uv run python authoring/export_catalog.py \
   --release-label "Experimental Technical Preview"
 ```
 
-The default output is `dist/catalog/catalog.json`. Catalog schema v1 contains no timestamp or
+The default output is `dist/catalog/catalog.json`. Catalog schema v2 contains no timestamp or
 local filesystem path, and its component order and JSON keys are stable. Each component exposes
 group, tags, discovery metadata, positive use cases, negative boundaries, assumptions,
-limitations, and trust data. Top-level sorted facet arrays cover categories, groups, tags,
-intents, input concepts, output concepts, lifecycles, and profiles. The private website can pin
-and consume that file as data.
+limitations, trust data, and deterministic JSON Schemas generated from its canonical Pydantic
+`Inputs` and `Output` models. The top-level `operation_protocol` record exports request, manifest,
+success, failure, and result schemas directly from `defined_quant_protocol`; the same canonical
+descriptor labels this operation path `unmanaged` and publishes its hash framing, domain, and
+verification vector. Sorted facet arrays cover categories, groups, tags, intents, input concepts,
+output concepts, lifecycles, and profiles. The private website can pin and consume that file as
+data.
 
-The exporter reports `exact_sha_attestation: none`. A future CI attestation step
-must derive and replace that value only after proving that the checks ran for the
-exact release commit; authors cannot claim it through a command-line flag.
+Schema export imports each component model only inside this authoring command. A website or other
+consumer reads the generated JSON and never imports or executes component Python.
+
+The exported `numerical: author_supplied` enum reports author-asserted numerical evidence, alongside
+`exact_sha_attestation: none` and `domain_review: none`. A future CI attestation step must derive
+and replace the exact-commit value only after proving that the checks ran for the exact release
+commit; authors cannot claim it through a command-line flag. Every current component remains
+lifecycle `draft` regardless of an export or successful engineering check.
 
 For local development, omit the release arguments:
 

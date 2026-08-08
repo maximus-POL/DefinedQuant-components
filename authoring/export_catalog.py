@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
-from defined_quant.catalog import iter_components
+from defined_quant.catalog import component_models, iter_components
 from defined_quant.discovery import catalog_facets
+from defined_quant_protocol import operation_protocol_schema
 
 EVIDENCE_SECTIONS = ("known_answers", "invariants", "boundary_cases", "cross_checks")
 
@@ -112,6 +113,12 @@ def _evidence_summary(evidence: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _operation_protocol() -> dict[str, Any]:
+    """Return the one canonical public operation-protocol descriptor."""
+
+    return operation_protocol_schema()
+
+
 def _component_record(component_dir: Path) -> dict[str, Any]:
     contract = _load_mapping(component_dir / "contract.yaml")
     evidence = _load_mapping(component_dir / "evidence.yaml")
@@ -128,6 +135,7 @@ def _component_record(component_dir: Path) -> dict[str, Any]:
     discovery = contract.get("discovery")
     if not isinstance(discovery, Mapping):
         raise ValueError(f"{component_dir / 'contract.yaml'} discovery must be an object")
+    inputs_model, output_model = component_models(component_dir)
 
     return {
         "id": contract["id"],
@@ -156,6 +164,10 @@ def _component_record(component_dir: Path) -> dict[str, Any]:
         "limitations": contract.get("limitations", []),
         "unsupported": guidance.get("unsupported_scope", []),
         "callable": contract["callable"],
+        "schemas": {
+            "input": inputs_model.model_json_schema(),
+            "output": output_model.model_json_schema(),
+        },
         "evidence": _evidence_summary(evidence),
     }
 
@@ -199,8 +211,9 @@ def main() -> int:
         return 1
     records.sort(key=lambda item: item["id"])
     catalog = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "defined_quant_catalog",
+        "operation_protocol": _operation_protocol(),
         "release": {
             "version": args.release_version,
             "label": args.release_label,

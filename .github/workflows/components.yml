@@ -41,10 +41,15 @@ jobs:
         run: uv run pytest
 
       - name: Lint
-        run: uv run ruff check shared categories authoring
+        run: |
+          uv run ruff check protocol shared categories authoring \
+            .agents/skills/use-defined-quant/scripts \
+            .agents/skills/use-defined-quant/tests
 
       - name: Type-check installed package projection
-        run: uv run --no-editable mypy shared categories authoring/*.py
+        run: |
+          uv run --no-editable mypy shared categories authoring/*.py
+          uv run --no-editable mypy -p defined_quant_protocol
 
       - name: Build wheel and source archive
         run: uv build

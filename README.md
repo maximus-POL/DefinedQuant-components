@@ -10,6 +10,10 @@ together in one small folder.
 > investment advice. Engineering checks, numerical evidence, provenance, and domain review are
 > reported separately.
 
+Every component currently published here has lifecycle `draft`. Its numerical evidence is
+author-asserted, not independently reviewed, and domain review is `none`. Those dimensions remain
+visible separately; passing repository checks does not upgrade a component's financial maturity.
+
 ## Find a component
 
 Start in [`categories/`](categories/). Categories are ordinary folders with a `README.md` that
@@ -38,6 +42,7 @@ the same five visible files.
 components/
 ├── categories/             browseable financial topics and components
 ├── shared/                 reusable types, validation, catalog loading, and charts
+├── protocol/               closed typed records installed as defined_quant_protocol
 ├── authoring/              one template, two schemas, and explicit Python tools
 ├── .agents/                optional repository-wide agent integration
 ├── .github/                contribution and CI configuration
@@ -46,8 +51,9 @@ components/
 ```
 
 `categories` and `shared` are source folders. Packaging projects them into the installed Python
-namespace `defined_quant`, so the product name remains stable without forcing contributors to
-browse through a `src/defined_quant/` wrapper.
+namespace `defined_quant`. The same wheel installs the separately versioned
+`defined_quant_protocol` namespace from `protocol/`. This keeps the typed transport boundary
+independent from component implementations without introducing a second distribution yet.
 
 `.agents/` is integration metadata for agent hosts such as Codex. It is not a financial category
 and it does not implement a calculation. Its single catalog-wide skill discovers, inspects, and
@@ -82,6 +88,26 @@ The result is a typed object, not a bare number. It includes units, assumptions,
 provenance, and a renderer-neutral visualization specification. The shared chart renderer can
 turn that specification into deterministic SVG without adding a plotting-library dependency.
 
+## Typed generic operations
+
+The repository-wide adapter can execute any conforming component through a closed
+`defined_quant_protocol.OperationRequest`. The request binds the exact component ID, version, and
+`subject_hash`; the selected component's Pydantic `Inputs` and `Output` models still perform the
+financial validation. Runtime locations such as the catalog root and output directory are host
+settings, not serialized request fields. A successful manifest names only relative output members
+and binds their hashes. The runner refuses a pre-existing output directory, stages every member,
+and publishes the complete new directory in one rename.
+
+This operation path is deliberately labeled **unmanaged**. The trusted local runner enforces typed
+component execution and records the exact request, result members, identities, and hashes. A
+manifest is an internally reconciled record, not a signed or independent execution attestation.
+It does not prove that caller-supplied data is true, authorize an analysis, create an approved
+`AnalysisPlan`, or produce a portable `ResearchBundle`. Those require the separate managed
+workflow that is not part of this release.
+
+See [the catalog-wide host skill](.agents/skills/use-defined-quant/SKILL.md) for discovery,
+inspection, request construction, execution, and result-handling instructions.
+
 ## Check the catalog
 
 The project intentionally exposes plain commands rather than a fictional `dq` CLI:
@@ -90,8 +116,11 @@ The project intentionally exposes plain commands rather than a fictional `dq` CL
 uv run pytest
 uv run python authoring/check_component.py
 uv run python authoring/search_catalog.py "calculate returns from prices"
-uv run ruff check shared categories authoring
+uv run python authoring/export_catalog.py
+uv run ruff check protocol shared categories authoring \
+  .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
 uv run --no-editable mypy shared categories authoring/*.py
+uv run --no-editable mypy -p defined_quant_protocol
 ```
 
 Normal development uses an editable install. The type-check command asks `uv` to check the same
@@ -128,8 +157,12 @@ Python. Adding a component therefore requires no website code change.
   searchable by humans, developer tools, websites, and autonomous agents without loading every
   calculation.
 - `evidence.yaml` names executable evidence and binds it to the exact behavior hash.
+- Every current component remains lifecycle `draft`, with author-asserted evidence and no
+  independent domain review.
 - Constraints use a closed operator vocabulary; no contract content is evaluated as Python.
 - Anything that changes the answer must be supplied or declared explicitly.
+- A typed operation binds what was calculated. Caller provenance records what the caller asserts;
+  it is not source authentication, authorization, or a managed verification claim.
 
 See [`VALIDATION.md`](VALIDATION.md) for the exact meaning of each trust claim.
 

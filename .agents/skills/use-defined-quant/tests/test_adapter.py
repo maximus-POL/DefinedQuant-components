@@ -6,6 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from defined_quant_protocol import (
+    OperationFailure,
+    OperationManifest,
+    OperationSuccess,
+    operation_protocol_schema,
+)
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 CATALOG = SKILL_ROOT / "scripts" / "catalog.py"
@@ -76,6 +83,11 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     }
     assert "simple_return_series" in shown["facets"]["output_concepts"]
     assert len(shown["subject_hash"]) == 64
+    assert shown["operation_protocol"]["protocol_version"] == "0.1.0"
+    assert shown["operation_protocol"]["schemas"]["request"]["title"] == "OperationRequest"
+    assert shown["operation_protocol"] == operation_protocol_schema()
+    assert shown["source_path"] == "categories/market_data/simple_return"
+    assert str(PROJECT_ROOT) not in json.dumps(shown)
 
 
 def test_catalog_search_explains_positive_boundary_and_unmatched_terms() -> None:
@@ -156,28 +168,43 @@ def test_runner_validates_executes_and_renders_component(
     )
     output_dir = tmp_path / "output"
 
-    manifest = _json_output(
-        _command(
-            str(RUNNER),
-            "--component",
-            "dq.market_data.simple_return",
-            "--input",
-            str(input_path),
-            "--output-dir",
-            str(output_dir),
+    response = OperationSuccess.model_validate(
+        _json_output(
+            _command(
+                str(RUNNER),
+                "--component",
+                "dq.market_data.simple_return",
+                "--input",
+                str(input_path),
+                "--output-dir",
+                str(output_dir),
+            )
         )
     )
+    manifest = response.manifest
 
-    assert manifest["component"]["id"] == "dq.market_data.simple_return"
-    assert Path(manifest["input"]["path"]).is_file()
-    assert Path(manifest["result"]["path"]).is_file()
-    assert Path(manifest["manifest_path"]).is_file()
-    assert len(manifest["artifacts"]) == 1
-    assert Path(manifest["artifacts"][0]["path"]).read_text(encoding="utf-8").startswith(
+    assert manifest.execution_mode == "unmanaged"
+    assert manifest.component.id == "dq.market_data.simple_return"
+    assert not Path(manifest.input.path).is_absolute()
+    assert not Path(manifest.result.path).is_absolute()
+    assert (output_dir / manifest.input.path).is_file()
+    assert (output_dir / manifest.result.path).is_file()
+    assert (output_dir / "manifest.json").is_file()
+    assert len(manifest.artifacts) == 1
+    assert not Path(manifest.artifacts[0].path).is_absolute()
+    assert len(Path(manifest.artifacts[0].path).parts) == 1
+    assert (output_dir / manifest.artifacts[0].path).read_text(encoding="utf-8").startswith(
         '<?xml version="1.0" encoding="UTF-8"?>'
     )
 
-    result = json.loads(Path(manifest["result"]["path"]).read_text(encoding="utf-8"))
+    saved_manifest = OperationManifest.model_validate_json(
+        (output_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert saved_manifest == manifest
+    assert manifest.operation_hash == manifest.request.operation_hash
+    assert str(output_dir) not in json.dumps(manifest.model_dump(mode="json"))
+
+    result = json.loads((output_dir / manifest.result.path).read_text(encoding="utf-8"))
     assert result["component_id"] == "dq.market_data.simple_return"
     assert result["returns"] == [
         0.030000000000000027,
@@ -201,5 +228,6 @@ def test_runner_returns_structured_input_error(tmp_path: Path) -> None:
     )
 
     assert completed.returncode == 2
-    error = json.loads(completed.stderr)["error"]
-    assert error["code"] == "invalid_component_input"
+    response = OperationFailure.model_validate_json(completed.stderr)
+    assert response.operation_hash is not None
+    assert response.error.code == "invalid_component_input"
