@@ -19,6 +19,7 @@ conflate them with these repository instructions.
 | `authoring/schemas/` | JSON Schemas for `contract.yaml` and `evidence.yaml`; protected |
 | `authoring/*.py` | Explicit creation, checking, and catalog-export tools; protected |
 | `.agents/skills/use-defined-quant/` | Optional catalog-wide Codex adapter; never component-specific |
+| `protocol/` | Canonical typed operation envelopes, installed as `defined_quant_protocol` |
 | `ARCHITECTURE.md` | Structure, package projection, trust binding, and publication boundary |
 
 ## Commands
@@ -36,8 +37,10 @@ uv run python authoring/create_component.py \
   --category <category> --group <group> --slug <slug> --profile <profile>
 uv run python authoring/create_category.py --id <id> --title "<title>"
 uv run python authoring/export_catalog.py
-uv run ruff check shared categories authoring
+uv run ruff check protocol shared categories authoring \
+  .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
 uv run --no-editable mypy shared categories authoring/*.py
+uv run --no-editable mypy -p defined_quant_protocol
 ```
 
 ## Invariants

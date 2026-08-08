@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["shared", "categories"]
+only-include = ["shared", "categories", "protocol"]
 exclude = [
   "**/__pycache__/**",
   "**/*.pyc",
@@ -30,16 +30,22 @@ exclude = [
   "shared/__init__.py",
   "shared/py.typed",
   "shared/README.md",
+  "protocol/__init__.py",
+  "protocol/py.typed",
+  "protocol/README.md",
 ]
-dev-mode-dirs = ["shared", "categories"]
+dev-mode-dirs = ["shared", "categories", "protocol"]
 
 [tool.hatch.build.targets.wheel.sources]
 "shared" = "defined_quant"
 "categories" = "defined_quant"
+"protocol" = "defined_quant_protocol"
 
 [tool.hatch.build.targets.wheel.force-include]
 "shared/__init__.py" = "defined_quant/__init__.py"
 "shared/py.typed" = "defined_quant/py.typed"
+"protocol/__init__.py" = "defined_quant_protocol/__init__.py"
+"protocol/py.typed" = "defined_quant_protocol/py.typed"
 
 [tool.pytest.ini_options]
 testpaths = ["categories", "authoring/tests", ".agents/skills"]
