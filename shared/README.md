@@ -4,8 +4,8 @@ Small, reusable foundations used by every component:
 
 - `types/` contains the canonical Pydantic financial, visualization, and datapoint-lineage types.
 - `validation.py` evaluates the closed, declarative rules stored in each `contract.yaml`.
-- `catalog.py` discovers components, loads their callables, and produces deterministic
-  `subject_hash` bindings.
+- `catalog.py` discovers components, loads their callables, caches stable-ID `subject_hash`
+  bindings, and exposes explicit invalidation and fresh verification for trust boundaries.
 - `discovery.py` searches contract metadata without importing calculations. It provides
   deterministic ranking, positive-versus-boundary match explanations, exact facets, and bounded
   results for both developer tools and agent adapters.
@@ -41,3 +41,10 @@ The folder is called `shared` so its purpose is clear when browsing the reposito
 it to the public Python package name `defined_quant`; component code therefore imports
 `defined_quant.validation`, `defined_quant.catalog`, `defined_quant.charts`, and
 `defined_quant.types`.
+
+The current catalog runtime is filesystem-backed. Stable-ID hashes are cached per normalized
+catalog root for ordinary component calls; the operation runner and managed plan validator call
+`verify_subject()` to clear the cache, recompute from disk, and seed the verified value before use.
+Path and explicit `ComponentRecord` hashes always remain fresh for authoring. Zip-imported or
+single-file frozen packages are not a supported execution layout because discovery and preflight
+also require readable contract files; memoization does not claim otherwise.

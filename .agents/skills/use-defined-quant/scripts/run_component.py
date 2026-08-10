@@ -29,7 +29,7 @@ from defined_quant import (  # noqa: E402
     load_component,
     preflight,
     save_svg,
-    subject_hash,
+    verify_subject,
     visualization_hash,
 )
 from defined_quant.catalog import ComponentRecord  # noqa: E402
@@ -337,7 +337,10 @@ def _component_ref(
 ) -> ComponentRef:
     try:
         digest = _quiet_component_call(
-            lambda: subject_hash(record),
+            lambda: verify_subject(
+                record.component_id,
+                root=record.path.parents[1],
+            ),
             component=requested,
         )
         return ComponentRef(id=record.component_id, version=record.version, subject_hash=digest)

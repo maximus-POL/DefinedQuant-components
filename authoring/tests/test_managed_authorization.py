@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import defined_quant.plan_validation as plan_validation
 import pytest
 from defined_quant import (
     create_authorization_binding,
@@ -140,6 +141,27 @@ def _authorized_chain() -> tuple[
     )
     binding = create_authorization_binding(plan, outcome, approval)
     return policy, plan, outcome, approval, binding
+
+
+def test_plan_validation_freshly_verifies_installed_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str | Path | None]] = []
+    original: Any = getattr(plan_validation, "verify_subject")
+
+    def verified(component_id: str, *, root: str | Path | None = None) -> str:
+        calls.append((component_id, root))
+        return original(component_id, root=root)
+
+    monkeypatch.setattr(plan_validation, "verify_subject", verified)
+    policy = load_execution_policy("simple_return_csv_v1")
+
+    outcome = validate_plan(_plan(policy=policy), policy)
+
+    assert isinstance(outcome, ValidationReceipt)
+    assert len(calls) == 1
+    assert calls[0][0] == "dq.market_data.simple_return"
+    assert isinstance(calls[0][1], Path)
 
 
 def test_exact_subject_atomic_plan_receipt_and_manual_approval_authorize() -> None:

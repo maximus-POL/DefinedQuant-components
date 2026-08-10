@@ -250,6 +250,34 @@ def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> N
     assert success.manifest.artifacts == ()
 
 
+def test_component_reference_uses_explicit_fresh_subject_verification() -> None:
+    completed = _python_probe(
+        """
+import json
+import sys
+sys.path.insert(0, sys.argv[1])
+import run_component as runner
+
+calls = []
+def verified(component_id, *, root=None):
+    calls.append({"component_id": component_id, "root": str(root)})
+    return "1" * 64
+
+runner.verify_subject = verified
+record = runner.component_record("dq.market_data.simple_return")
+reference = runner._component_ref(record)
+print(json.dumps({"calls": calls, "reference": reference.model_dump(mode="json")}))
+"""
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 0
+    assert len(payload["calls"]) == 1
+    assert payload["calls"][0]["component_id"] == "dq.market_data.simple_return"
+    assert Path(payload["calls"][0]["root"]).is_absolute()
+    assert payload["reference"]["subject_hash"] == "1" * 64
+
+
 def test_runtime_configuration_is_rejected_inside_request(tmp_path: Path) -> None:
     request = _request().model_dump(mode="json")
     request["output_dir"] = str(tmp_path / "smuggled-output")

@@ -142,6 +142,12 @@ Normal development uses an editable install. The type-check command asks `uv` to
 merged package layout users receive in the wheel, because static type checkers do not execute the
 small runtime path extension used by the readable two-source layout.
 
+Runtime discovery is filesystem-backed. Stable component-ID subject hashes are memoized per
+catalog root for ordinary calculations, while the runner and managed validator explicitly
+invalidate and freshly verify the installed subject at their trust boundaries. Zipimport and
+single-file frozen packaging are not currently supported because contracts must remain readable to
+both discovery and preflight.
+
 To add a component:
 
 ```bash

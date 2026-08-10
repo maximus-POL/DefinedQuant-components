@@ -188,7 +188,8 @@ unsupported hosts fail rather than falling back to a replace operation.
 The generic adapter then performs the following catalog-wide sequence:
 
 1. Validate the closed operation request.
-2. Discover the component by stable ID and refuse a version or `subject_hash` mismatch.
+2. Discover the component by stable ID, freshly recompute and cache its filesystem-backed
+   `subject_hash`, and refuse an exact version or subject mismatch.
 3. Validate input through that component's canonical Pydantic `Inputs` model.
 4. Invoke only the callable declared by the component catalog.
 5. Validate the return value through the canonical Pydantic `Output` model and verify its
@@ -200,6 +201,9 @@ No production branch selects behavior by component ID. A component can serve as 
 but adding another conforming component requires no runner edit. Pydantic models also remain the
 canonical source for structural compatibility between possible component steps; an empty or
 populated `depends_on` list in `contract.yaml` is not a substitute for model compatibility.
+Ordinary stable-ID subject lookups reuse the freshly verified cache entry; path and explicit-record
+lookups remain uncached for authoring. The current catalog and preflight require filesystem-backed
+contracts, so zipimport and single-file frozen layouts are outside the supported runtime boundary.
 
 The operation result is intentionally **unmanaged**. The trusted local runner enforces the sequence
 above; its manifest records an internally reconciled assertion about the exact request, component,
