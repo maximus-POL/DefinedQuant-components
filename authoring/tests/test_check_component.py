@@ -12,6 +12,7 @@ from authoring.check_component import (
     _validate_callable_signature,
     _validate_discovery,
     _validate_formula_surfaces,
+    _validate_guidance,
     _validate_output_model,
 )
 
@@ -146,3 +147,74 @@ def test_formula_surfaces_must_match_component_formula(tmp_path: Path) -> None:
         formula,
     )
     assert any("Formula section must include" in error for error in readme_errors)
+
+
+def test_input_independent_warning_comparisons_are_rejected_as_disclosures() -> None:
+    guidance = {
+        "constraints": [
+            {
+                "id": "always_visible",
+                "severity": "warning",
+                "when": {
+                    "all": [
+                        {
+                            "left": {"field": "values", "measure": "count"},
+                            "op": "gt",
+                            "right": {"value": 0},
+                        },
+                        {
+                            "left": {"value": True},
+                            "op": "eq",
+                            "right": {"value": True},
+                        },
+                    ]
+                },
+                "message": "Always visible context.",
+            }
+        ],
+        "required_questions": [],
+        "allowed_defaults": [],
+    }
+
+    errors = _validate_guidance(
+        Path("contract.yaml"),
+        guidance,
+        {"values"},
+        {"values"},
+        {},
+    )
+
+    assert any(
+        "input-independent comparison" in error
+        and "constant output context belongs in Output.disclosures" in error
+        for error in errors
+    )
+
+
+def test_field_dependent_warning_constraints_remain_valid() -> None:
+    guidance = {
+        "constraints": [
+            {
+                "id": "empty_values",
+                "severity": "warning",
+                "when": {
+                    "left": {"field": "values", "measure": "count"},
+                    "op": "eq",
+                    "right": {"value": 0},
+                },
+                "message": "The supplied values are empty.",
+            }
+        ],
+        "required_questions": [],
+        "allowed_defaults": [],
+    }
+
+    errors = _validate_guidance(
+        Path("contract.yaml"),
+        guidance,
+        {"values"},
+        {"values"},
+        {},
+    )
+
+    assert errors == []

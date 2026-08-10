@@ -149,10 +149,34 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.3.0"
+    assert result.version == "0.3.1"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL
+
+
+def test_constant_context_is_disclosed_without_warning() -> None:
+    result = simple_return(
+        (100.0, 101.0),
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=(_timestamp(24), _timestamp(25)),
+    )
+
+    assert result.warnings == ()
+    assert result.disclosures == (
+        "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
+        "so gaps were not assessed.",
+    )
+    assert result.visualizations[0].warnings == ()
+
+
+def test_blank_disclosures_are_rejected() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+    payload = result.model_dump(mode="python")
+    payload["disclosures"] = ("",)
+
+    with pytest.raises(ValidationError, match="output messages must not be blank"):
+        Output.model_validate(payload)
 
 
 def test_simple_return_rejects_incomplete_or_reindexed_lineage() -> None:

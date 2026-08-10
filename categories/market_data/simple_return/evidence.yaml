@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee",
+  "validated_subject_hash": "b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a",
   "known_answers": [
     {
       "id": "ka_001",
@@ -259,8 +259,13 @@
             "value": "ordering_unverified:"
           },
           {
-            "path": "/warnings",
+            "path": "/disclosures",
             "op": "contains_prefix",
+            "value": "gap_check_not_assessed:"
+          },
+          {
+            "path": "/warnings",
+            "op": "not_contains_prefix",
             "value": "gap_check_not_assessed:"
           }
         ]
@@ -315,6 +320,11 @@
           },
           {
             "path": "/warnings",
+            "op": "equal",
+            "value": []
+          },
+          {
+            "path": "/disclosures",
             "op": "contains_prefix",
             "value": "gap_check_not_assessed:"
           }
@@ -638,6 +648,7 @@
           "returns",
           "return_kind",
           "price_kind",
+          "disclosures",
           "warnings",
           "derivations",
           "visualizations",
@@ -704,6 +715,7 @@
           "returns",
           "ordering_status",
           "gap_check",
+          "disclosures",
           "derivations",
           "warnings"
         ]

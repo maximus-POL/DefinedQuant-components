@@ -22,9 +22,13 @@ component's Pydantic models remain canonical for inputs, outputs, units, default
 compatibility. The direct operation adapter remains unmanaged and cannot mint plan approval,
 source-verification, or `ResearchBundle` claims.
 
+`ComponentOutput` keeps assumptions, permanent disclosures, transformations, and state-dependent
+warnings in separate fields. Every comparison in a contract warning rule must depend on component
+input state; constant output context belongs in `disclosures`.
+
 Protocol 0.2.0 adds a separate authorization-only path. The packaged `simple_return_csv_v1`
-profile allowlists exactly `dq.market_data.simple_return` version `0.3.0`, subject
-`7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`. It requires explicit draft
+profile allowlists exactly `dq.market_data.simple_return` version `0.3.1`, subject
+`b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.

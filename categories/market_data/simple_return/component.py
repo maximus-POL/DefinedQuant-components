@@ -27,8 +27,12 @@ from defined_quant.types import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.3.0"
+COMPONENT_VERSION = "0.3.1"
 FORMULA = "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁"
+_GAP_DISCLOSURES = (
+    "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
+    "so gaps were not assessed.",
+)
 
 
 class Inputs(BaseModel):
@@ -250,6 +254,7 @@ def simple_return(
         subject_hash=subject_hash(COMPONENT_ID),
         unit=Unit.DECIMAL,
         assumptions=assumptions,
+        disclosures=_GAP_DISCLOSURES,
         warnings=warnings,
         transformations=transformations,
         derivations=_derivations(returns),

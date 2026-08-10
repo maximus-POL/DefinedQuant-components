@@ -61,6 +61,7 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["schemas"]["output"]["type"] == "object"
     assert "prices" in record["schemas"]["input"]["properties"]
     assert "derivations" in record["schemas"]["output"]["properties"]
+    assert "disclosures" in record["schemas"]["output"]["properties"]
     assert "derivations" in record["schemas"]["output"]["required"]
     assert "Derivation" in record["schemas"]["output"]["$defs"]
 

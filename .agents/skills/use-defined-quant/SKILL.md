@@ -143,9 +143,9 @@ settings belongs inside the request or its operation hash.
    be reported as an operational failure. On success, standard output contains an
    `OperationSuccess` whose manifest is also written to `manifest.json`.
 5. Read `result.json` and `manifest.json`. Present the result with its component ID, version,
-   subject hash, unit, assumptions, transformations, warnings, datapoint derivations, and any
-   component-specific interpretation fields. Verify content hashes before trusting materialized
-   members.
+   subject hash, unit, assumptions, disclosures, transformations, state-dependent warnings,
+   datapoint derivations, and any component-specific interpretation fields. Verify content hashes
+   before trusting materialized members.
 6. Manifest member paths are normalized relative POSIX paths such as `result.json` or
    `01-chart.svg`; they never contain the host output root. Resolve a member against the selected
    output directory only for local access. Do not write that resolved host path back into the

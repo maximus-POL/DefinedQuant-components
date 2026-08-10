@@ -68,9 +68,10 @@ not be verified.
 
 Use this component for deterministic adjacent-period price returns when the ordered observations
 and adjusted/unadjusted convention are explicit. It is also suitable as a trusted transform inside
-an agent workflow because the result carries provenance, warnings, conventions, and, when the
-result is within the presentation limit, its chart specification together. Each returned datapoint
-also carries exact, machine-validated lineage to its two adjacent source prices.
+an agent workflow because the result separates permanent disclosures from state-dependent
+warnings and carries provenance, conventions, and, when the result is within the presentation
+limit, its chart specification together. Each returned datapoint also carries exact,
+machine-validated lineage to its two adjacent source prices.
 
 ## Inappropriate uses
 
@@ -84,5 +85,7 @@ The output describes the supplied series; it does not establish that the series 
 point-in-time correct, survivorship-bias free, or suitable for investment decisions. A declared
 frequency is retained as disclosure only. Calendar-aware gap detection requires an explicit
 calendar and gap policy that this draft contract does not yet define, so `gap_check` is always
-`not_assessed`. A positive finite price pair whose return overflows or is indistinguishable from
-total loss in binary64 is rejected.
+`not_assessed` and that permanent context appears in `disclosures`, not `warnings`. Warnings are
+reserved for findings caused by the supplied state, such as unverified ordering, unadjusted-price
+interpretation, or an omitted over-limit chart. A positive finite price pair whose return
+overflows or is indistinguishable from total loss in binary64 is rejected.

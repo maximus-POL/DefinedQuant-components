@@ -133,6 +133,12 @@ def test_typed_request_is_portable_hash_bound_and_repeatable(tmp_path: Path) -> 
     assert manifest.operation_hash == manifest.request.operation_hash
     assert manifest.input.sha256 == _sha256(first_dir / manifest.input.path)
     assert manifest.result.sha256 == _sha256(first_dir / manifest.result.path)
+    result = json.loads((first_dir / manifest.result.path).read_text(encoding="utf-8"))
+    assert result["warnings"] == []
+    assert result["disclosures"] == [
+        "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
+        "so gaps were not assessed."
+    ]
     result_members = (manifest.input.path, manifest.result.path)
     assert all(not Path(member).is_absolute() for member in result_members)
     assert all(not Path(artifact.path).is_absolute() for artifact in manifest.artifacts)

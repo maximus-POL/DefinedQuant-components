@@ -554,6 +554,23 @@ def _condition_fields(value: Any) -> Iterable[str]:
             yield from _condition_fields(child)
 
 
+def _has_literal_only_comparison(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    for operator in ("all", "any"):
+        children = value.get(operator)
+        if isinstance(children, list):
+            return any(_has_literal_only_comparison(child) for child in children)
+    left = value.get("left")
+    right = value.get("right")
+    return (
+        isinstance(left, Mapping)
+        and isinstance(right, Mapping)
+        and "value" in left
+        and "value" in right
+    )
+
+
 def _duplicates(values: Iterable[str]) -> set[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()
@@ -578,6 +595,18 @@ def _validate_guidance(
     referenced.update(_condition_fields(guidance.get("allowed_defaults", [])))
     for field in sorted(referenced - input_fields):
         errors.append(f"{path}: guidance references unknown input field {field!r}")
+
+    raw_constraints = guidance.get("constraints", [])
+    constraints = raw_constraints if isinstance(raw_constraints, list) else []
+    for constraint in constraints:
+        if not isinstance(constraint, Mapping) or constraint.get("severity") != "warning":
+            continue
+        if _has_literal_only_comparison(constraint.get("when")):
+            constraint_id = constraint.get("id", "unknown")
+            errors.append(
+                f"{path}: warning constraint {constraint_id!r} contains an input-independent "
+                "comparison; constant output context belongs in Output.disclosures"
+            )
 
     raw_questions = guidance.get("required_questions", [])
     questions = raw_questions if isinstance(raw_questions, list) else []

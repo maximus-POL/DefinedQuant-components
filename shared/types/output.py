@@ -19,12 +19,13 @@ class ComponentOutput(BaseModel):
     subject_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     unit: Unit
     assumptions: tuple[str, ...] = ()
+    disclosures: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     transformations: tuple[str, ...] = ()
     derivations: tuple[Derivation, ...] = ()
     visualizations: tuple[VisualizationSpec, ...] = ()
 
-    @field_validator("assumptions", "warnings", "transformations")
+    @field_validator("assumptions", "disclosures", "warnings", "transformations")
     @classmethod
     def validate_messages(cls, values: tuple[str, ...]) -> tuple[str, ...]:
         if any(not value.strip() for value in values):

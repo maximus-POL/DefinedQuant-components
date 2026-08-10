@@ -84,9 +84,10 @@ print(result.returns)
 PY
 ```
 
-The result is a typed object, not a bare number. It includes units, assumptions, warnings,
-provenance, and a renderer-neutral visualization specification. The shared chart renderer can
-turn that specification into deterministic SVG without adding a plotting-library dependency.
+The result is a typed object, not a bare number. It includes units, assumptions, constant
+disclosures, state-dependent warnings, datapoint derivations, provenance, and a renderer-neutral
+visualization specification. The shared chart renderer can turn that specification into
+deterministic SVG without adding a plotting-library dependency.
 
 ## Typed generic operations
 
@@ -106,8 +107,8 @@ It does not prove that caller-supplied data is true, authorize an analysis, crea
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
 Protocol 0.2.0 separately introduces an atomic managed-authorization foundation. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.0` at
-subject `7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`, with explicit opt-in to
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.1` at
+subject `b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.

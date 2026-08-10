@@ -95,6 +95,9 @@ Each component has one canonical implementation file and two machine-readable do
 - Defines Pydantic `Inputs` and `Output`.
 - Defines the deterministic callable.
 - Is canonical for types, units, conventions, and defaults.
+- Separates assumptions, permanent disclosures, transformations, and state-dependent warnings in
+  the shared output envelope; input-independent comparisons in contract warning rules are
+  rejected.
 - May return typed, renderer-neutral visualization specifications.
 
 `contract.yaml`
@@ -215,8 +218,8 @@ assertion, not a provider or Defined Quant attestation.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
-`dq.market_data.simple_return` version `0.3.0`, subject
-`7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`, with explicit opt-in to its
+`dq.market_data.simple_return` version `0.3.1`, subject
+`b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a
