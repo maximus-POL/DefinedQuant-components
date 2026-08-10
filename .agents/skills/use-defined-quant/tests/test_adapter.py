@@ -84,7 +84,7 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     }
     assert "simple_return_series" in shown["facets"]["output_concepts"]
     assert len(shown["subject_hash"]) == 64
-    assert shown["operation_protocol"]["protocol_version"] == "0.1.0"
+    assert shown["operation_protocol"]["protocol_version"] == "0.2.0"
     assert shown["operation_protocol"]["schemas"]["request"]["title"] == "OperationRequest"
     assert shown["operation_protocol"] == operation_protocol_schema()
     assert shown["source_path"] == "categories/market_data/simple_return"
