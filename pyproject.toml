@@ -48,6 +48,7 @@ dev-mode-dirs = ["shared", "categories", "protocol"]
 "protocol/py.typed" = "defined_quant_protocol/py.typed"
 
 [tool.pytest.ini_options]
+addopts = ["-p", "authoring.pytest_evidence"]
 testpaths = ["categories", "authoring/tests", ".agents/skills"]
 python_files = ["test_*.py"]
 pythonpath = ["."]

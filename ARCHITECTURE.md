@@ -111,8 +111,10 @@ Each component has one canonical implementation file and two machine-readable do
 `evidence.yaml`
 
 - The subject hash that the evidence applies to.
-- Known answers, invariants, boundary cases, and cross-checks, each tied to an executable test.
-- Agent-use cases used to test correct invocation/refusal behavior.
+- Known answers, boundary cases, and cross-checks are single-invocation fixtures collected and
+  executed directly by pytest through a closed assertion vocabulary.
+- Invariants name hand-written property tests; agent cases execute structured requests through the
+  real adapter and assert compute, clarification, or refusal behavior.
 - Does not grant domain review.
 
 `README.md` is the human trust surface. It explains the implementation but cannot redefine it.
@@ -130,9 +132,9 @@ Each component has one canonical implementation file and two machine-readable do
 - declared component and external dependencies.
 - all contract fields used by canonical agent routing, including discovery metadata.
 
-Evidence content binds separately to the subject and named tests. Exact-commit CI records what
-actually ran. Domain review, when added, binds the exact reviewed subject and explanatory content.
-None of these dimensions is collapsed into a single trust badge.
+Evidence content binds separately to the subject and to the generated or named tests that consumed
+it. Exact-commit CI records what actually ran. Domain review, when added, binds the exact reviewed
+subject and explanatory content. None of these dimensions is collapsed into a single trust badge.
 
 ## 6. Visualization boundary
 

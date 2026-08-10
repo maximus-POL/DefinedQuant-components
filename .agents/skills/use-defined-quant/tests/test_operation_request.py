@@ -166,7 +166,12 @@ def test_exact_component_identity_mismatch_refuses_before_output(tmp_path: Path)
 
 
 def test_invalid_component_input_retains_valid_request_hash(tmp_path: Path) -> None:
-    request = _request(input_data={"prices": [100.0]})
+    request = _request(
+        input_data={
+            "prices": [100.0, 101.0],
+            "price_kind": "vendor_defined",
+        }
+    )
     request_path = tmp_path / "invalid-input.json"
     _write_request(request_path, request)
     output_dir = tmp_path / "output"
@@ -176,6 +181,21 @@ def test_invalid_component_input_retains_valid_request_hash(tmp_path: Path) -> N
     assert failure.operation_hash == request.operation_hash
     assert failure.error.code == "invalid_component_input"
     assert failure.error.component == request.component
+    assert not output_dir.exists()
+
+
+def test_missing_required_question_is_typed_as_ambiguous_input(tmp_path: Path) -> None:
+    request = _request(input_data={"prices": [100.0, 101.0]})
+    request_path = tmp_path / "missing-question.json"
+    _write_request(request_path, request)
+    output_dir = tmp_path / "output"
+
+    failure = _failure(_command(request_path, output_dir))
+
+    assert failure.error.code == "component_refused"
+    component_error = failure.error.details["component_error"]
+    assert component_error["code"] == "ambiguous_input"
+    assert component_error["details"]["questions"][0]["field"] == "price_kind"
     assert not output_dir.exists()
 
 

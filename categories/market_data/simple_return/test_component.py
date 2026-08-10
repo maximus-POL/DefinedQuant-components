@@ -11,13 +11,10 @@ import pytest
 from defined_quant import preflight, render_svg, subject_hash
 from defined_quant.market_data.simple_return.component import FORMULA, Inputs, Output, simple_return
 from defined_quant.types import (
-    MAX_VISUALIZATION_POINTS,
     AmbiguousInput,
     DomainError,
-    Frequency,
     NumberFormat,
     PriceKind,
-    ReturnKind,
     Unit,
 )
 from pydantic import ValidationError
@@ -56,16 +53,6 @@ def test_formula_surfaces_match_the_executed_expression() -> None:
     caption = result.visualizations[0].caption
     assert caption is not None
     assert FORMULA in caption
-
-
-def test_evidence_ka_001() -> None:
-    result = simple_return(
-        [100.0, 105.0, 102.9],
-        price_kind=PriceKind.ADJUSTED,
-    )
-
-    assert result.returns == pytest.approx((0.05, -0.02), rel=1e-12, abs=1e-12)
-    assert result.return_kind is ReturnKind.SIMPLE
 
 
 def test_evidence_inv_001() -> None:
@@ -109,170 +96,6 @@ def test_evidence_inv_004() -> None:
     assert visualization.y_axis.number_format is NumberFormat.PERCENT
     assert visualization.assumptions == result.assumptions
     assert visualization.warnings == result.warnings
-
-
-def test_evidence_bc_001() -> None:
-    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
-
-    assert len(result.returns) == 1
-    assert result.returns[0] == pytest.approx(0.01, rel=1e-12, abs=1e-12)
-
-
-def test_evidence_bc_002() -> None:
-    timestamps = (_timestamp(24), _timestamp(27), _timestamp(28))
-    result = simple_return(
-        (100.0, 101.0, 102.0),
-        price_kind=PriceKind.ADJUSTED,
-        timestamps=timestamps,
-    )
-
-    assert result.return_timestamps == timestamps[1:]
-    assert result.ordering_status == "verified"
-
-
-def test_evidence_bc_003() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return(
-            (100.0, 101.0, 102.0),
-            price_kind=PriceKind.ADJUSTED,
-            timestamps=(_timestamp(24), _timestamp(27)),
-        )
-
-    assert "timestamp_length_mismatch" in _rules(caught.value)
-
-
-def test_evidence_bc_004() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return(
-            (100.0, 101.0),
-            price_kind=PriceKind.ADJUSTED,
-            timestamps=(_timestamp(24), _timestamp(24)),
-        )
-
-    assert "duplicate_timestamps" in _rules(caught.value)
-
-
-def test_evidence_bc_005() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return(
-            (100.0, 101.0),
-            price_kind=PriceKind.ADJUSTED,
-            timestamps=(_timestamp(28), _timestamp(27)),
-        )
-
-    assert "non_increasing_timestamps" in _rules(caught.value)
-
-
-def test_evidence_bc_006() -> None:
-    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
-
-    assert result.ordering_status == "unverified"
-    assert result.gap_check == "not_assessed"
-    assert any(message.startswith("ordering_unverified:") for message in result.warnings)
-    assert any(message.startswith("gap_check_not_assessed:") for message in result.warnings)
-
-
-def test_evidence_bc_007() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return(
-            (100.0, 101.0),
-            price_kind=PriceKind.ADJUSTED,
-            declared_frequency=Frequency.DAILY,
-        )
-
-    assert "frequency_without_timestamps" in _rules(caught.value)
-
-
-def test_evidence_bc_008() -> None:
-    result = simple_return(
-        (100.0, 101.0),
-        price_kind=PriceKind.ADJUSTED,
-        timestamps=(_timestamp(24), _timestamp(27)),
-        declared_frequency=Frequency.DAILY,
-    )
-
-    assert result.declared_frequency is Frequency.DAILY
-    assert result.gap_check == "not_assessed"
-    assert any(message.startswith("gap_check_not_assessed:") for message in result.warnings)
-
-
-def test_evidence_bc_009() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return((100.0,), price_kind=PriceKind.ADJUSTED)
-
-    assert "insufficient_prices" in _rules(caught.value)
-
-
-@pytest.mark.parametrize("price", [0.0, -1.0])
-def test_evidence_bc_010(price: float) -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return((100.0, price), price_kind=PriceKind.ADJUSTED)
-
-    assert "non_positive_prices" in _rules(caught.value)
-
-
-@pytest.mark.parametrize("price", [math.nan, math.inf, -math.inf])
-def test_evidence_bc_011(price: float) -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return((100.0, price), price_kind=PriceKind.ADJUSTED)
-
-    assert "non_finite_prices" in _rules(caught.value)
-
-
-def test_evidence_bc_012() -> None:
-    result = simple_return((100.0, 101.0), price_kind=PriceKind.UNADJUSTED)
-
-    assert any(
-        message.startswith("unadjusted_price_interpretation:")
-        for message in result.warnings
-    )
-
-
-def test_evidence_bc_013() -> None:
-    close_prices = simple_return(
-        (1e16, 1e16 + 2.0),
-        price_kind=PriceKind.ADJUSTED,
-    )
-    assert close_prices.returns == (2e-16,)
-
-
-def test_evidence_bc_014() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return((1e-308, 1e308), price_kind=PriceKind.ADJUSTED)
-    assert "non_finite_result" in _rules(caught.value)
-
-
-def test_evidence_bc_015() -> None:
-    with pytest.raises(DomainError) as caught:
-        simple_return((1e308, 1e-308), price_kind=PriceKind.ADJUSTED)
-    assert "non_finite_result" in _rules(caught.value)
-
-
-def test_evidence_bc_016() -> None:
-    at_limit = simple_return(
-        (100.0,) * (MAX_VISUALIZATION_POINTS + 1),
-        price_kind=PriceKind.ADJUSTED,
-    )
-    above_limit = simple_return(
-        (100.0,) * (MAX_VISUALIZATION_POINTS + 2),
-        price_kind=PriceKind.ADJUSTED,
-    )
-
-    assert at_limit.returns == (0.0,) * MAX_VISUALIZATION_POINTS
-    assert len(at_limit.visualizations) == 1
-    assert len(at_limit.visualizations[0].categories) == MAX_VISUALIZATION_POINTS
-    assert at_limit.visualizations[0].series[0].values == at_limit.returns
-    assert not any(message.startswith("visualization_omitted:") for message in at_limit.warnings)
-
-    assert above_limit.returns == (0.0,) * (MAX_VISUALIZATION_POINTS + 1)
-    assert above_limit.visualizations == ()
-    omission = next(
-        message
-        for message in above_limit.warnings
-        if message.startswith("visualization_omitted:")
-    )
-    assert str(MAX_VISUALIZATION_POINTS) in omission
-    assert "full return series is preserved" in omission
 
 
 @pytest.mark.parametrize(

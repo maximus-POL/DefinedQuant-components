@@ -216,7 +216,10 @@ def test_runner_validates_executes_and_renders_component(
 
 def test_runner_returns_structured_input_error(tmp_path: Path) -> None:
     input_path = tmp_path / "invalid-input.json"
-    input_path.write_text(json.dumps({"prices": [100.0]}), encoding="utf-8")
+    input_path.write_text(
+        json.dumps({"prices": [100.0, 101.0], "price_kind": "invented"}),
+        encoding="utf-8",
+    )
 
     completed = _command(
         str(RUNNER),

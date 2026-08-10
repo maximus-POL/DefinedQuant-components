@@ -1,11 +1,10 @@
 {
-  "schema_version": 0,
+  "schema_version": 1,
   "component_id": "dq.market_data.simple_return",
   "validated_subject_hash": "ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7",
   "known_answers": [
     {
       "id": "ka_001",
-      "test_id": "test_evidence_ka_001",
       "description": "Two hand-derived simple returns from three prices.",
       "inputs": {
         "prices": [
@@ -15,16 +14,25 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected": {
-        "returns": [
-          0.05,
-          -0.02
-        ],
-        "return_kind": "simple"
-      },
-      "tolerance": {
-        "rtol": 1e-12,
-        "atol": 1e-12
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              0.05,
+              -0.02
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/return_kind",
+            "op": "equal",
+            "value": "simple"
+          }
+        ]
       },
       "provenance": {
         "kind": "author_derivation",
@@ -37,40 +45,27 @@
     {
       "id": "inv_001",
       "test_id": "test_evidence_inv_001",
-      "description": "Compounding every simple return reproduces the terminal-to-initial price ratio.",
-      "kind": "cumulative_price_ratio",
-      "tolerance": {
-        "rtol": 1e-12,
-        "atol": 1e-12
-      }
+      "description": "Compounding every simple return reproduces the terminal-to-initial price ratio."
     },
     {
       "id": "inv_002",
       "test_id": "test_evidence_inv_002",
-      "description": "Multiplying every price by the same positive scale leaves returns unchanged.",
-      "kind": "scale_invariance",
-      "tolerance": {
-        "rtol": 1e-12,
-        "atol": 1e-12
-      }
+      "description": "Multiplying every price by the same positive scale leaves returns unchanged."
     },
     {
       "id": "inv_003",
       "test_id": "test_evidence_inv_003",
-      "description": "A constant positive price series produces exact zero returns.",
-      "kind": "constant_series"
+      "description": "A constant positive price series produces exact zero returns."
     },
     {
       "id": "inv_004",
       "test_id": "test_evidence_inv_004",
-      "description": "Visualization values, units, labels, assumptions, and warnings match the canonical output.",
-      "kind": "visualization_fidelity"
+      "description": "Visualization values, units, labels, assumptions, and warnings match the canonical output."
     }
   ],
   "boundary_cases": [
     {
       "id": "bc_001",
-      "test_id": "test_evidence_bc_001",
       "description": "Two prices produce exactly one return.",
       "inputs": {
         "prices": [
@@ -79,19 +74,23 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected": {
-        "returns": [
-          0.01
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              0.01
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          }
         ]
-      },
-      "tolerance": {
-        "rtol": 1e-12,
-        "atol": 1e-12
       }
     },
     {
       "id": "bc_002",
-      "test_id": "test_evidence_bc_002",
       "description": "Each return timestamp is the end of its price interval.",
       "inputs": {
         "prices": [
@@ -106,16 +105,27 @@
           "2026-07-28T00:00:00Z"
         ]
       },
-      "expected": {
-        "return_timestamp_indices": [
-          1,
-          2
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/return_timestamps",
+            "op": "equal",
+            "value": [
+              "2026-07-27T00:00:00Z",
+              "2026-07-28T00:00:00Z"
+            ]
+          },
+          {
+            "path": "/ordering_status",
+            "op": "equal",
+            "value": "verified"
+          }
         ]
       }
     },
     {
       "id": "bc_003",
-      "test_id": "test_evidence_bc_003",
       "description": "Price and timestamp length mismatch is blocking.",
       "inputs": {
         "prices": [
@@ -129,11 +139,16 @@
           "2026-07-27T00:00:00Z"
         ]
       },
-      "expected_error": "timestamp_length_mismatch"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "timestamp_length_mismatch"
+        ]
+      }
     },
     {
       "id": "bc_004",
-      "test_id": "test_evidence_bc_004",
       "description": "Duplicate timestamps are blocking.",
       "inputs": {
         "prices": [
@@ -146,11 +161,16 @@
           "2026-07-24T00:00:00Z"
         ]
       },
-      "expected_error": "duplicate_timestamps"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "duplicate_timestamps"
+        ]
+      }
     },
     {
       "id": "bc_005",
-      "test_id": "test_evidence_bc_005",
       "description": "Reverse-ordered timestamps are refused rather than sorted.",
       "inputs": {
         "prices": [
@@ -163,11 +183,16 @@
           "2026-07-27T00:00:00Z"
         ]
       },
-      "expected_error": "non_increasing_timestamps"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_increasing_timestamps"
+        ]
+      }
     },
     {
       "id": "bc_006",
-      "test_id": "test_evidence_bc_006",
       "description": "Missing timestamps preserve order but visibly mark chronology and gaps unassessed.",
       "inputs": {
         "prices": [
@@ -176,11 +201,34 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected_warning": "ordering_unverified"
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/ordering_status",
+            "op": "equal",
+            "value": "unverified"
+          },
+          {
+            "path": "/gap_check",
+            "op": "equal",
+            "value": "not_assessed"
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "ordering_unverified:"
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "gap_check_not_assessed:"
+          }
+        ]
+      }
     },
     {
       "id": "bc_007",
-      "test_id": "test_evidence_bc_007",
       "description": "A frequency declaration without timestamps is blocking.",
       "inputs": {
         "prices": [
@@ -190,11 +238,16 @@
         "price_kind": "adjusted",
         "declared_frequency": "daily"
       },
-      "expected_error": "frequency_without_timestamps"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "frequency_without_timestamps"
+        ]
+      }
     },
     {
       "id": "bc_008",
-      "test_id": "test_evidence_bc_008",
       "description": "A frequency label is retained but never mistaken for a market-calendar gap policy.",
       "inputs": {
         "prices": [
@@ -208,11 +261,29 @@
         ],
         "declared_frequency": "daily"
       },
-      "expected_warning": "gap_check_not_assessed"
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/declared_frequency",
+            "op": "equal",
+            "value": "daily"
+          },
+          {
+            "path": "/gap_check",
+            "op": "equal",
+            "value": "not_assessed"
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "gap_check_not_assessed:"
+          }
+        ]
+      }
     },
     {
       "id": "bc_009",
-      "test_id": "test_evidence_bc_009",
       "description": "Fewer than two prices is blocking.",
       "inputs": {
         "prices": [
@@ -220,12 +291,17 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected_error": "insufficient_prices"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "insufficient_prices"
+        ]
+      }
     },
     {
-      "id": "bc_010",
-      "test_id": "test_evidence_bc_010",
-      "description": "Zero and negative prices are blocking.",
+      "id": "bc_010_zero",
+      "description": "A zero price is blocking.",
       "inputs": {
         "prices": [
           100.0,
@@ -233,24 +309,94 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected_error": "non_positive_prices"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_positive_prices"
+        ]
+      }
     },
     {
-      "id": "bc_011",
-      "test_id": "test_evidence_bc_011",
-      "description": "NaN and infinite prices are blocking.",
+      "id": "bc_010_negative",
+      "description": "A negative price is blocking.",
       "inputs": {
         "prices": [
           100.0,
-          "non-finite"
+          -1.0
         ],
         "price_kind": "adjusted"
       },
-      "expected_error": "non_finite_prices"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_positive_prices"
+        ]
+      }
+    },
+    {
+      "id": "bc_011_nan",
+      "description": "A tagged NaN price is materialized and blocked.",
+      "inputs": {
+        "prices": [
+          100.0,
+          {
+            "$float": "nan"
+          }
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_prices"
+        ]
+      }
+    },
+    {
+      "id": "bc_011_positive_infinity",
+      "description": "A tagged positive-infinity price is materialized and blocked.",
+      "inputs": {
+        "prices": [
+          100.0,
+          {
+            "$float": "positive_infinity"
+          }
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_prices"
+        ]
+      }
+    },
+    {
+      "id": "bc_011_negative_infinity",
+      "description": "A tagged negative-infinity price is materialized and blocked.",
+      "inputs": {
+        "prices": [
+          100.0,
+          {
+            "$float": "negative_infinity"
+          }
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_prices"
+        ]
+      }
     },
     {
       "id": "bc_012",
-      "test_id": "test_evidence_bc_012",
       "description": "Unadjusted prices are valid but carry a total-return interpretation warning.",
       "inputs": {
         "prices": [
@@ -259,11 +405,24 @@
         ],
         "price_kind": "unadjusted"
       },
-      "expected_warning": "unadjusted_price_interpretation"
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/price_kind",
+            "op": "equal",
+            "value": "unadjusted"
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "unadjusted_price_interpretation:"
+          }
+        ]
+      }
     },
     {
       "id": "bc_013",
-      "test_id": "test_evidence_bc_013",
       "description": "Close finite prices retain relative precision.",
       "inputs": {
         "prices": [
@@ -272,19 +431,23 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected": {
-        "returns": [
-          2e-16
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              2e-16
+            ],
+            "rtol": 1e-12,
+            "atol": 0.0
+          }
         ]
-      },
-      "tolerance": {
-        "rtol": 1e-12,
-        "atol": 0.0
       }
     },
     {
       "id": "bc_014",
-      "test_id": "test_evidence_bc_014",
       "description": "A finite positive price pair whose simple return overflows is blocking.",
       "inputs": {
         "prices": [
@@ -293,11 +456,16 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected_error": "non_finite_result"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
     },
     {
       "id": "bc_015",
-      "test_id": "test_evidence_bc_015",
       "description": "A finite positive price pair whose simple return rounds to total loss is blocking.",
       "inputs": {
         "prices": [
@@ -306,37 +474,105 @@
         ],
         "price_kind": "adjusted"
       },
-      "expected_error": "non_finite_result"
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
     },
     {
-      "id": "bc_016",
-      "test_id": "test_evidence_bc_016",
-      "description": "The 501/502-price boundary preserves every return and omits only an over-limit visualization.",
+      "id": "bc_016_at_visualization_limit",
+      "description": "501 prices preserve 500 returns and emit one exact visualization.",
       "inputs": {
-        "price_kind": "adjusted",
-        "synthetic_constant_price_fixtures": [
+        "prices": {
+          "$repeat": {
+            "value": 100.0,
+            "count": 501
+          }
+        },
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
           {
-            "price": 100.0,
-            "price_count": 501
+            "path": "/returns",
+            "op": "approx",
+            "value": {
+              "$repeat": {
+                "value": 0.0,
+                "count": 500
+              }
+            },
+            "rtol": 0.0,
+            "atol": 0.0
           },
           {
-            "price": 100.0,
-            "price_count": 502
+            "path": "/visualizations",
+            "op": "length_equal",
+            "value": 1
+          },
+          {
+            "path": "/visualizations/0/series/0/values",
+            "op": "approx",
+            "value": {
+              "$repeat": {
+                "value": 0.0,
+                "count": 500
+              }
+            },
+            "rtol": 0.0,
+            "atol": 0.0
+          },
+          {
+            "path": "/warnings",
+            "op": "not_contains_prefix",
+            "value": "visualization_omitted:"
           }
         ]
+      }
+    },
+    {
+      "id": "bc_016_above_visualization_limit",
+      "description": "502 prices preserve 501 returns and omit only the over-limit visualization.",
+      "inputs": {
+        "prices": {
+          "$repeat": {
+            "value": 100.0,
+            "count": 502
+          }
+        },
+        "price_kind": "adjusted"
       },
-      "expected": {
-        "return_counts": [
-          500,
-          501
-        ],
-        "visualization_counts": [
-          1,
-          0
-        ],
-        "full_returns_preserved": true
-      },
-      "expected_warning": "visualization_omitted"
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": {
+              "$repeat": {
+                "value": 0.0,
+                "count": 501
+              }
+            },
+            "rtol": 0.0,
+            "atol": 0.0
+          },
+          {
+            "path": "/visualizations",
+            "op": "length_equal",
+            "value": 0
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "visualization_omitted:"
+          }
+        ]
+      }
     }
   ],
   "cross_checks": [],
@@ -344,65 +580,109 @@
     {
       "id": "complete_adjusted_request",
       "prompt": "Calculate and chart simple returns for adjusted prices 100, 105, and 102.9 in that order.",
-      "expected_action": "compute",
-      "expected_fields": [
-        "returns",
-        "return_kind",
-        "price_kind",
-        "warnings",
-        "visualizations",
-        "component_id",
-        "version",
-        "subject_hash"
-      ],
-      "rationale": "The prices, order, and interpretation-bearing convention are explicit."
+      "inputs": {
+        "prices": [
+          100.0,
+          105.0,
+          102.9
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "action": "compute",
+        "fields": [
+          "returns",
+          "return_kind",
+          "price_kind",
+          "warnings",
+          "visualizations",
+          "component_id",
+          "version",
+          "subject_hash"
+        ]
+      },
+      "rationale": "The structured fixture supplies every interpretation-bearing input."
     },
     {
       "id": "missing_price_kind",
       "prompt": "Calculate simple returns for prices 100 and 105.",
-      "expected_action": "ask",
-      "expected_fields": [],
-      "rationale": "Adjusted versus unadjusted semantics must never be inferred."
+      "inputs": {
+        "prices": [
+          100.0,
+          105.0
+        ]
+      },
+      "expect": {
+        "action": "ask",
+        "question_fields": [
+          "price_kind"
+        ]
+      },
+      "rationale": "The real adapter must surface the required price-kind question."
     },
     {
       "id": "reverse_ordered_timestamps",
-      "prompt": "Calculate returns for 100 then 105 at timestamps 2026-07-28 then 2026-07-27 using adjusted prices.",
-      "expected_action": "refuse",
-      "expected_fields": [],
-      "rationale": "The component refuses reversed chronology and never silently sorts observations."
-    },
-    {
-      "id": "total_return_construction",
-      "prompt": "Use unadjusted closes to construct dividend-reinvested total returns.",
-      "expected_action": "refuse",
-      "expected_fields": [],
-      "rationale": "Dividend reinvestment and total-return construction are outside this component's scope."
+      "prompt": "Calculate adjusted-price returns for reverse-ordered timestamps.",
+      "inputs": {
+        "prices": [
+          100.0,
+          105.0
+        ],
+        "price_kind": "adjusted",
+        "timestamps": [
+          "2026-07-28T00:00:00Z",
+          "2026-07-27T00:00:00Z"
+        ]
+      },
+      "expect": {
+        "action": "refuse",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_increasing_timestamps"
+        ]
+      },
+      "rationale": "The adapter executes the component refusal and never silently sorts."
     },
     {
       "id": "no_timestamps",
-      "prompt": "Use adjusted prices 100 and 101 in the supplied order; no timestamps are available.",
-      "expected_action": "compute",
-      "expected_fields": [
-        "returns",
-        "ordering_status",
-        "gap_check",
-        "warnings"
-      ],
-      "rationale": "The arithmetic remains meaningful, but unverified ordering and unassessed gaps must be visible."
+      "prompt": "Use adjusted prices 100 and 101 in the supplied order without timestamps.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "action": "compute",
+        "fields": [
+          "returns",
+          "ordering_status",
+          "gap_check",
+          "warnings"
+        ]
+      },
+      "rationale": "The arithmetic remains meaningful and the output exposes its limitations."
     },
     {
-      "id": "frequency_without_calendar",
-      "prompt": "Chart daily adjusted-price returns and assume all missing dates are bad data.",
-      "expected_action": "ask",
-      "expected_fields": [],
-      "rationale": "A frequency label cannot substitute for an explicit exchange calendar and gap policy."
-    },
-    {
-      "id": "unspecified_return_convention",
-      "prompt": "Calculate returns from adjusted prices 100 and 105.",
-      "expected_action": "ask",
-      "expected_fields": [],
-      "rationale": "Simple and log returns differ, so the return convention must be selected before choosing this component."
+      "id": "frequency_without_timestamps",
+      "prompt": "Calculate daily adjusted-price returns without supplying timestamps.",
+      "inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "adjusted",
+        "declared_frequency": "daily"
+      },
+      "expect": {
+        "action": "refuse",
+        "code": "domain_error",
+        "violation_ids": [
+          "frequency_without_timestamps"
+        ]
+      },
+      "rationale": "The executable adapter fixture proves that a frequency label cannot replace timestamps."
     }
   ]
 }

@@ -19,8 +19,8 @@ profile overlays, or extension matrices.
 | `README.md` | Human explanation, formula, example, assumptions, and limitations. |
 | `component.py` | Deterministic function plus canonical Pydantic `Inputs` and `Output`. |
 | `contract.yaml` | Identity, discovery metadata, provenance, agent guidance, constraints, and display copy. |
-| `evidence.yaml` | Numerical evidence, test bindings, and agent evaluation cases. |
-| `test_component.py` | Behaviour and evidence tests referenced by `evidence.yaml`. |
+| `evidence.yaml` | Executable numerical fixtures, assertions, and agent adapter cases. |
+| `test_component.py` | Behaviour tests and hand-written invariant tests. |
 
 The `{{PLACEHOLDER}}` values are replaced by `create_component.py`. Edit the
 canonical folder itself when every future component should start differently.
@@ -111,16 +111,23 @@ uv run python authoring/check_component.py \
 ```
 
 The checker validates the two-level folder rule, both JSON Schemas, the Pydantic
-model declarations, declarative constraint references, evidence-to-test references,
-agent-case output fields, and a component’s subject-hash binding. Every `Output`
+model declarations, declarative constraint references, executable evidence inputs and output
+paths, invariant-to-test references, agent-case output fields, and a component’s subject-hash
+binding. Every `Output`
 must extend `defined_quant.types.ComponentOutput`, which supplies the shared provenance,
 interpretation, and visualization envelope. The checker also guarantees that a catalog-wide
 adapter can invoke every component uniformly: every `Inputs` field must be accepted by the
 component callable as a keyword (or through `**kwargs`), with no positional-only parameters or
 hidden required arguments. Legacy split contracts and empty optional files are rejected.
 
-Once all referenced evidence tests pass, bind the evidence to the exact current
-behaviour:
+Known answers, boundary cases, and cross-checks use one closed fixture and assertion vocabulary
+and are collected directly from `evidence.yaml` by pytest. The only reserved fixture objects are
+`$float` for explicitly tagged non-finite boundary values and `$repeat` for bounded repeated
+values. Agent cases provide structured adapter inputs and expected compute, ask, or refusal
+outcomes. Invariants remain hand-written property tests referenced by `test_id`.
+
+Once every generated evidence case and referenced invariant passes, bind the evidence to the exact
+current behaviour:
 
 ```bash
 uv run python authoring/check_component.py \
@@ -175,7 +182,7 @@ catalog.
 
 - `schemas/contract.schema.json` validates the merged component contract, including
   nested `guidance` and `display`.
-- `schemas/evidence.schema.json` validates numerical records and `agent_cases`.
+- `schemas/evidence.schema.json` defines the closed executable numerical and agent-case DSL.
 
 The Pydantic models in `component.py` remain the source of truth for input/output
 types, units, and answer-changing defaults. Neither YAML schema duplicates them.

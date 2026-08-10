@@ -170,7 +170,8 @@ Python. Adding a component therefore requires no website code change.
 - Required discovery aliases and stable intent/input/output concepts make the same catalog
   searchable by humans, developer tools, websites, and autonomous agents without loading every
   calculation.
-- `evidence.yaml` names executable evidence and binds it to the exact behavior hash.
+- `evidence.yaml` supplies closed, executable fixtures and assertions and binds their passing run
+  to the exact behavior hash.
 - Every current component remains lifecycle `draft`, with author-asserted evidence and no
   independent domain review.
 - Constraints use a closed operator vocabulary; no contract content is evaluated as Python.

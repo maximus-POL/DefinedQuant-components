@@ -18,8 +18,8 @@ Closes #<!-- accepted proposal issue -->
 - [ ] `README.md` explains the formula, worked example, and limitations
 - [ ] `component.py` defines Pydantic `Inputs` / `Output` and the callable
 - [ ] `contract.yaml` contains identity, guidance, constraints, and display hints
-- [ ] `evidence.yaml` contains named evidence and agent cases
-- [ ] `test_component.py` defines every evidence-referenced test
+- [ ] `evidence.yaml` contains executable numerical and agent cases
+- [ ] `test_component.py` defines every hand-written invariant referenced by evidence
 - [ ] No empty optional file or generated artifact is committed
 
 ## Canonical sources
@@ -34,7 +34,8 @@ Closes #<!-- accepted proposal issue -->
 - [ ] Every material ambiguity is a required question or visible declared default
 - [ ] Unsupported scope is explicit
 - [ ] Blocking means meaningless output; warning means valid but uncertain output
-- [ ] Every evidence ID names a test, provenance, and tolerance policy
+- [ ] Every numerical and agent fixture is one invocation in the closed evidence DSL
+- [ ] Every hand-written invariant names an executed test
 - [ ] `validated_subject_hash` was written by `check_component.py --bless`, not by hand
 - [ ] No independent human or domain review is self-awarded
 
