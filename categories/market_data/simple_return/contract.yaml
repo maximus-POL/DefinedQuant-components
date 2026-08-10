@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -34,6 +34,7 @@
     ],
     "output_concepts": [
       "calculation_diagnostics",
+      "datapoint_lineage",
       "periodic_return_series",
       "return_timestamps",
       "simple_return_series",
@@ -46,7 +47,7 @@
       "github": "makstylek"
     }
   ],
-  "tags": ["market_data", "returns", "time_series", "visualization"],
+  "tags": ["lineage", "market_data", "returns", "time_series", "visualization"],
   "assumptions": [
     "Successive observations refer to the same instrument and price unit.",
     "Caller order is meaningful when timestamps are absent.",
@@ -55,7 +56,7 @@
   "limitations": [
     "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
     "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
-    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in v0.2.",
+    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in this version.",
     "A finite positive price pair whose simple return overflows or rounds to total loss is rejected.",
     "Results longer than 500 returns retain the full numerical output but omit visualizations with an explicit warning."
   ],
@@ -286,13 +287,13 @@
         "message": "unadjusted_price_interpretation: Unadjusted price changes exclude reinvested distributions and are not total returns."
       }
     ],
-    "interpretation": "Report decimal simple returns between successive supplied observations, the adjusted or unadjusted price convention, ordering status, unassessed gap status, warnings, and provenance. Do not call an unadjusted price change a total return or imply that this component validated the source data."
+    "interpretation": "Report decimal simple returns between successive supplied observations, one exact derivation per return, the adjusted or unadjusted price convention, ordering status, unassessed gap status, warnings, and provenance. Do not call an unadjusted price change a total return or imply that this component validated the source data."
   },
   "display": {
     "profile": "time_series",
     "formula": "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁",
     "intent": "Use when a downstream calculation needs simple returns and the caller can state whether prices are adjusted or unadjusted.",
-    "output": "A full return series of length n − 1 with return kind, ordering status, gap assessment, warnings, provenance, and an optional visualization for up to 500 returns.",
+    "output": "A full return series of length n − 1 with one indexed derivation per value, return kind, ordering status, gap assessment, warnings, provenance, and an optional visualization for up to 500 returns.",
     "section_order": [
       "intuition",
       "formula",

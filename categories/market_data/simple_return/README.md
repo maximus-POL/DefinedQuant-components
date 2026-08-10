@@ -28,6 +28,15 @@ For prices `[100.0, 105.0, 102.9]`:
 The result is `[0.05, -0.02]`. Compounding the two outputs gives
 \((1.05)(0.98)=1.029\), the same ratio as \(102.9/100\).
 
+## Datapoint lineage
+
+Every `returns[i]` has one closed `Derivation` record. It names `returns[i]` as the output,
+references `prices[i]` and `prices[i + 1]` in order, records the indexed expression that ran, and
+repeats the exact result value. `InputRef.citation_id` is currently `null`; it is the stable join
+point where a later source adapter can attach exact source-cell citations without asking a
+consumer to reconstruct the indexing rule from prose. The expression is inspectable metadata and
+is never evaluated as code.
+
 ## Visualization
 
 For results of up to 500 returns, the structured output contains one renderer-neutral
@@ -60,7 +69,8 @@ not be verified.
 Use this component for deterministic adjacent-period price returns when the ordered observations
 and adjusted/unadjusted convention are explicit. It is also suitable as a trusted transform inside
 an agent workflow because the result carries provenance, warnings, conventions, and, when the
-result is within the presentation limit, its chart specification together.
+result is within the presentation limit, its chart specification together. Each returned datapoint
+also carries exact, machine-validated lineage to its two adjacent source prices.
 
 ## Inappropriate uses
 

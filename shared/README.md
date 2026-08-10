@@ -2,7 +2,7 @@
 
 Small, reusable foundations used by every component:
 
-- `types/` contains the canonical Pydantic financial and visualization types.
+- `types/` contains the canonical Pydantic financial, visualization, and datapoint-lineage types.
 - `validation.py` evaluates the closed, declarative rules stored in each `contract.yaml`.
 - `catalog.py` discovers components, loads their callables, and produces deterministic
   `subject_hash` bindings.
@@ -23,8 +23,8 @@ compatibility. The direct operation adapter remains unmanaged and cannot mint pl
 source-verification, or `ResearchBundle` claims.
 
 Protocol 0.2.0 adds a separate authorization-only path. The packaged `simple_return_csv_v1`
-profile allowlists exactly `dq.market_data.simple_return` version `0.2.2`, subject
-`ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7`. It requires explicit draft
+profile allowlists exactly `dq.market_data.simple_return` version `0.3.0`, subject
+`7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.
@@ -32,8 +32,10 @@ receipt, and approval roots are revalidated before future execution.
 Resolution timestamps are operational and excluded from the semantic plan hash. Dataset
 timestamps and resolved answers are semantic and hash-bound. Frozen models do not recursively
 freeze nested JSON, so any nested mutation requires validation again. This path performs no
-calculation and verifies no source. Semantic port metadata, multi-step composition, source-bound
-execution, citations, and portable `ResearchBundle` generation remain deferred.
+calculation and verifies no source. Component derivations can bind output indices to input indices,
+but their nullable citation IDs are not source evidence. Semantic port metadata, multi-step
+composition, source-bound execution, populated citations, and portable `ResearchBundle` generation
+remain deferred.
 
 The folder is called `shared` so its purpose is clear when browsing the repository. Packaging maps
 it to the public Python package name `defined_quant`; component code therefore imports

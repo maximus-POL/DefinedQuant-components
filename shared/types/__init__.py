@@ -12,6 +12,7 @@ from .errors import (
     DQError,
     UnsupportedScope,
 )
+from .lineage import Derivation, InputRef, OutputRef
 from .money import Money
 from .output import ComponentOutput
 from .rate import Rate
@@ -40,14 +41,17 @@ __all__ = [
     "DQError",
     "DayCountConvention",
     "DiagnosticOutput",
+    "Derivation",
     "DomainError",
     "Finding",
     "Frequency",
+    "InputRef",
     "MAX_VISUALIZATION_POINTS",
     "Money",
     "NumberFormat",
     "NumericSeries",
     "PriceKind",
+    "OutputRef",
     "Rate",
     "ReturnKind",
     "Unit",

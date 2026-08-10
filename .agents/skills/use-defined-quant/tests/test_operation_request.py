@@ -233,6 +233,16 @@ def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> N
     result = json.loads((output_dir / success.manifest.result.path).read_text(encoding="utf-8"))
 
     assert result["returns"] == [0.0] * 501
+    assert len(result["derivations"]) == 501
+    assert result["derivations"][0] == {
+        "output": {"field": "returns", "index": 0},
+        "inputs": [
+            {"field": "prices", "index": 0, "citation_id": None},
+            {"field": "prices", "index": 1, "citation_id": None},
+        ],
+        "expression": "(prices[1] - prices[0]) / prices[0]",
+        "value": 0.0,
+    }
     assert result["visualizations"] == []
     assert any(
         warning.startswith("visualization_omitted:") for warning in result["warnings"]

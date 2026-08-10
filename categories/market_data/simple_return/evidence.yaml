@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7",
+  "validated_subject_hash": "7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee",
   "known_answers": [
     {
       "id": "ka_001",
@@ -31,6 +31,40 @@
             "path": "/return_kind",
             "op": "equal",
             "value": "simple"
+          },
+          {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 2
+          },
+          {
+            "path": "/derivations/0/output",
+            "op": "equal",
+            "value": {
+              "field": "returns",
+              "index": 0
+            }
+          },
+          {
+            "path": "/derivations/0/inputs",
+            "op": "equal",
+            "value": [
+              {
+                "field": "prices",
+                "index": 0,
+                "citation_id": null
+              },
+              {
+                "field": "prices",
+                "index": 1,
+                "citation_id": null
+              }
+            ]
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "(prices[1] - prices[0]) / prices[0]"
           }
         ]
       },
@@ -61,6 +95,11 @@
       "id": "inv_004",
       "test_id": "test_evidence_inv_004",
       "description": "Visualization values, units, labels, assumptions, and warnings match the canonical output."
+    },
+    {
+      "id": "inv_005",
+      "test_id": "test_evidence_inv_005",
+      "description": "Every return has one ordered derivation referencing its exact adjacent source prices."
     }
   ],
   "boundary_cases": [
@@ -567,6 +606,11 @@
             "value": 0
           },
           {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 501
+          },
+          {
             "path": "/warnings",
             "op": "contains_prefix",
             "value": "visualization_omitted:"
@@ -595,6 +639,7 @@
           "return_kind",
           "price_kind",
           "warnings",
+          "derivations",
           "visualizations",
           "component_id",
           "version",
@@ -659,6 +704,7 @@
           "returns",
           "ordering_status",
           "gap_check",
+          "derivations",
           "warnings"
         ]
       },

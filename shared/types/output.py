@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .lineage import Derivation
 from .units import Unit
 from .visualization import VisualizationSpec
 
@@ -20,6 +21,7 @@ class ComponentOutput(BaseModel):
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     transformations: tuple[str, ...] = ()
+    derivations: tuple[Derivation, ...] = ()
     visualizations: tuple[VisualizationSpec, ...] = ()
 
     @field_validator("assumptions", "warnings", "transformations")
@@ -28,6 +30,35 @@ class ComponentOutput(BaseModel):
         if any(not value.strip() for value in values):
             raise ValueError("output messages must not be blank")
         return values
+
+    @model_validator(mode="after")
+    def validate_derivation_targets(self) -> ComponentOutput:
+        output_locations = [
+            (derivation.output.field, derivation.output.index)
+            for derivation in self.derivations
+        ]
+        if len(set(output_locations)) != len(output_locations):
+            raise ValueError("derivation output locations must be unique")
+
+        for derivation in self.derivations:
+            output_ref = derivation.output
+            if output_ref.field not in type(self).model_fields:
+                raise ValueError(
+                    f"derivation output field {output_ref.field!r} does not exist"
+                )
+            values = getattr(self, output_ref.field)
+            if not isinstance(values, tuple):
+                raise ValueError(
+                    f"derivation output field {output_ref.field!r} must be a tuple"
+                )
+            if output_ref.index >= len(values):
+                raise ValueError(
+                    f"derivation output index {output_ref.index} is out of range for "
+                    f"{output_ref.field!r}"
+                )
+            if values[output_ref.index] != derivation.value:
+                raise ValueError("derivation value must equal its referenced output value")
+        return self
 
 
 __all__ = ["ComponentOutput"]

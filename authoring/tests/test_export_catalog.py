@@ -60,6 +60,9 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["schemas"]["input"]["type"] == "object"
     assert record["schemas"]["output"]["type"] == "object"
     assert "prices" in record["schemas"]["input"]["properties"]
+    assert "derivations" in record["schemas"]["output"]["properties"]
+    assert "derivations" in record["schemas"]["output"]["required"]
+    assert "Derivation" in record["schemas"]["output"]["$defs"]
 
 
 def test_catalog_v2_has_deterministic_schemas_and_top_level_facets(

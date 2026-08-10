@@ -66,6 +66,7 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     assert listed["filters"]["output_concepts"] == ["simple_return_series"]
     assert listed["components"][0]["facets"]["output_concepts"] == [
         "calculation_diagnostics",
+        "datapoint_lineage",
         "periodic_return_series",
         "return_timestamps",
         "simple_return_series",

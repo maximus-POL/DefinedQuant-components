@@ -106,8 +106,8 @@ It does not prove that caller-supplied data is true, authorize an analysis, crea
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
 Protocol 0.2.0 separately introduces an atomic managed-authorization foundation. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.2.2` at
-subject `ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7`, with explicit opt-in to
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.0` at
+subject `7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.
@@ -116,8 +116,9 @@ Resolution timestamps are operational audit metadata and do not change a plan's 
 resolved answers do. Dataset timestamps are semantic input and are hash-bound. Because frozen
 Pydantic models are shallow, callers must treat nested JSON as immutable and revalidate after any
 nested mutation. This foundation performs no calculation and makes no source-verification claim.
-Semantic port metadata, multi-step composition, source-bound execution, citations, and portable
-research bundles remain deferred.
+Simple Return now emits one machine-validated derivation per result datapoint, with nullable
+citation join keys; authentic source bindings and citations remain deferred, as do semantic port
+metadata, multi-step composition, source-bound execution, and portable research bundles.
 
 See [the catalog-wide host skill](.agents/skills/use-defined-quant/SKILL.md) for discovery,
 inspection, request construction, execution, and result-handling instructions.

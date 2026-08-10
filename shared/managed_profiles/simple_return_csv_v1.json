@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "policy_id": "simple_return_csv_v1",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "components": [
     {
       "profile_id": "simple_return_csv_v1",
       "component": {
         "id": "dq.market_data.simple_return",
-        "version": "0.2.2",
-        "subject_hash": "ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7"
+        "version": "0.3.0",
+        "subject_hash": "7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee"
       },
       "allowed_lifecycle": "draft",
       "require_explicit_opt_in": true,

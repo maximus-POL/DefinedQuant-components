@@ -79,8 +79,8 @@ with explicit draft opt-in:
 
 ```text
 dq.market_data.simple_return
-version:      0.2.2
-subject_hash: ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7
+version:      0.3.0
+subject_hash: 7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee
 ```
 
 The catalog-aware validator checks that exact allowlist binding, required questions, the canonical
@@ -104,10 +104,11 @@ the plan hash. Changing a timestamp therefore invalidates an existing receipt an
 `managed_authorization_protocol_schema()` publishes the policy, plan, validation, approval, and
 authorization schemas plus their hash domains. This surface validates and authorizes; it does not
 call the calculation, authenticate a data source, issue citations, or produce an execution
-attestation or `ResearchBundle`. Source-bound execution and portable research bundles remain
-deferred. Semantic port metadata and multi-step composition, including Log Return to Historical
-Volatility, are also deferred; adding them changes the authorized subject and requires a new
-component version and re-freeze.
+attestation or `ResearchBundle`. Component result schemas may expose indexed calculation
+derivations, but nullable citation join keys do not authenticate their inputs. Source-bound
+execution and portable research bundles remain deferred. Semantic port metadata and multi-step
+composition, including Log Return to Historical Volatility, are also deferred; adding them changes
+the authorized subject and requires a new component version and re-freeze.
 
 Pydantic's frozen configuration prevents model-field reassignment but is shallow: nested JSON
 containers supplied as component input or a dataset binding must be treated as immutable by

@@ -211,8 +211,8 @@ assertion, not a provider or Defined Quant attestation.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
-`dq.market_data.simple_return` version `0.2.2`, subject
-`ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7`, with explicit opt-in to its
+`dq.market_data.simple_return` version `0.3.0`, subject
+`7259991b8fa3617d27e13109208258f536cd706c1d65e9008964ed072d8dfaee`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a
@@ -225,11 +225,13 @@ the semantic plan hash, while the answer and other resolution meaning remain bou
 timestamps are semantic data and are included in both the dataset and plan hashes. Frozen Pydantic
 records provide shallow immutability only, so mutation of nested JSON requires revalidation.
 
-This boundary neither executes Simple Return nor authenticates the dataset source. It issues no
-source citations, execution attestation, evaluation record, or `ResearchBundle`. Semantic port
-metadata, multi-step composition (including Log Return to Historical Volatility), source-bound
-execution, and portable bundle verification remain deferred. Adding semantic ports changes the
-component subject and therefore requires a version change and re-freeze before authorization.
+This boundary neither executes Simple Return nor authenticates the dataset source. Simple Return's
+output now binds every return index to its two source-price indices through a closed derivation
+record, but its nullable citation IDs make no source claim. Exact source citations, execution
+attestation, evaluation records, and `ResearchBundle` generation remain deferred, as do semantic
+port metadata, multi-step composition (including Log Return to Historical Volatility), and
+source-bound execution. Adding semantic ports changes the component subject and therefore requires
+a version change and re-freeze before authorization.
 
 ## 9. Static publication
 
@@ -265,6 +267,7 @@ changing those facts.
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return
 subject. These records authorize a future calculation but do not perform one. The bound dataset is
-explicitly `unverified`, and no source-bound dataset, citation set, deterministic evaluation
-record, managed execution result, or `ResearchBundle` exists yet. Direct Python calls and generic
-operation requests remain unmanaged and cannot receive a managed or independently verified label.
+explicitly `unverified`. Datapoint derivations expose calculation lineage, but no source-bound
+dataset, populated citation set, deterministic evaluation record, managed execution result, or
+`ResearchBundle` exists yet. Direct Python calls and generic operation requests remain unmanaged
+and cannot receive a managed or independently verified label.
