@@ -16,8 +16,13 @@ from pydantic import (
     model_validator,
 )
 
-from .canonical import CANONICALIZATION_ID, canonical_hash, canonical_json_bytes
-from .version import PROTOCOL_VERSION
+from .canonical import (
+    CANONICALIZATION_ID,
+    canonical_hash,
+    canonical_hash_framing,
+    canonical_json_bytes,
+)
+from .version import PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS, ProtocolVersion
 
 _COMPONENT_ID_PATTERN = r"^dq\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$"
 _SAFE_ID_PATTERN = r"^[a-z][a-z0-9_]{0,63}$"
@@ -196,7 +201,7 @@ class OperationManifest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[1] = 1
-    protocol_version: Literal["0.1.0"] = "0.1.0"
+    protocol_version: ProtocolVersion = PROTOCOL_VERSION
     canonicalization_id: Literal["dq-tagged-json-v1"] = "dq-tagged-json-v1"
     execution_mode: Literal["unmanaged"] = "unmanaged"
     operation_hash: str = Field(pattern=_SHA256_PATTERN)
@@ -209,8 +214,8 @@ class OperationManifest(BaseModel):
 
     @model_validator(mode="after")
     def validate_bindings(self) -> OperationManifest:
-        if self.protocol_version != PROTOCOL_VERSION:
-            raise ValueError("manifest protocol version does not match this package")
+        if self.protocol_version not in SUPPORTED_PROTOCOL_VERSIONS:
+            raise ValueError("manifest protocol version is not supported by this package")
         if self.canonicalization_id != CANONICALIZATION_ID:
             raise ValueError("manifest canonicalization does not match this package")
         if self.operation_hash != self.request.operation_hash:
@@ -300,16 +305,7 @@ def operation_protocol_schema() -> dict[str, Any]:
         "execution_mode": "unmanaged",
         "canonicalization_id": CANONICALIZATION_ID,
         "hash_algorithm": "sha256",
-        "hash_framing": {
-            "prefix_utf8": "defined-quant",
-            "separator_hex": "00",
-            "ordered_parts": [
-                "prefix_utf8",
-                "canonicalization_id",
-                "domain_ascii",
-                "canonical_bytes",
-            ],
-        },
+        "hash_framing": canonical_hash_framing(),
         "operation_request_domain": _OPERATION_HASH_DOMAIN,
         "canonicalization_vector": {
             "input": {"b": 2, "a": 1},

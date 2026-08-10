@@ -136,4 +136,24 @@ def canonical_hash(value: Any, *, domain: str) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-__all__ = ["CANONICALIZATION_ID", "canonical_hash", "canonical_json_bytes"]
+def canonical_hash_framing() -> dict[str, str | list[str]]:
+    """Describe the byte framing needed to reproduce every protocol digest."""
+
+    return {
+        "prefix_utf8": _HASH_PREFIX.decode("ascii"),
+        "separator_hex": "00",
+        "ordered_parts": [
+            "prefix_utf8",
+            "canonicalization_id",
+            "domain_ascii",
+            "canonical_bytes",
+        ],
+    }
+
+
+__all__ = [
+    "CANONICALIZATION_ID",
+    "canonical_hash",
+    "canonical_hash_framing",
+    "canonical_json_bytes",
+]

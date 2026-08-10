@@ -40,6 +40,13 @@ from defined_quant.discovery import (  # noqa: E402
     search_components,
     tokenize,
 )
+from defined_quant.plan_validation import (  # noqa: E402
+    create_authorization_binding,
+    create_manual_approval,
+    load_execution_policy,
+    validate_plan,
+    verify_authorization,
+)
 from defined_quant.validation import preflight  # noqa: E402
 
 __version__ = "0.1.0"
@@ -55,8 +62,11 @@ __all__ = [
     "component_models",
     "component_record",
     "component_facets",
+    "create_authorization_binding",
+    "create_manual_approval",
     "iter_components",
     "load_component",
+    "load_execution_policy",
     "preflight",
     "render_svg",
     "save_svg",
@@ -64,6 +74,8 @@ __all__ = [
     "subject_hash",
     "subject_manifest",
     "tokenize",
+    "validate_plan",
+    "verify_authorization",
     "visualization_hash",
 ]
 

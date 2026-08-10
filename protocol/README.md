@@ -1,9 +1,12 @@
-# Defined Quant operation protocol
+# Defined Quant protocols
 
-`defined_quant_protocol` is the closed, typed interchange format for one generic component
-operation. It is versioned independently from the component catalog and ships in the same Python
-distribution for now. The package depends only on Pydantic and the Python standard library; it
-does not import component implementations, discovery, renderers, or any host application.
+`defined_quant_protocol` 0.2.0 provides closed, typed interchange formats for generic component
+operations and atomic managed authorization. It is versioned independently from the component
+catalog and ships in the same Python distribution for now. The package depends only on Pydantic
+and the Python standard library; it does not import component implementations, discovery,
+renderers, or any host application.
+
+## Unmanaged component operations
 
 An `OperationRequest` binds the exact component ID, version, and `subject_hash` plus candidate
 input and caller-asserted provenance. The selected component's Pydantic input model remains the
@@ -14,9 +17,14 @@ current runner requires a new output directory and does not support mutable over
 Publication uses the host's atomic no-replace rename primitive on Linux, macOS, and Windows; a
 host without that primitive receives a typed failure instead of a weaker overwrite fallback.
 
-This first protocol is explicitly unmanaged. Its provenance status is either `unverified` or
-`caller_confirmed`; it cannot claim that values are source-bound. Managed plans, approvals,
-source citations, and portable research bundles require a later authority protocol.
+The direct `OperationRequest` path remains explicitly unmanaged in protocol 0.2.0. Its provenance
+status is either `unverified` or `caller_confirmed`; it cannot claim that values are source-bound.
+An operation request does not become managed merely because the package now also defines managed
+authorization records.
+
+New operation manifests default to protocol 0.2.0. The unchanged unmanaged manifest shape still
+parses protocol 0.1.0 records, so adding the separate authorization surface does not invalidate
+existing operation bundles.
 
 Every path stored in an `OperationManifest` is a relative POSIX bundle-member path using portable
 safe-ASCII names. Each segment contains only letters, digits, underscores, and hyphens, with dots
@@ -56,17 +64,57 @@ For a domain `D` and canonical bytes `C`, the lowercase hash is exactly
 ID and domain are therefore both bound into every digest; no host-formatted JSON number text enters
 the hash.
 
-`operation_protocol_schema()` is the single public descriptor. It publishes the package and
-protocol versions, unmanaged execution mode, canonicalizer ID, SHA-256 framing, operation-request
-domain, one fixed `test.vector` byte/hash vector, and the nested request, manifest, success,
-failure, and result schemas. Integrations should consume that descriptor instead of reconstructing
-its fields. The complete normative vector suite, including Unicode ordering, number equivalence,
-safe-integer boundaries, and refusal cases, is executable in `authoring/tests/test_agent_protocol.py`.
+`operation_protocol_schema()` publishes the package and protocol versions, unmanaged execution
+mode, canonicalizer ID, SHA-256 framing, operation-request domain, one fixed `test.vector`
+byte/hash vector, and the nested request, manifest, success, failure, and result schemas.
+Integrations should consume that descriptor instead of reconstructing its fields. The complete
+normative vector suite, including Unicode ordering, number equivalence, safe-integer boundaries,
+and refusal cases, is executable in `authoring/tests/test_agent_protocol.py`.
+
+## Atomic managed authorization
+
+Protocol 0.2.0 adds an authorization-only foundation for one immutable, one-step `AnalysisPlan`.
+The packaged `simple_return_csv_v1` execution policy currently permits exactly this draft subject,
+with explicit draft opt-in:
+
+```text
+dq.market_data.simple_return
+version:      0.2.0
+subject_hash: 146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484
+```
+
+The catalog-aware validator checks that exact allowlist binding, required questions, the canonical
+component input model, declarative constraints, lifecycle opt-in, and the profile's requirement
+for non-empty timestamps. Success produces a deterministic `ValidationReceipt`; failure produces
+a typed blocked or needs-information result and no approvable receipt. `ApprovalRecord` is
+manual-only and binds one exact plan hash and receipt hash. `AuthorizationBinding` captures the
+plan, receipt, approval, component, and dataset roots, and `verify_authorization()` reproduces the
+validation before a later runner may act. Changes to any bound root require validation and manual
+approval again.
+
+`manual` is a closed authorization kind, not an identity proof or digital signature. The host is
+responsible for authenticating the reviewer and controlling access to approval creation; this
+foundation only makes the resulting actor assertion and exact bindings inspectable.
+
+`ResolvedQuestion.resolved_at` is operational audit metadata and is deliberately excluded from
+the semantic plan hash. Its answer, target, supplier, and verification status are semantic.
+Dataset timestamps are input data, so they are included in `DatasetBinding.dataset_hash` and in
+the plan hash. Changing a timestamp therefore invalidates an existing receipt and approval chain.
+
+`managed_authorization_protocol_schema()` publishes the policy, plan, validation, approval, and
+authorization schemas plus their hash domains. This surface validates and authorizes; it does not
+call the calculation, authenticate a data source, issue citations, or produce an execution
+attestation or `ResearchBundle`. Source-bound execution and portable research bundles remain
+deferred. Semantic port metadata and multi-step composition, including Log Return to Historical
+Volatility, are also deferred; adding them changes the authorized subject and requires a new
+component version and re-freeze.
 
 Pydantic's frozen configuration prevents model-field reassignment but is shallow: nested JSON
-containers supplied as component input must be treated as immutable by callers. Manifest
-construction recalculates and reconciles the request hash, so a request mutated after its hash was
-recorded is refused. Hosts should serialize and revalidate requests at trust boundaries.
+containers supplied as component input or a dataset binding must be treated as immutable by
+callers. Manifest construction recalculates and reconciles the operation request hash, while
+managed authorization revalidation recalculates all semantic roots. A shallow nested JSON mutation
+therefore requires revalidation and, if semantics changed, a new manual approval. Hosts should
+serialize and revalidate records at trust boundaries.
 
 The protocol source code is licensed under Apache-2.0 under the repository's `LICENSE` file. This
 README is documentation and remains licensed under CC BY 4.0 as specified by `LICENSE-CONTENT`.

@@ -98,12 +98,26 @@ settings, not serialized request fields. A successful manifest names only relati
 and binds their hashes. The runner refuses a pre-existing output directory, stages every member,
 and publishes the complete new directory in one rename.
 
-This operation path is deliberately labeled **unmanaged**. The trusted local runner enforces typed
-component execution and records the exact request, result members, identities, and hashes. A
+This direct operation path remains deliberately labeled **unmanaged**. The trusted local runner
+enforces typed component execution and records the exact request, result members, identities, and
+hashes. A
 manifest is an internally reconciled record, not a signed or independent execution attestation.
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
-`AnalysisPlan`, or produce a portable `ResearchBundle`. Those require the separate managed
-workflow that is not part of this release.
+`AnalysisPlan`, or produce a portable `ResearchBundle`.
+
+Protocol 0.2.0 separately introduces an atomic managed-authorization foundation. Its packaged
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.2.0` at
+subject `146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484`, with explicit opt-in to
+its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
+manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
+approval hashes. The approval model has no automatic or policy-approval mode.
+
+Resolution timestamps are operational audit metadata and do not change a plan's semantic hash;
+resolved answers do. Dataset timestamps are semantic input and are hash-bound. Because frozen
+Pydantic models are shallow, callers must treat nested JSON as immutable and revalidate after any
+nested mutation. This foundation performs no calculation and makes no source-verification claim.
+Semantic port metadata, multi-step composition, source-bound execution, citations, and portable
+research bundles remain deferred.
 
 See [the catalog-wide host skill](.agents/skills/use-defined-quant/SKILL.md) for discovery,
 inspection, request construction, execution, and result-handling instructions.

@@ -16,9 +16,32 @@ for _entry in sys.path:
         __path__.insert(0, str(_candidate))
         break
 
+from .authorization import (  # noqa: E402
+    AUTHORIZATION_BINDING_HASH_DOMAIN,
+    MANUAL_APPROVAL_HASH_DOMAIN,
+    VALIDATION_RECEIPT_HASH_DOMAIN,
+    ApprovalRecord,
+    AuthorizationBinding,
+    AuthorizationErrorCode,
+    AuthorizationFailure,
+    AuthorizationOutcome,
+    AuthorizationSuccess,
+    ClarificationQuestion,
+    PlanValidationOutcome,
+    ValidationCheck,
+    ValidationFailure,
+    ValidationIssue,
+    ValidationIssueCode,
+    ValidationReceipt,
+    approval_record_hash,
+    authorization_binding_hash,
+    managed_authorization_protocol_schema,
+    validation_receipt_hash,
+)
 from .canonical import (  # noqa: E402
     CANONICALIZATION_ID,
     canonical_hash,
+    canonical_hash_framing,
     canonical_json_bytes,
 )
 from .operation import (  # noqa: E402
@@ -44,15 +67,56 @@ from .operation import (  # noqa: E402
     operation_hash,
     operation_protocol_schema,
 )
-from .version import PROTOCOL_VERSION  # noqa: E402
+from .plan import (  # noqa: E402
+    ANALYSIS_PLAN_HASH_DOMAIN,
+    DATASET_BINDING_HASH_DOMAIN,
+    AnalysisPlan,
+    DatasetBinding,
+    PlanStep,
+    QuestionVerificationStatus,
+    ResolvedQuestion,
+    analysis_plan_hash,
+    dataset_binding_hash,
+)
+from .policy import (  # noqa: E402
+    EXECUTION_POLICY_HASH_DOMAIN,
+    ComponentLifecycle,
+    ExecutionPolicy,
+    InputRequirement,
+    ManagedComponentRule,
+    RequirementFailureCode,
+    execution_policy_hash,
+)
+from .version import (  # noqa: E402
+    PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
+    ProtocolVersion,
+)
 
 __version__ = PROTOCOL_VERSION
 
 __all__ = [
     "PROTOCOL_VERSION",
+    "SUPPORTED_PROTOCOL_VERSIONS",
+    "ProtocolVersion",
     "CANONICALIZATION_ID",
+    "ANALYSIS_PLAN_HASH_DOMAIN",
+    "AnalysisPlan",
+    "ApprovalRecord",
+    "AuthorizationBinding",
+    "AUTHORIZATION_BINDING_HASH_DOMAIN",
+    "AuthorizationErrorCode",
+    "AuthorizationFailure",
+    "AuthorizationOutcome",
+    "AuthorizationSuccess",
     "CallerProvenance",
     "ComponentRef",
+    "ComponentLifecycle",
+    "ClarificationQuestion",
+    "DatasetBinding",
+    "DATASET_BINDING_HASH_DOMAIN",
+    "EXECUTION_POLICY_HASH_DOMAIN",
+    "ExecutionPolicy",
     "FileDigest",
     "InterpretationMethod",
     "OperationError",
@@ -63,17 +127,39 @@ __all__ = [
     "OperationRequest",
     "OperationResult",
     "OperationSuccess",
+    "PlanStep",
+    "PlanValidationOutcome",
     "ProvenanceStatus",
+    "QuestionVerificationStatus",
     "RelativeMemberPath",
     "RunnerIdentity",
+    "ResolvedQuestion",
+    "RequirementFailureCode",
     "SourceKind",
     "SvgArtifact",
     "SvgArtifactRequest",
     "VerificationStatus",
+    "ValidationCheck",
+    "ValidationFailure",
+    "ValidationIssue",
+    "ValidationIssueCode",
+    "ValidationReceipt",
+    "VALIDATION_RECEIPT_HASH_DOMAIN",
+    "InputRequirement",
+    "ManagedComponentRule",
+    "MANUAL_APPROVAL_HASH_DOMAIN",
+    "analysis_plan_hash",
+    "approval_record_hash",
+    "authorization_binding_hash",
     "canonical_hash",
+    "canonical_hash_framing",
     "canonical_json_bytes",
+    "dataset_binding_hash",
+    "execution_policy_hash",
+    "managed_authorization_protocol_schema",
     "operation_hash",
     "operation_protocol_schema",
+    "validation_receipt_hash",
 ]
 
 del _candidate, _entry

@@ -33,12 +33,17 @@ components/
 │   ├── validation.py
 │   ├── catalog.py
 │   ├── charts.py
+│   ├── managed_profiles/
+│   ├── plan_validation.py
 │   └── agent.py                 compatibility imports only
 ├── protocol/
 │   ├── __init__.py
 │   ├── README.md
+│   ├── authorization.py
 │   ├── canonical.py
 │   ├── operation.py
+│   ├── plan.py
+│   ├── policy.py
 │   ├── version.py
 │   └── py.typed
 ├── authoring/
@@ -169,14 +174,14 @@ The adapter is a host convenience layer, not another source of truth. It cannot 
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
 
-`defined_quant_protocol` provides the closed operation records. An `OperationRequest` binds an
-exact component ID, version, and `subject_hash` to a candidate input object, explicit caller
-provenance, and a bounded artifact request. Catalog roots and output directories are trusted
-runtime settings and never fields in the semantic request. The request schema contains no host
-filesystem path. The C2 runner requires a new output directory and publishes a fully staged
-directory with an atomic no-replace rename; mutable overwrite semantics are deliberately
-unsupported. Linux, macOS, and Windows use their native no-clobber behavior, and unsupported hosts
-fail rather than falling back to a replace operation.
+`defined_quant_protocol` 0.2.0 provides the closed operation and managed-authorization records. An
+`OperationRequest` binds an exact component ID, version, and `subject_hash` to a candidate input
+object, explicit caller provenance, and a bounded artifact request. Catalog roots and output
+directories are trusted runtime settings and never fields in the semantic request. The request
+schema contains no host filesystem path. The C2 runner requires a new output directory and
+publishes a fully staged directory with an atomic no-replace rename; mutable overwrite semantics
+are deliberately unsupported. Linux, macOS, and Windows use their native no-clobber behavior, and
+unsupported hosts fail rather than falling back to a replace operation.
 
 The generic adapter then performs the following catalog-wide sequence:
 
@@ -201,6 +206,28 @@ the record is not independent execution attestation. It also does not establish 
 data is authentic, that an interpretation is correct, that a person approved an analysis plan, or
 that a portable research bundle passed independent verification. Caller provenance is a recorded
 assertion, not a provider or Defined Quant attestation.
+
+The separate C3B surface is atomic managed authorization, not managed execution. An immutable
+`AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
+`dq.market_data.simple_return` version `0.2.0`, subject
+`146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484`, with explicit opt-in to its
+draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
+subject, the component's required questions and Pydantic input model, declarative constraints, and
+the outer policy requirements without calling the calculation. A successful evaluation emits a
+deterministic `ValidationReceipt`; approval is manual-only and binds that receipt and exact plan.
+
+Before any future managed runner may act, authorization is reproduced against the plan, policy,
+component, dataset, receipt, and approval roots. Any semantic change requires a new validation and
+manual approval. `ResolvedQuestion.resolved_at` is operational audit metadata and is excluded from
+the semantic plan hash, while the answer and other resolution meaning remain bound. Dataset
+timestamps are semantic data and are included in both the dataset and plan hashes. Frozen Pydantic
+records provide shallow immutability only, so mutation of nested JSON requires revalidation.
+
+This boundary neither executes Simple Return nor authenticates the dataset source. It issues no
+source citations, execution attestation, evaluation record, or `ResearchBundle`. Semantic port
+metadata, multi-step composition (including Log Return to Historical Volatility), source-bound
+execution, and portable bundle verification remain deferred. Adding semantic ports changes the
+component subject and therefore requires a version change and re-freeze before authorization.
 
 ## 9. Static publication
 
@@ -233,8 +260,9 @@ All current components have lifecycle `draft`, author-asserted evidence, and no 
 review. The typed operation protocol improves reproducibility and interface verification without
 changing those facts.
 
-The current release does not define `AnalysisPlan`, validation receipt, approval record,
-source-bound dataset, deterministic evaluation record, or `ResearchBundle`. Those records belong
-to the later managed trust path. Until that path exists, direct Python calls and generic operation
-requests may produce valid calculations and manifests but cannot receive a managed or independently
-verified label.
+The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
+manual-only approval record, and revalidated authorization binding for one exact Simple Return
+subject. These records authorize a future calculation but do not perform one. The bound dataset is
+explicitly `unverified`, and no source-bound dataset, citation set, deterministic evaluation
+record, managed execution result, or `ResearchBundle` exists yet. Direct Python calls and generic
+operation requests remain unmanaged and cannot receive a managed or independently verified label.
