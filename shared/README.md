@@ -23,8 +23,8 @@ compatibility. The direct operation adapter remains unmanaged and cannot mint pl
 source-verification, or `ResearchBundle` claims.
 
 Protocol 0.2.0 adds a separate authorization-only path. The packaged `simple_return_csv_v1`
-profile allowlists exactly `dq.market_data.simple_return` version `0.2.0`, subject
-`146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484`. It requires explicit draft
+profile allowlists exactly `dq.market_data.simple_return` version `0.2.1`, subject
+`be4ec41acc48df60a5c986efdf272894878ed989b681646de11d7a6a62c6100c`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.

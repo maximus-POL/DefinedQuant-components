@@ -8,6 +8,7 @@ from typing import Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
+    MAX_VISUALIZATION_POINTS,
     AxisSpec,
     ChartKind,
     ChartSeries,
@@ -23,7 +24,7 @@ from defined_quant.types import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.2.0"
+COMPONENT_VERSION = "0.2.1"
 
 
 class Inputs(BaseModel):
@@ -192,12 +193,18 @@ def simple_return(
         "Computed each value as (current_price - previous_price) / previous_price.",
         "Associated each return with the interval-end timestamp when timestamps were supplied.",
     )
-    visualization = _visualization(
-        returns=returns,
-        inputs=inputs,
-        assumptions=assumptions,
-        warnings=warnings,
-        ordering_status=ordering_status,
+    visualizations = (
+        (
+            _visualization(
+                returns=returns,
+                inputs=inputs,
+                assumptions=assumptions,
+                warnings=warnings,
+                ordering_status=ordering_status,
+            ),
+        )
+        if len(returns) <= MAX_VISUALIZATION_POINTS
+        else ()
     )
 
     return Output(
@@ -208,7 +215,7 @@ def simple_return(
         assumptions=assumptions,
         warnings=warnings,
         transformations=transformations,
-        visualizations=(visualization,),
+        visualizations=visualizations,
         returns=returns,
         price_kind=inputs.price_kind,
         return_timestamps=(

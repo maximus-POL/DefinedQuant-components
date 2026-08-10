@@ -9,6 +9,7 @@ import pytest
 from defined_quant import preflight, render_svg, subject_hash
 from defined_quant.market_data.simple_return.component import Inputs, Output, simple_return
 from defined_quant.types import (
+    MAX_VISUALIZATION_POINTS,
     AmbiguousInput,
     DomainError,
     Frequency,
@@ -230,6 +231,33 @@ def test_evidence_bc_015() -> None:
     assert "non_finite_result" in _rules(caught.value)
 
 
+def test_evidence_bc_016() -> None:
+    at_limit = simple_return(
+        (100.0,) * (MAX_VISUALIZATION_POINTS + 1),
+        price_kind=PriceKind.ADJUSTED,
+    )
+    above_limit = simple_return(
+        (100.0,) * (MAX_VISUALIZATION_POINTS + 2),
+        price_kind=PriceKind.ADJUSTED,
+    )
+
+    assert at_limit.returns == (0.0,) * MAX_VISUALIZATION_POINTS
+    assert len(at_limit.visualizations) == 1
+    assert len(at_limit.visualizations[0].categories) == MAX_VISUALIZATION_POINTS
+    assert at_limit.visualizations[0].series[0].values == at_limit.returns
+    assert not any(message.startswith("visualization_omitted:") for message in at_limit.warnings)
+
+    assert above_limit.returns == (0.0,) * (MAX_VISUALIZATION_POINTS + 1)
+    assert above_limit.visualizations == ()
+    omission = next(
+        message
+        for message in above_limit.warnings
+        if message.startswith("visualization_omitted:")
+    )
+    assert str(MAX_VISUALIZATION_POINTS) in omission
+    assert "full return series is preserved" in omission
+
+
 @pytest.mark.parametrize(
     "prices",
     [(math.nan, -1.0), (-1.0, math.nan)],
@@ -261,7 +289,7 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.2.0"
+    assert result.version == "0.2.1"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL

@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -56,7 +56,8 @@
     "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
     "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
     "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in v0.2.",
-    "A finite positive price pair whose simple return overflows or rounds to total loss is rejected."
+    "A finite positive price pair whose simple return overflows or rounds to total loss is rejected.",
+    "Results longer than 500 returns retain the full numerical output but omit visualizations with an explicit warning."
   ],
   "depends_on": [],
   "references": [],
@@ -255,6 +256,16 @@
         "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
       },
       {
+        "id": "visualization_omitted",
+        "severity": "warning",
+        "when": {
+          "left": {"field": "prices", "measure": "count"},
+          "op": "gt",
+          "right": {"value": 501}
+        },
+        "message": "visualization_omitted: More than 500 returns were calculated. The full return series is preserved in returns, but no visualization was emitted because the renderer accepts at most 500 points."
+      },
+      {
         "id": "gap_check_not_assessed",
         "severity": "warning",
         "when": {
@@ -281,7 +292,7 @@
     "profile": "time_series",
     "formula": "rₜ = Pₜ / Pₜ₋₁ − 1",
     "intent": "Use when a downstream calculation needs simple returns and the caller can state whether prices are adjusted or unadjusted.",
-    "output": "A return series of length n − 1 with return kind, ordering status, gap assessment, warnings, and provenance.",
+    "output": "A full return series of length n − 1 with return kind, ordering status, gap assessment, warnings, provenance, and an optional visualization for up to 500 returns.",
     "section_order": [
       "intuition",
       "formula",

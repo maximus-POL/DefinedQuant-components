@@ -198,6 +198,28 @@ def test_component_domain_refusal_is_distinct_from_input_validation(tmp_path: Pa
     assert not output_dir.exists()
 
 
+def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> None:
+    request = _request(
+        input_data={
+            "prices": [100.0] * 502,
+            "price_kind": "adjusted",
+        }
+    )
+    request_path = tmp_path / "over-chart-limit.json"
+    _write_request(request_path, request)
+    output_dir = tmp_path / "output"
+
+    success = _success(_command(request_path, output_dir))
+    result = json.loads((output_dir / success.manifest.result.path).read_text(encoding="utf-8"))
+
+    assert result["returns"] == [0.0] * 501
+    assert result["visualizations"] == []
+    assert any(
+        warning.startswith("visualization_omitted:") for warning in result["warnings"]
+    )
+    assert success.manifest.artifacts == ()
+
+
 def test_runtime_configuration_is_rejected_inside_request(tmp_path: Path) -> None:
     request = _request().model_dump(mode="json")
     request["output_dir"] = str(tmp_path / "smuggled-output")

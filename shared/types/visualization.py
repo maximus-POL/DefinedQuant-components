@@ -5,13 +5,14 @@ from __future__ import annotations
 import math
 import re
 from enum import StrEnum
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .units import Unit
 
 _SAFE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+MAX_VISUALIZATION_POINTS: Final = 500
 
 
 class ChartKind(StrEnum):
@@ -46,7 +47,10 @@ class ChartSeries(BaseModel):
 
     key: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=120)
-    values: tuple[float, ...] = Field(min_length=1, max_length=500)
+    values: tuple[float, ...] = Field(
+        min_length=1,
+        max_length=MAX_VISUALIZATION_POINTS,
+    )
 
     @field_validator("key")
     @classmethod
@@ -77,7 +81,10 @@ class VisualizationSpec(BaseModel):
     kind: ChartKind
     title: str = Field(min_length=1, max_length=160)
     alt_text: str = Field(min_length=1, max_length=500)
-    categories: tuple[str, ...] = Field(min_length=1, max_length=500)
+    categories: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=MAX_VISUALIZATION_POINTS,
+    )
     series: tuple[ChartSeries, ...] = Field(min_length=1, max_length=12)
     x_axis: AxisSpec
     y_axis: AxisSpec
@@ -123,6 +130,7 @@ __all__ = [
     "AxisSpec",
     "ChartKind",
     "ChartSeries",
+    "MAX_VISUALIZATION_POINTS",
     "NumberFormat",
     "VisualizationSpec",
 ]

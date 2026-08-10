@@ -1,7 +1,7 @@
 {
   "schema_version": 0,
   "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484",
+  "validated_subject_hash": "be4ec41acc48df60a5c986efdf272894878ed989b681646de11d7a6a62c6100c",
   "known_answers": [
     {
       "id": "ka_001",
@@ -307,6 +307,36 @@
         "price_kind": "adjusted"
       },
       "expected_error": "non_finite_result"
+    },
+    {
+      "id": "bc_016",
+      "test_id": "test_evidence_bc_016",
+      "description": "The 501/502-price boundary preserves every return and omits only an over-limit visualization.",
+      "inputs": {
+        "price_kind": "adjusted",
+        "synthetic_constant_price_fixtures": [
+          {
+            "price": 100.0,
+            "price_count": 501
+          },
+          {
+            "price": 100.0,
+            "price_count": 502
+          }
+        ]
+      },
+      "expected": {
+        "return_counts": [
+          500,
+          501
+        ],
+        "visualization_counts": [
+          1,
+          0
+        ],
+        "full_returns_preserved": true
+      },
+      "expected_warning": "visualization_omitted"
     }
   ],
   "cross_checks": [],
