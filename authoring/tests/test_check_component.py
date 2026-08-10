@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from authoring.check_component import (
     _validate_callable_signature,
     _validate_discovery,
+    _validate_formula_surfaces,
     _validate_output_model,
 )
 
@@ -113,3 +114,35 @@ def test_discovery_concepts_are_bounded_identifiers() -> None:
 
     assert any("between 1 and 16" in error for error in errors)
     assert sum("lower snake_case identifiers" in error for error in errors) == 2
+
+
+def test_formula_surfaces_must_match_component_formula(tmp_path: Path) -> None:
+    formula = "r = (current − previous) / previous"
+    (tmp_path / "README.md").write_text(
+        f"# Example\n\n## Formula\n\n`{formula}`\n\n## Output\n",
+        encoding="utf-8",
+    )
+
+    assert _validate_formula_surfaces(
+        tmp_path,
+        {"display": {"formula": formula}},
+        formula,
+    ) == []
+
+    contract_errors = _validate_formula_surfaces(
+        tmp_path,
+        {"display": {"formula": "r = current / previous - 1"}},
+        formula,
+    )
+    assert any("display.formula must exactly match" in error for error in contract_errors)
+
+    (tmp_path / "README.md").write_text(
+        "# Example\n\n## Formula\n\n`r = current / previous - 1`\n",
+        encoding="utf-8",
+    )
+    readme_errors = _validate_formula_surfaces(
+        tmp_path,
+        {"display": {"formula": formula}},
+        formula,
+    )
+    assert any("Formula section must include" in error for error in readme_errors)

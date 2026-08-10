@@ -434,7 +434,7 @@ def _validate_output_model(module_name: str, output: Any) -> type[BaseModel]:
 
 def _import_contract_models(
     root: Path, contract: Mapping[str, Any]
-) -> tuple[set[str], set[str], dict[str, Any], set[str]]:
+) -> tuple[set[str], set[str], dict[str, Any], set[str], str]:
     _bootstrap_checkout_package(root)
 
     callable_path = contract.get("callable")
@@ -444,12 +444,15 @@ def _import_contract_models(
     module = importlib.import_module(module_name)
     inputs = getattr(module, "Inputs", None)
     output = getattr(module, "Output", None)
+    formula = getattr(module, "FORMULA", None)
     component = getattr(module, callable_name, None)
     if not isinstance(inputs, type) or not issubclass(inputs, BaseModel):
         raise ValueError(f"{module_name}.Inputs must be a Pydantic model")
     output_model = _validate_output_model(module_name, output)
     if not callable(component):
         raise ValueError(f"{callable_path} does not resolve to a callable")
+    if not isinstance(formula, str) or not formula.strip():
+        raise ValueError(f"{module_name}.FORMULA must be a non-empty string")
 
     input_fields = set(inputs.model_fields)
     _validate_callable_signature(component, input_fields)
@@ -459,7 +462,53 @@ def _import_contract_models(
         for name, field in inputs.model_fields.items()
         if not field.is_required()
     }
-    return input_fields, required_inputs, defaults, set(output_model.model_fields)
+    return input_fields, required_inputs, defaults, set(output_model.model_fields), formula
+
+
+def _markdown_section(text: str, heading: str) -> str | None:
+    marker = f"## {heading}"
+    lines = text.splitlines()
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == marker) + 1
+    except StopIteration:
+        return None
+    end = next(
+        (index for index in range(start, len(lines)) if lines[index].startswith("## ")),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def _validate_formula_surfaces(
+    component_dir: Path,
+    contract: Mapping[str, Any],
+    implementation_formula: str,
+) -> list[str]:
+    """Keep the imported implementation formula aligned with public formula surfaces."""
+
+    errors: list[str] = []
+    contract_path = component_dir / "contract.yaml"
+    display = contract.get("display")
+    display_formula = display.get("formula") if isinstance(display, Mapping) else None
+    if display_formula != implementation_formula:
+        errors.append(
+            f"{contract_path}: display.formula must exactly match component.FORMULA "
+            f"{implementation_formula!r}"
+        )
+
+    readme_path = component_dir / "README.md"
+    try:
+        formula_section = _markdown_section(readme_path.read_text(encoding="utf-8"), "Formula")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"{readme_path}: cannot read formula surface: {exc}")
+    else:
+        rendered_formula = f"`{implementation_formula}`"
+        if formula_section is None or rendered_formula not in formula_section:
+            errors.append(
+                f"{readme_path}: Formula section must include component.FORMULA exactly as "
+                f"inline code {rendered_formula!r}"
+            )
+    return errors
 
 
 def _condition_fields(value: Any) -> Iterable[str]:
@@ -725,16 +774,25 @@ def _validate_component(
 
     errors.extend(_inspect_component_python(component_dir, contract))
     try:
-        input_fields, required_inputs, input_defaults, output_fields = _import_contract_models(
-            root, contract
-        )
+        (
+            input_fields,
+            required_inputs,
+            input_defaults,
+            output_fields,
+            implementation_formula,
+        ) = _import_contract_models(root, contract)
     except (ImportError, AttributeError, TypeError, ValueError) as exc:
         errors.append(f"{component_dir / 'component.py'}: cannot load models: {exc}")
-        input_fields, required_inputs, input_defaults, output_fields = (
+        input_fields, required_inputs, input_defaults, output_fields, implementation_formula = (
             set(),
             set(),
             {},
             set(),
+            "",
+        )
+    if implementation_formula:
+        errors.extend(
+            _validate_formula_surfaces(component_dir, contract, implementation_formula)
         )
     errors.extend(
         _validate_guidance(

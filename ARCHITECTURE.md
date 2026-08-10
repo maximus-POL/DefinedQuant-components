@@ -209,8 +209,8 @@ assertion, not a provider or Defined Quant attestation.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
-`dq.market_data.simple_return` version `0.2.1`, subject
-`be4ec41acc48df60a5c986efdf272894878ed989b681646de11d7a6a62c6100c`, with explicit opt-in to its
+`dq.market_data.simple_return` version `0.2.2`, subject
+`ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a

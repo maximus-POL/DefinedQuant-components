@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from defined_quant.market_data.simple_return.component import FORMULA
 from defined_quant_protocol import operation_protocol_schema
 
 from authoring import export_catalog
@@ -55,6 +56,7 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["do_not_use_when"]
     assert record["limitations"]
     assert record["unsupported"]
+    assert record["formula"] == FORMULA
     assert record["schemas"]["input"]["type"] == "object"
     assert record["schemas"]["output"]["type"] == "object"
     assert "prices" in record["schemas"]["input"]["properties"]

@@ -106,8 +106,8 @@ It does not prove that caller-supplied data is true, authorize an analysis, crea
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
 Protocol 0.2.0 separately introduces an atomic managed-authorization foundation. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.2.1` at
-subject `be4ec41acc48df60a5c986efdf272894878ed989b681646de11d7a6a62c6100c`, with explicit opt-in to
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.2.2` at
+subject `ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.

@@ -46,8 +46,8 @@ from pydantic import ValidationError
 
 SIMPLE_RETURN = ComponentRef(
     id="dq.market_data.simple_return",
-    version="0.2.1",
-    subject_hash="be4ec41acc48df60a5c986efdf272894878ed989b681646de11d7a6a62c6100c",
+    version="0.2.2",
+    subject_hash="ab786fec9ee0b711060682c80bf42d132b4b0e2b2c0cf8d95fb09844f8eb09f7",
 )
 TIMESTAMPS = [
     "2026-07-24T16:00:00Z",
@@ -352,7 +352,7 @@ def test_managed_profile_requires_nonempty_timestamps(timestamps: list[str] | No
             version=SIMPLE_RETURN.version,
             subject_hash=SIMPLE_RETURN.subject_hash,
         ),
-        SIMPLE_RETURN.model_copy(update={"version": "0.2.2"}),
+        SIMPLE_RETURN.model_copy(update={"version": "0.2.3"}),
         SIMPLE_RETURN.model_copy(update={"subject_hash": "b" * 64}),
     ],
 )
@@ -385,7 +385,7 @@ def test_unknown_profile_and_unbound_policy_are_outside_managed_scope() -> None:
 def test_caller_constructed_policy_cannot_replace_the_packaged_allowlist() -> None:
     packaged = load_execution_policy("simple_return_csv_v1")
     caller_policy = ExecutionPolicy.model_validate(
-        {**packaged.model_dump(mode="json"), "version": "1.0.2"}
+        {**packaged.model_dump(mode="json"), "version": "1.0.3"}
     )
     plan = _plan(policy=caller_policy)
 
@@ -421,7 +421,7 @@ def test_plan_receipt_approval_policy_and_component_mutations_fail_independently
         update={"validator": RunnerIdentity(name="other_validator", version="0.1.0")}
     )
     changed_approval = approval.model_copy(update={"approved_by": "different_reviewer"})
-    changed_policy = policy.model_copy(update={"version": "1.0.2"})
+    changed_policy = policy.model_copy(update={"version": "1.0.3"})
     changed_component_plan = plan.model_copy(
         update={
             "step": plan.step.model_copy(

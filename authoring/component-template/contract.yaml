@@ -62,7 +62,7 @@
   },
   "display": {
     "profile": "{{PROFILE}}",
-    "formula": "TODO: provide a concise display formula.",
+    "formula": "TODO: provide the exact formula executed by this component.",
     "intent": "TODO: provide a concise display intent.",
     "output": "TODO: describe the displayed output and unit.",
     "section_order": [

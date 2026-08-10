@@ -12,7 +12,7 @@ TODO: summarize when this calculation is appropriate.
 
 ## Formula
 
-TODO: write the formula and define every symbol.
+`TODO: provide the exact formula executed by this component.` Define every symbol.
 
 ## Inputs
 

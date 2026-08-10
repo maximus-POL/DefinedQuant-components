@@ -11,11 +11,9 @@ The component preserves caller order. It never sorts, reverses, fills, fetches, 
 
 ## Formula
 
-For ordered prices \(p_0, p_1, \ldots, p_n\), each output is:
-
-\[
-r_i = \frac{p_i}{p_{i-1}} - 1,\qquad i=1,\ldots,n
-\]
+For ordered prices \(P_0, P_1, \ldots, P_n\), the canonical executed formula is
+`rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁` for \(t=1,\ldots,n\). The difference is evaluated before division to
+retain relative precision when adjacent binary64 prices are close.
 
 The output uses decimal units: `0.05` means `5%`. Its declared return convention is `simple`, not
 `log`.
@@ -24,8 +22,8 @@ The output uses decimal units: `0.05` means `5%`. Its declared return convention
 
 For prices `[100.0, 105.0, 102.9]`:
 
-- \(105 / 100 - 1 = 0.05\)
-- \(102.9 / 105 - 1 = -0.02\)
+- \((105 - 100) / 100 = 0.05\)
+- \((102.9 - 105) / 105 = -0.02\)
 
 The result is `[0.05, -0.02]`. Compounding the two outputs gives
 \((1.05)(0.98)=1.029\), the same ratio as \(102.9/100\).

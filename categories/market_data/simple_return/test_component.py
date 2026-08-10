@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from defined_quant import preflight, render_svg, subject_hash
-from defined_quant.market_data.simple_return.component import Inputs, Output, simple_return
+from defined_quant.market_data.simple_return.component import FORMULA, Inputs, Output, simple_return
 from defined_quant.types import (
     MAX_VISUALIZATION_POINTS,
     AmbiguousInput,
@@ -39,6 +41,21 @@ def test_contract_exports_are_present() -> None:
     assert Inputs is not None
     assert Output is not None
     assert callable(simple_return)
+
+
+def test_formula_surfaces_match_the_executed_expression() -> None:
+    component_dir = Path(__file__).parent
+    contract = json.loads((component_dir / "contract.yaml").read_text(encoding="utf-8"))
+    readme = (component_dir / "README.md").read_text(encoding="utf-8")
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    assert FORMULA == "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁"
+    assert contract["display"]["formula"] == FORMULA
+    assert f"`{FORMULA}`" in readme
+    assert FORMULA in result.transformations[0]
+    caption = result.visualizations[0].caption
+    assert caption is not None
+    assert FORMULA in caption
 
 
 def test_evidence_ka_001() -> None:
@@ -289,7 +306,7 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.2.1"
+    assert result.version == "0.2.2"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL

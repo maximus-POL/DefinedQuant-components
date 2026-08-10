@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -290,7 +290,7 @@
   },
   "display": {
     "profile": "time_series",
-    "formula": "rₜ = Pₜ / Pₜ₋₁ − 1",
+    "formula": "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁",
     "intent": "Use when a downstream calculation needs simple returns and the caller can state whether prices are adjusted or unadjusted.",
     "output": "A full return series of length n − 1 with return kind, ordering status, gap assessment, warnings, provenance, and an optional visualization for up to 500 returns.",
     "section_order": [

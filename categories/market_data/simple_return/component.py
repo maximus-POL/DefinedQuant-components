@@ -24,7 +24,8 @@ from defined_quant.types import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.2.1"
+COMPONENT_VERSION = "0.2.2"
+FORMULA = "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁"
 
 
 class Inputs(BaseModel):
@@ -126,7 +127,7 @@ def _visualization(
         f"Values range from {minimum:.6g} to {maximum:.6g} in decimal units."
     )
     caption = (
-        "Each value is r_t = p_t / p_(t-1) - 1. "
+        f"Each value is {FORMULA}. "
         f"Price kind: {inputs.price_kind.value}; ordering: {ordering_status}; "
         "calendar-aware gaps: not assessed."
     )
@@ -162,7 +163,7 @@ def simple_return(
     timestamps: tuple[datetime | str, ...] | list[datetime | str] | None = None,
     declared_frequency: Frequency | str | None = None,
 ) -> Output:
-    """Return ``prices[i] / prices[i-1] - 1`` for each successive observation."""
+    """Return precision-preserving simple returns for each successive observation."""
 
     inputs = Inputs.model_validate(
         {
@@ -190,7 +191,7 @@ def simple_return(
         ),
     )
     transformations = (
-        "Computed each value as (current_price - previous_price) / previous_price.",
+        f"Computed each value as {FORMULA}.",
         "Associated each return with the interval-end timestamp when timestamps were supplied.",
     )
     visualizations = (

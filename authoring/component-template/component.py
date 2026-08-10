@@ -5,6 +5,8 @@ from __future__ import annotations
 from defined_quant.types import ComponentOutput
 from pydantic import BaseModel, ConfigDict, Field
 
+FORMULA = "TODO: provide the exact formula executed by this component."
+
 
 class Inputs(BaseModel):
     """Canonical inputs. Replace the scaffold field with the real contract."""
@@ -30,4 +32,4 @@ def COMPONENT_FUNCTION(*, values: tuple[float, ...]) -> Output:
     raise NotImplementedError("Replace the canonical component scaffold.")
 
 
-__all__ = ["Inputs", "Output", "COMPONENT_FUNCTION"]
+__all__ = ["FORMULA", "Inputs", "Output", "COMPONENT_FUNCTION"]
