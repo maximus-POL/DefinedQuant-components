@@ -259,14 +259,14 @@ def test_nonfinite_normalized_input_is_typed_and_never_materialized(tmp_path: Pa
     assert not output_dir.exists()
 
 
-def test_nonfinite_component_output_is_rejected_before_staging(tmp_path: Path) -> None:
+def test_nonfinite_component_result_is_refused_before_staging(tmp_path: Path) -> None:
     request = _request(
         input_data={
             "prices": [1e-308, 1e15],
             "price_kind": "adjusted",
         }
     )
-    request_path = tmp_path / "nonfinite-output.json"
+    request_path = tmp_path / "nonfinite-result.json"
     _write_request(request_path, request)
     output_dir = tmp_path / "output"
 
@@ -274,7 +274,7 @@ def test_nonfinite_component_output_is_rejected_before_staging(tmp_path: Path) -
     failure = _failure(completed)
 
     assert failure.operation_hash == request.operation_hash
-    assert failure.error.code == "output_validation_failed"
+    assert failure.error.code == "component_refused"
     assert "Infinity" not in completed.stderr
     assert not output_dir.exists()
     assert not list(tmp_path.glob(".output.dq-stage-*"))

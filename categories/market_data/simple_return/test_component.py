@@ -210,6 +210,38 @@ def test_evidence_bc_012() -> None:
     )
 
 
+def test_evidence_bc_013() -> None:
+    close_prices = simple_return(
+        (1e16, 1e16 + 2.0),
+        price_kind=PriceKind.ADJUSTED,
+    )
+    assert close_prices.returns == (2e-16,)
+
+
+def test_evidence_bc_014() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return((1e-308, 1e308), price_kind=PriceKind.ADJUSTED)
+    assert "non_finite_result" in _rules(caught.value)
+
+
+def test_evidence_bc_015() -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return((1e308, 1e-308), price_kind=PriceKind.ADJUSTED)
+    assert "non_finite_result" in _rules(caught.value)
+
+
+@pytest.mark.parametrize(
+    "prices",
+    [(math.nan, -1.0), (-1.0, math.nan)],
+)
+def test_non_finite_prices_do_not_evaluate_minimum(
+    prices: tuple[float, ...],
+) -> None:
+    with pytest.raises(DomainError) as caught:
+        simple_return(prices, price_kind=PriceKind.ADJUSTED)
+    assert _rules(caught.value) == {"non_finite_prices"}
+
+
 def test_models_are_frozen_and_reject_extra_fields() -> None:
     inputs = Inputs(prices=(100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
@@ -229,7 +261,7 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.1.0"
+    assert result.version == "0.2.0"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL

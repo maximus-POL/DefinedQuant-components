@@ -66,6 +66,7 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     assert listed["filters"]["output_concepts"] == ["simple_return_series"]
     assert listed["components"][0]["facets"]["output_concepts"] == [
         "calculation_diagnostics",
+        "periodic_return_series",
         "return_timestamps",
         "simple_return_series",
         "visualization_specifications",
@@ -207,9 +208,9 @@ def test_runner_validates_executes_and_renders_component(
     result = json.loads((output_dir / manifest.result.path).read_text(encoding="utf-8"))
     assert result["component_id"] == "dq.market_data.simple_return"
     assert result["returns"] == [
-        0.030000000000000027,
-        -0.01941747572815533,
-        0.03960396039603964,
+        0.03,
+        -0.019417475728155338,
+        0.039603960396039604,
     ]
 
 

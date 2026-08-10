@@ -106,7 +106,7 @@ def test_catalog_v1_reference_query_keeps_its_explainable_score() -> None:
 
     assert result.total_matches == 1
     assert result.hits[0].record.component_id == "dq.market_data.simple_return"
-    assert result.hits[0].score == 111
+    assert result.hits[0].score == 124
 
 
 def test_alias_and_concept_fields_outrank_explanatory_prose() -> None:
