@@ -280,6 +280,53 @@ def test_nonfinite_component_result_is_refused_before_staging(tmp_path: Path) ->
     assert not list(tmp_path.glob(".output.dq-stage-*"))
 
 
+def test_nonfinite_component_output_is_rejected_before_staging(tmp_path: Path) -> None:
+    completed = _python_probe(
+        """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import run_component as runner
+
+root = Path(sys.argv[2])
+record = runner.component_record("dq.market_data.simple_return")
+reference = runner._component_ref(record)
+request = runner.OperationRequest(
+    component=reference,
+    input={"prices": [100.0, 101.0], "price_kind": "adjusted"},
+    provenance=runner.CallerProvenance(
+        source_kind="synthetic",
+        interpretation_method="caller_structured",
+        label="Synthetic non-finite output regression fixture.",
+    ),
+)
+inputs_model, _ = runner.component_models(record)
+validated = inputs_model.model_validate(request.input)
+original = runner.load_component(record)
+
+def nonfinite_component(**kwargs):
+    result = original(**kwargs)
+    return result.model_copy(update={"returns": (float("inf"),)})
+
+runner.load_component = lambda selected: nonfinite_component
+try:
+    runner._run(request, record, root / "output")
+except Exception as error:
+    runner._print_model(runner._failure(error, request=request), stream=sys.stdout)
+""",
+        str(tmp_path),
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    failure = OperationFailure.model_validate_json(completed.stdout)
+    assert failure.operation_hash is not None
+    assert failure.error.code == "output_validation_failed"
+    assert "Infinity" not in completed.stdout
+    assert not (tmp_path / "output").exists()
+    assert not list(tmp_path.glob(".output.dq-stage-*"))
+
+
 def test_artifact_request_is_optional_and_output_conflicts_are_typed(tmp_path: Path) -> None:
     request = _request(artifacts=False)
     request_path = tmp_path / "request.json"
