@@ -1,7 +1,7 @@
 {
   "schema_version": 0,
   "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "fd761abf82599273671928ac925fea39753822fe754bf17879c20a0e39d8f2c2",
+  "validated_subject_hash": "146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484",
   "known_answers": [
     {
       "id": "ka_001",
@@ -260,6 +260,53 @@
         "price_kind": "unadjusted"
       },
       "expected_warning": "unadjusted_price_interpretation"
+    },
+    {
+      "id": "bc_013",
+      "test_id": "test_evidence_bc_013",
+      "description": "Close finite prices retain relative precision.",
+      "inputs": {
+        "prices": [
+          1e+16,
+          1.0000000000000002e+16
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected": {
+        "returns": [
+          2e-16
+        ]
+      },
+      "tolerance": {
+        "rtol": 1e-12,
+        "atol": 0.0
+      }
+    },
+    {
+      "id": "bc_014",
+      "test_id": "test_evidence_bc_014",
+      "description": "A finite positive price pair whose simple return overflows is blocking.",
+      "inputs": {
+        "prices": [
+          1e-308,
+          1e+308
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_error": "non_finite_result"
+    },
+    {
+      "id": "bc_015",
+      "test_id": "test_evidence_bc_015",
+      "description": "A finite positive price pair whose simple return rounds to total loss is blocking.",
+      "inputs": {
+        "prices": [
+          1e+308,
+          1e-308
+        ],
+        "price_kind": "adjusted"
+      },
+      "expected_error": "non_finite_result"
     }
   ],
   "cross_checks": [],
@@ -319,6 +366,13 @@
       "expected_action": "ask",
       "expected_fields": [],
       "rationale": "A frequency label cannot substitute for an explicit exchange calendar and gap policy."
+    },
+    {
+      "id": "unspecified_return_convention",
+      "prompt": "Calculate returns from adjusted prices 100 and 105.",
+      "expected_action": "ask",
+      "expected_fields": [],
+      "rationale": "Simple and log returns differ, so the return convention must be selected before choosing this component."
     }
   ]
 }

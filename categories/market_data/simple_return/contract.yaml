@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -17,13 +17,14 @@
     "aliases": [
       "arithmetic return",
       "discrete return",
+      "period price change",
       "period price return",
       "simple price return"
     ],
     "intents": [
       "calculate_simple_returns",
       "measure_period_price_change",
-      "transform_prices_to_returns"
+      "transform_prices_to_simple_returns"
     ],
     "input_concepts": [
       "observation_frequency",
@@ -33,6 +34,7 @@
     ],
     "output_concepts": [
       "calculation_diagnostics",
+      "periodic_return_series",
       "return_timestamps",
       "simple_return_series",
       "visualization_specifications"
@@ -53,7 +55,8 @@
   "limitations": [
     "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
     "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
-    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in v0.1."
+    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in v0.2.",
+    "A finite positive price pair whose simple return overflows or rounds to total loss is rejected."
   ],
   "depends_on": [],
   "references": [],
@@ -76,6 +79,7 @@
       "Caller order should be preserved exactly rather than repaired or inferred."
     ],
     "do_not_use_when": [
+      "The caller asks for returns from prices without choosing simple or log returns; clarify the convention first.",
       "The adjusted or unadjusted price convention is unknown.",
       "The request requires log returns, total-return construction, annualization, or risk estimation.",
       "Observations need sorting, reversal, imputation, currency conversion, or corporate-action adjustment."
@@ -144,6 +148,11 @@
               "left": {"field": "prices", "measure": "count"},
               "op": "gt",
               "right": {"value": 0}
+            },
+            {
+              "left": {"field": "prices", "measure": "all_finite"},
+              "op": "eq",
+              "right": {"value": true}
             },
             {
               "left": {"field": "prices", "measure": "min"},

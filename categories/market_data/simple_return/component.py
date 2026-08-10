@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Literal
 
@@ -11,6 +12,7 @@ from defined_quant.types import (
     ChartKind,
     ChartSeries,
     ComponentOutput,
+    DomainError,
     Frequency,
     NumberFormat,
     PriceKind,
@@ -21,7 +23,7 @@ from defined_quant.types import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.2.0"
 
 
 class Inputs(BaseModel):
@@ -47,7 +49,7 @@ class Inputs(BaseModel):
     declared_frequency: Frequency | None = Field(
         default=None,
         description=(
-            "Optional caller declaration. In v0.1 it is disclosure only; no market-calendar "
+            "Optional caller declaration. In v0.2 it is disclosure only; no market-calendar "
             "gap inference is performed."
         ),
     )
@@ -70,6 +72,34 @@ class Output(ComponentOutput):
     declared_frequency: Frequency | None
     ordering_status: Literal["verified", "unverified"]
     gap_check: Literal["not_assessed"] = "not_assessed"
+
+
+def _non_finite_result() -> DomainError:
+    message = (
+        "non_finite_result: A finite positive price pair produced a simple return "
+        "that cannot be represented without overflow or rounding to total loss."
+    )
+    return DomainError(
+        message,
+        component_id=COMPONENT_ID,
+        details={
+            "violations": [
+                {
+                    "rule": "non_finite_result",
+                    "severity": "blocking",
+                    "message": message,
+                    "context": {},
+                }
+            ]
+        },
+    )
+
+
+def _simple_return(previous: float, current: float) -> float:
+    value = (current - previous) / previous
+    if not math.isfinite(value) or value == -1.0:
+        raise _non_finite_result()
+    return value
 
 
 def _visualization(
@@ -144,7 +174,7 @@ def simple_return(
     violations = preflight(COMPONENT_ID, **inputs.model_dump(mode="python"))
 
     returns = tuple(
-        current / previous - 1.0
+        _simple_return(previous, current)
         for previous, current in zip(inputs.prices, inputs.prices[1:], strict=False)
     )
     warnings = tuple(violation.message for violation in violations)
@@ -159,7 +189,7 @@ def simple_return(
         ),
     )
     transformations = (
-        "Computed each value as current_price / previous_price - 1.",
+        "Computed each value as (current_price - previous_price) / previous_price.",
         "Associated each return with the interval-end timestamp when timestamps were supplied.",
     )
     visualization = _visualization(

@@ -44,6 +44,8 @@ not be verified.
 ## Common mistakes
 
 - Treating `0.05` as `0.05%` instead of `5%`.
+- Choosing this component when the request says only “returns” and does not select simple versus
+  log returns.
 - Mixing simple and log returns downstream.
 - Omitting whether prices are adjusted or unadjusted.
 - Calling an unadjusted price change a total return.
@@ -69,4 +71,5 @@ The output describes the supplied series; it does not establish that the series 
 point-in-time correct, survivorship-bias free, or suitable for investment decisions. A declared
 frequency is retained as disclosure only. Calendar-aware gap detection requires an explicit
 calendar and gap policy that this draft contract does not yet define, so `gap_check` is always
-`not_assessed`.
+`not_assessed`. A positive finite price pair whose return overflows or is indistinguishable from
+total loss in binary64 is rejected.
