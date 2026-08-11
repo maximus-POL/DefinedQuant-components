@@ -158,6 +158,13 @@ trusted SVG renderer. Components without visualizations still produce normalized
 structured result, and manifest members. Production execution is catalog-wide and must not branch
 on a particular component ID.
 
+Before passing one component field into another, inspect both generated schemas and compare their
+`x-defined-quant-port` metadata. The producer must be an output, the consumer must be an input,
+and concept, unit, shape, cardinality, convention, ordering, frequency, and provenance requirement
+must be compatible. Use the canonical `compare_semantic_ports` or `require_compatible_ports`
+helper rather than matching selected strings. Compatibility does not move values, waive the
+consumer's constraints, authorize a multi-step plan, or make `depends_on` an execution edge.
+
 ## Data and interpretation boundaries
 
 - Keep data acquisition separate from calculation. A host tool may supply observations, but
@@ -168,8 +175,9 @@ on a particular component ID.
 - Treat provenance references as caller context, not cell-level citations or authenticated source
   bindings. A component derivation may identify exact input indices, but a null or caller-populated
   citation ID does not prove that a CSV cell, filing passage, or provider response supplied a value.
-- Do not claim an approved `AnalysisPlan`, validation receipt, authorization, deterministic
-  evaluation, or portable `ResearchBundle`; those records are not part of this protocol version.
+- Do not claim that a direct operation created an approved `AnalysisPlan`, validation receipt,
+  authorization, deterministic evaluation, or portable `ResearchBundle`; this unmanaged adapter
+  produces none of those records.
 - Do not turn a deterministic calculation into financial advice or imply evidence, review, or
   scope beyond the component's contract.
 

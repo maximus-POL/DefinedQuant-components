@@ -48,16 +48,26 @@ class ComponentOutput(BaseModel):
                     f"derivation output field {output_ref.field!r} does not exist"
                 )
             values = getattr(self, output_ref.field)
-            if not isinstance(values, tuple):
+            if isinstance(values, tuple):
+                if output_ref.index >= len(values):
+                    raise ValueError(
+                        f"derivation output index {output_ref.index} is out of range for "
+                        f"{output_ref.field!r}"
+                    )
+                referenced_value = values[output_ref.index]
+            else:
+                if output_ref.index != 0:
+                    raise ValueError(
+                        f"scalar derivation output {output_ref.field!r} must use index 0"
+                    )
+                referenced_value = values
+            if isinstance(referenced_value, bool) or not isinstance(
+                referenced_value, (int, float)
+            ):
                 raise ValueError(
-                    f"derivation output field {output_ref.field!r} must be a tuple"
+                    f"derivation output {output_ref.field!r} must reference a numeric value"
                 )
-            if output_ref.index >= len(values):
-                raise ValueError(
-                    f"derivation output index {output_ref.index} is out of range for "
-                    f"{output_ref.field!r}"
-                )
-            if values[output_ref.index] != derivation.value:
+            if referenced_value != derivation.value:
                 raise ValueError("derivation value must equal its referenced output value")
         return self
 

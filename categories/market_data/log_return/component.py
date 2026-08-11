@@ -1,8 +1,9 @@
-"""Canonical models and implementation for ``dq.market_data.simple_return``."""
+"""Canonical models and implementation for ``dq.market_data.log_return``."""
 
 from __future__ import annotations
 
 import math
+import sys
 from datetime import datetime
 from typing import Literal
 
@@ -38,12 +39,20 @@ from defined_quant_protocol import (
 )
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
-COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.3.2"
-FORMULA = "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁"
-_GAP_DISCLOSURES = (
+COMPONENT_ID = "dq.market_data.log_return"
+COMPONENT_VERSION = "0.1.0"
+FORMULA = (
+    "rₜ = log1p((Pₜ − Pₜ₋₁) / Pₜ₋₁) if Pₜ ≥ Pₜ₋₁ / 2 and Pₜ₋₁ ≥ Pₜ / 2; "
+    "otherwise q = Pₜ / Pₜ₋₁ and rₜ = log(q) if 2⁻¹⁰²² ≤ q < ∞, else "
+    "log(Pₜ) − log(Pₜ₋₁)"
+)
+_DISCLOSURES = (
     "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
     "so gaps were not assessed.",
+    "frequency_not_inferred: Observation frequency is retained only when the caller declares "
+    "it; this component does not infer frequency from timestamps.",
+    "adjustment_method_not_audited: The caller's adjusted or unadjusted label is preserved, "
+    "but the upstream provider's adjustment methodology is not audited.",
 )
 
 
@@ -89,14 +98,14 @@ class Inputs(BaseModel):
     declared_frequency: Frequency | None = Field(
         default=None,
         description=(
-            "Optional caller declaration. In this version it is disclosure only; no "
-            "market-calendar gap inference is performed."
+            "Optional caller declaration. It is disclosure only; no market-calendar gap "
+            "inference is performed."
         ),
     )
 
 
 class Output(ComponentOutput):
-    """Simple periodic returns plus explicit alignment and interpretation state."""
+    """Log periodic returns plus explicit alignment and interpretation state."""
 
     returns: tuple[float, ...] = Field(
         ...,
@@ -107,21 +116,21 @@ class Output(ComponentOutput):
             unit=PortUnit.DECIMAL,
             shape=PortShape.ORDERED_SERIES,
             cardinality=PortCardinality.ONE_OR_MORE,
-            convention=PortConvention.SIMPLE_PERIODIC_RETURN,
+            convention=PortConvention.LOG_PERIODIC_RETURN,
             ordering=PortOrdering.PRESERVE_SOURCE_ORDER,
             frequency=PortFrequency.INHERITED,
             provenance_requirement=PortProvenanceRequirement.COMPONENT_BOUND,
         ),
     )
-    return_kind: Literal[ReturnKind.SIMPLE] = Field(
-        default=ReturnKind.SIMPLE,
+    return_kind: Literal[ReturnKind.LOG] = Field(
+        default=ReturnKind.LOG,
         json_schema_extra=semantic_port_metadata(
             direction=PortDirection.OUTPUT,
             concept=PortConcept.RETURN_CONVENTION,
             unit=PortUnit.UNITLESS,
             shape=PortShape.SCALAR,
             cardinality=PortCardinality.EXACTLY_ONE,
-            convention=PortConvention.SIMPLE_PERIODIC_RETURN,
+            convention=PortConvention.LOG_PERIODIC_RETURN,
             ordering=PortOrdering.NOT_APPLICABLE,
             frequency=PortFrequency.NOT_APPLICABLE,
             provenance_requirement=PortProvenanceRequirement.COMPONENT_BOUND,
@@ -144,18 +153,20 @@ class Output(ComponentOutput):
             input_locations = tuple((item.field, item.index) for item in derivation.inputs)
             if input_locations != (("prices", index), ("prices", index + 1)):
                 raise ValueError("each return derivation must reference its two source prices")
-            expected_expression = (
-                f"(prices[{index + 1}] - prices[{index}]) / prices[{index}]"
-            )
-            if derivation.expression != expected_expression:
-                raise ValueError("return derivation expression must match the executed indexing")
+            allowed_expressions = {
+                f"log1p((prices[{index + 1}] - prices[{index}]) / prices[{index}])",
+                f"log(prices[{index + 1}] / prices[{index}])",
+                f"log(prices[{index + 1}]) - log(prices[{index}])",
+            }
+            if derivation.expression not in allowed_expressions:
+                raise ValueError("return derivation expression must identify the executed branch")
         return self
 
 
 def _non_finite_result() -> DomainError:
     message = (
-        "non_finite_result: A finite positive price pair produced a simple return "
-        "that cannot be represented without overflow or rounding to total loss."
+        "non_finite_result: A finite positive price pair produced a log return that cannot "
+        "be represented as a finite binary64 value."
     )
     return DomainError(
         message,
@@ -173,26 +184,48 @@ def _non_finite_result() -> DomainError:
     )
 
 
-def _simple_return(previous: float, current: float) -> float:
-    value = (current - previous) / previous
-    if not math.isfinite(value) or value == -1.0:
+def _log_return(previous: float, current: float, *, index: int) -> tuple[float, str]:
+    # Sterbenz's lemma makes the subtraction exact within this factor-of-two
+    # neighborhood, while log1p preserves changes close to zero.
+    if current >= previous / 2.0 and previous >= current / 2.0:
+        relative = (current - previous) / previous
+        value = math.log1p(relative)
+        expression = f"log1p((prices[{index + 1}] - prices[{index}]) / prices[{index}])"
+    else:
+        ratio = current / previous
+        if math.isfinite(ratio) and ratio >= sys.float_info.min:
+            value = math.log(ratio)
+            expression = f"log(prices[{index + 1}] / prices[{index}])"
+        else:
+            value = math.log(current) - math.log(previous)
+            expression = f"log(prices[{index + 1}]) - log(prices[{index}])"
+    if not math.isfinite(value):
         raise _non_finite_result()
-    return value
+    return value, expression
 
 
-def _derivations(returns: tuple[float, ...]) -> tuple[Derivation, ...]:
-    return tuple(
-        Derivation(
-            output=OutputRef(field="returns", index=index),
-            inputs=(
-                InputRef(field="prices", index=index),
-                InputRef(field="prices", index=index + 1),
-            ),
-            expression=f"(prices[{index + 1}] - prices[{index}]) / prices[{index}]",
-            value=value,
+def _calculate(
+    prices: tuple[float, ...],
+) -> tuple[tuple[float, ...], tuple[Derivation, ...]]:
+    returns: list[float] = []
+    derivations: list[Derivation] = []
+    for index, (previous, current) in enumerate(
+        zip(prices, prices[1:], strict=False)
+    ):
+        value, expression = _log_return(previous, current, index=index)
+        returns.append(value)
+        derivations.append(
+            Derivation(
+                output=OutputRef(field="returns", index=index),
+                inputs=(
+                    InputRef(field="prices", index=index),
+                    InputRef(field="prices", index=index + 1),
+                ),
+                expression=expression,
+                value=value,
+            )
         )
-        for index, value in enumerate(returns)
-    )
+    return tuple(returns), tuple(derivations)
 
 
 def _visualization(
@@ -213,7 +246,7 @@ def _visualization(
     minimum = min(returns)
     maximum = max(returns)
     alt_text = (
-        f"Line chart of {len(returns)} simple periodic return"
+        f"Line chart of {len(returns)} log periodic return"
         f"{'' if len(returns) == 1 else 's'} from {inputs.price_kind.value} prices. "
         f"Values range from {minimum:.6g} to {maximum:.6g} in decimal units."
     )
@@ -223,23 +256,23 @@ def _visualization(
         "calendar-aware gaps: not assessed."
     )
     return VisualizationSpec(
-        id="simple_periodic_returns",
+        id="log_periodic_returns",
         kind=ChartKind.LINE,
-        title="Simple periodic returns",
+        title="Log periodic returns",
         alt_text=alt_text,
         categories=categories,
         series=(
             ChartSeries(
-                key="simple_return",
-                label="Simple return",
+                key="log_return",
+                label="Log return",
                 values=returns,
             ),
         ),
         x_axis=AxisSpec(label=x_axis_label, unit=Unit.UNITLESS),
         y_axis=AxisSpec(
-            label="Simple return",
+            label="Log return",
             unit=Unit.DECIMAL,
-            number_format=NumberFormat.PERCENT,
+            number_format=NumberFormat.DECIMAL,
         ),
         caption=caption,
         assumptions=assumptions,
@@ -247,14 +280,14 @@ def _visualization(
     )
 
 
-def simple_return(
+def log_return(
     prices: tuple[float, ...] | list[float],
     *,
     price_kind: PriceKind | str,
     timestamps: tuple[datetime | str, ...] | list[datetime | str] | None = None,
     declared_frequency: Frequency | str | None = None,
 ) -> Output:
-    """Return precision-preserving simple returns for each successive observation."""
+    """Return precision-preserving log returns for each successive observation."""
 
     inputs = Inputs.model_validate(
         {
@@ -265,11 +298,7 @@ def simple_return(
         }
     )
     violations = preflight(COMPONENT_ID, **inputs.model_dump(mode="python"))
-
-    returns = tuple(
-        _simple_return(previous, current)
-        for previous, current in zip(inputs.prices, inputs.prices[1:], strict=False)
-    )
+    returns, derivations = _calculate(inputs.prices)
     warnings = tuple(violation.message for violation in violations)
     ordering_status: Literal["verified", "unverified"] = (
         "verified" if inputs.timestamps is not None else "unverified"
@@ -305,10 +334,10 @@ def simple_return(
         subject_hash=subject_hash(COMPONENT_ID),
         unit=Unit.DECIMAL,
         assumptions=assumptions,
-        disclosures=_GAP_DISCLOSURES,
+        disclosures=_DISCLOSURES,
         warnings=warnings,
         transformations=transformations,
-        derivations=_derivations(returns),
+        derivations=derivations,
         visualizations=visualizations,
         returns=returns,
         price_kind=inputs.price_kind,
@@ -318,3 +347,13 @@ def simple_return(
         declared_frequency=inputs.declared_frequency,
         ordering_status=ordering_status,
     )
+
+
+__all__ = [
+    "COMPONENT_ID",
+    "COMPONENT_VERSION",
+    "FORMULA",
+    "Inputs",
+    "Output",
+    "log_return",
+]

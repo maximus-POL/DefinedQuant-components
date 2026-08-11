@@ -196,10 +196,37 @@
         }
       }
     },
+    "inputValidationIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+        },
+        "type": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+      }
+    },
+    "inputValidationErrorExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "issues"],
+      "properties": {
+        "outcome": {"const": "input_validation_error"},
+        "issues": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/inputValidationIssue"}
+        }
+      }
+    },
     "expectation": {
       "oneOf": [
         {"$ref": "#/$defs/successExpectation"},
-        {"$ref": "#/$defs/errorExpectation"}
+        {"$ref": "#/$defs/errorExpectation"},
+        {"$ref": "#/$defs/inputValidationErrorExpectation"}
       ]
     },
     "provenance": {

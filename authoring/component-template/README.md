@@ -24,6 +24,12 @@ The canonical input fields, units, and defaults are defined by `Inputs` in
 The canonical output fields and units are defined by `Output` in `component.py`.
 Explain how a user should interpret them.
 
+## Semantic ports
+
+TODO: attach closed `semantic_port_metadata` to at least one canonical input and output field,
+then explain which producer/consumer meanings are compatible. Reuse or deliberately extend the
+protocol vocabulary; never invent component-local schema-extra keys.
+
 ## Worked example
 
 TODO: add a small, synthetic, hand-checkable example.

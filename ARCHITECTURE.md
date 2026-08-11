@@ -43,6 +43,7 @@ components/
 │   ├── canonical.py
 │   ├── operation.py
 │   ├── plan.py
+│   ├── ports.py
 │   ├── policy.py
 │   ├── version.py
 │   └── py.typed
@@ -95,6 +96,8 @@ Each component has one canonical implementation file and two machine-readable do
 - Defines Pydantic `Inputs` and `Output`.
 - Defines the deterministic callable.
 - Is canonical for types, units, conventions, and defaults.
+- Declares closed `x-defined-quant-port` metadata on composable fields; the authoring checker
+  rejects partial, invented, wrongly directed, or sibling ad-hoc port metadata.
 - Separates assumptions, permanent disclosures, transformations, and state-dependent warnings in
   the shared output envelope; input-independent comparisons in contract warning rules are
   rejected.
@@ -179,7 +182,8 @@ The adapter is a host convenience layer, not another source of truth. It cannot 
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
 
-`defined_quant_protocol` 0.2.0 provides the closed operation and managed-authorization records. An
+`defined_quant_protocol` 0.3.0 provides the closed operation, semantic-port, and
+managed-authorization records. An
 `OperationRequest` binds an exact component ID, version, and `subject_hash` to a candidate input
 object, explicit caller provenance, and a bounded artifact request. Catalog roots and output
 directories are trusted runtime settings and never fields in the semantic request. The request
@@ -201,9 +205,12 @@ The generic adapter then performs the following catalog-wide sequence:
 7. Emit a typed result whose manifest records relative POSIX member names and content hashes.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
-but adding another conforming component requires no runner edit. Pydantic models also remain the
-canonical source for structural compatibility between possible component steps; an empty or
-populated `depends_on` list in `contract.yaml` is not a substitute for model compatibility.
+but adding another conforming component requires no runner edit. Pydantic models remain canonical
+for field structure, and their closed semantic-port metadata establishes field-level meaning.
+Composition compares direction, concept, unit, shape, cardinality, convention, ordering,
+frequency, and provenance requirements before a producer output can feed a consumer input. An
+empty or populated `depends_on` list in `contract.yaml` binds implementation dependencies; it is
+not a substitute for port compatibility.
 Ordinary stable-ID subject lookups reuse the freshly verified cache entry; path and explicit-record
 lookups remain uncached for authoring. The current catalog and preflight require filesystem-backed
 contracts, so zipimport and single-file frozen layouts are outside the supported runtime boundary.
@@ -218,8 +225,8 @@ assertion, not a provider or Defined Quant attestation.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
-`dq.market_data.simple_return` version `0.3.1`, subject
-`b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a`, with explicit opt-in to its
+`dq.market_data.simple_return` version `0.3.2`, subject
+`8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a
@@ -233,12 +240,12 @@ timestamps are semantic data and are included in both the dataset and plan hashe
 records provide shallow immutability only, so mutation of nested JSON requires revalidation.
 
 This boundary neither executes Simple Return nor authenticates the dataset source. Simple Return's
-output now binds every return index to its two source-price indices through a closed derivation
-record, but its nullable citation IDs make no source claim. Exact source citations, execution
-attestation, evaluation records, and `ResearchBundle` generation remain deferred, as do semantic
-port metadata, multi-step composition (including Log Return to Historical Volatility), and
-source-bound execution. Adding semantic ports changes the component subject and therefore requires
-a version change and re-freeze before authorization.
+output binds every return index to its two source-price indices through a closed derivation record,
+but its nullable citation IDs make no source claim. Log Return and Historical Volatility now form
+the first machine-checkable semantic chain: both the return series and the log-return convention
+ports match, while the simple-return convention does not. This compatibility neither executes nor
+authorizes a multi-step plan. Exact source citations, execution attestation, evaluation records,
+managed composition, `ResearchBundle` generation, and source-bound execution remain deferred.
 
 ## 9. Static publication
 
@@ -246,7 +253,8 @@ a version change and re-freeze before authorization.
 deterministic, website-safe catalog artifact containing sanitized component metadata and trust
 bindings. Catalog schema v2 exports component groups, tags, discovery fields, use/do-not-use
 boundaries, limitations, deterministic top-level facet values, and each component's Pydantic
-input/output JSON Schemas. It also exports request, manifest, success, failure, and result schemas
+input/output JSON Schemas, including their closed semantic-port extensions. It also exports
+request, manifest, success, failure, and result schemas
 plus canonicalization, hash framing, domain, and a fixed verification vector directly from
 `defined_quant_protocol`, labeled as unmanaged.
 
@@ -267,9 +275,9 @@ source code.
 
 ## 10. Current claim boundary
 
-All current components have lifecycle `draft`, author-asserted evidence, and no independent domain
-review. The typed operation protocol improves reproducibility and interface verification without
-changing those facts.
+All three current components have lifecycle `draft`, author-asserted evidence, and no independent
+domain review. The typed operation protocol improves reproducibility and interface verification
+without changing those facts.
 
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return

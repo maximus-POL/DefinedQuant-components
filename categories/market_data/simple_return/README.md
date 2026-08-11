@@ -1,7 +1,8 @@
 # Simple Return
 
 > Experimental Technical Preview. This component is draft, has author-supplied evidence, and has
-> no domain review. Canonical inputs, outputs, units, and defaults live in `component.py`.
+> no domain review. Canonical inputs, outputs, units, defaults, and semantic ports live in
+> `component.py`.
 
 ## Intuition
 
@@ -36,6 +37,13 @@ repeats the exact result value. `InputRef.citation_id` is currently `null`; it i
 point where a later source adapter can attach exact source-cell citations without asking a
 consumer to reconstruct the indexing rule from prose. The expression is inspectable metadata and
 is never evaluated as code.
+
+## Semantic ports
+
+The generated schemas mark the price-series and price-kind inputs and the return-series and
+return-kind outputs with closed semantic ports. The output convention is
+`simple_periodic_return`; a log-only consumer therefore receives a typed compatibility difference
+instead of silently accepting or relabelling the values.
 
 ## Visualization
 

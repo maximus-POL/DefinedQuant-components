@@ -24,7 +24,18 @@ from typing import Any
 
 import jsonschema  # type: ignore[import-untyped]
 import yaml  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+if __package__:
+    from authoring.input_validation import (
+        expected_input_validation_issues,
+        input_validation_issues,
+    )
+else:
+    from input_validation import (  # type: ignore[import-not-found,no-redef]
+        expected_input_validation_issues,
+        input_validation_issues,
+    )
 
 REQUIRED_COMPONENT_FILES = {
     "README.md",
@@ -449,6 +460,37 @@ def _validate_output_model(module_name: str, output: Any) -> type[BaseModel]:
     return output
 
 
+def _validate_semantic_port_metadata(
+    model: type[BaseModel],
+    *,
+    direction: str,
+) -> list[str]:
+    """Require closed semantic metadata wherever a model field declares schema extras."""
+
+    from defined_quant_protocol import (
+        PortDirection,
+        SemanticPortError,
+        extract_semantic_port,
+    )
+
+    expected = PortDirection(direction)
+    errors: list[str] = []
+    port_count = 0
+    for field_name, field_info in model.model_fields.items():
+        if field_info.json_schema_extra is None:
+            continue
+        port_count += 1
+        try:
+            extract_semantic_port(model, field_name, expected)
+        except SemanticPortError as exc:
+            errors.append(str(exc))
+    if port_count == 0:
+        errors.append(
+            f"{model.__name__} must declare at least one {direction} semantic port"
+        )
+    return errors
+
+
 def _import_contract_models(
     root: Path, contract: Mapping[str, Any]
 ) -> tuple[
@@ -457,6 +499,7 @@ def _import_contract_models(
     dict[str, Any],
     set[str],
     str,
+    type[BaseModel],
     type[BaseModel],
 ]:
     _bootstrap_checkout_package(root)
@@ -493,6 +536,7 @@ def _import_contract_models(
         set(output_model.model_fields),
         formula,
         inputs,
+        output_model,
     )
 
 
@@ -702,6 +746,13 @@ def _validate_evidence(
                             f"{path}: test_id {test_id!r} is not defined in test_component.py"
                         )
 
+            expectation = record.get("expect")
+            input_validation_expectation = (
+                expectation
+                if isinstance(expectation, Mapping)
+                and expectation.get("outcome") == "input_validation_error"
+                else None
+            )
             raw_inputs = record.get("inputs")
             if section != "invariants" and isinstance(raw_inputs, Mapping):
                 unknown_inputs = sorted(set(raw_inputs) - input_fields)
@@ -711,12 +762,41 @@ def _validate_evidence(
                     try:
                         materialized = _materialize_evidence_fixture(raw_inputs)
                         input_model.model_validate(materialized)
+                    except ValidationError as exc:
+                        if input_validation_expectation is None:
+                            errors.append(
+                                f"{path}: evidence record {record_id!r} has invalid Inputs: "
+                                f"{exc}"
+                            )
+                        else:
+                            actual_issues = input_validation_issues(exc)
+                            try:
+                                expected_issues = expected_input_validation_issues(
+                                    input_validation_expectation
+                                )
+                            except AssertionError as issue_error:
+                                errors.append(
+                                    f"{path}: evidence record {record_id!r} has invalid "
+                                    f"input-validation issues: {issue_error}"
+                                )
+                            else:
+                                if actual_issues != expected_issues:
+                                    errors.append(
+                                        f"{path}: evidence record {record_id!r} input "
+                                        f"validation issues {actual_issues!r} do not equal "
+                                        f"{expected_issues!r}"
+                                    )
                     except (TypeError, ValueError) as exc:
                         errors.append(
                             f"{path}: evidence record {record_id!r} has invalid Inputs: {exc}"
                         )
+                    else:
+                        if input_validation_expectation is not None:
+                            errors.append(
+                                f"{path}: evidence record {record_id!r} expects input "
+                                "validation to fail but Inputs are valid"
+                            )
 
-            expectation = record.get("expect")
             if not isinstance(expectation, Mapping):
                 continue
             if section == "agent_cases":
@@ -895,6 +975,7 @@ def _validate_component(
             output_fields,
             implementation_formula,
             input_model,
+            output_model,
         ) = _import_contract_models(root, contract)
     except (ImportError, AttributeError, TypeError, ValueError) as exc:
         errors.append(f"{component_dir / 'component.py'}: cannot load models: {exc}")
@@ -905,6 +986,7 @@ def _validate_component(
             output_fields,
             implementation_formula,
             input_model,
+            output_model,
         ) = (
             set(),
             set(),
@@ -912,6 +994,23 @@ def _validate_component(
             set(),
             "",
             None,
+            None,
+        )
+    if input_model is not None:
+        errors.extend(
+            f"{component_dir / 'component.py'}: {message}"
+            for message in _validate_semantic_port_metadata(
+                input_model,
+                direction="input",
+            )
+        )
+    if output_model is not None:
+        errors.extend(
+            f"{component_dir / 'component.py'}: {message}"
+            for message in _validate_semantic_port_metadata(
+                output_model,
+                direction="output",
+            )
         )
     if implementation_formula:
         errors.extend(

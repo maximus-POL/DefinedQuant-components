@@ -18,17 +18,19 @@ Small, reusable foundations used by every component:
 
 The generic host adapter composes these catalog, validation, and rendering foundations with the
 separate `defined_quant_protocol` package. Protocol records do not become component truth: each
-component's Pydantic models remain canonical for inputs, outputs, units, defaults, and structural
-compatibility. The direct operation adapter remains unmanaged and cannot mint plan approval,
-source-verification, or `ResearchBundle` claims.
+component's Pydantic models remain canonical for inputs, outputs, units, and defaults. Their
+closed semantic-port extensions make field compatibility inspectable without turning
+`depends_on` into an execution graph. The direct operation adapter remains unmanaged and cannot
+mint plan approval, source-verification, or `ResearchBundle` claims.
 
 `ComponentOutput` keeps assumptions, permanent disclosures, transformations, and state-dependent
 warnings in separate fields. Every comparison in a contract warning rule must depend on component
 input state; constant output context belongs in `disclosures`.
 
-Protocol 0.2.0 adds a separate authorization-only path. The packaged `simple_return_csv_v1`
-profile allowlists exactly `dq.market_data.simple_return` version `0.3.1`, subject
-`b16826e2babe46b8c483d352be92ee07be7463d1658c11a096108b0ba835470a`. It requires explicit draft
+Protocol 0.3.0 adds semantic ports while retaining the separate authorization-only path introduced
+in 0.2.0. The packaged `simple_return_csv_v1`
+profile allowlists exactly `dq.market_data.simple_return` version `0.3.2`, subject
+`8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.
@@ -37,9 +39,11 @@ Resolution timestamps are operational and excluded from the semantic plan hash. 
 timestamps and resolved answers are semantic and hash-bound. Frozen models do not recursively
 freeze nested JSON, so any nested mutation requires validation again. This path performs no
 calculation and verifies no source. Component derivations can bind output indices to input indices,
-but their nullable citation IDs are not source evidence. Semantic port metadata, multi-step
-composition, source-bound execution, populated citations, and portable `ResearchBundle` generation
-remain deferred.
+but their nullable citation IDs are not source evidence. Semantic ports prove field-level
+compatibility for the Log Return to Historical Volatility boundary and refuse Simple Return's
+different convention. They do not execute or authorize a chain. Managed multi-step composition,
+source-bound execution, populated citations, and portable `ResearchBundle` generation remain
+deferred.
 
 The folder is called `shared` so its purpose is clear when browsing the repository. Packaging maps
 it to the public Python package name `defined_quant`; component code therefore imports

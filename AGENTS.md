@@ -75,6 +75,9 @@ uv run --no-editable mypy -p defined_quant_protocol
 15. Every contract has bounded `discovery` aliases, intents, input concepts, and output concepts.
     Intents and concepts are stable lower-snake-case identifiers. Search and filtering must read
     contracts only and must never import component code.
+16. Every component declares at least one closed input and output semantic port through
+    `defined_quant_protocol.semantic_port_metadata`. Never invent sibling `json_schema_extra`
+    dialects, and never treat `depends_on` as proof that two component fields are compatible.
 
 ## Adding a component
 

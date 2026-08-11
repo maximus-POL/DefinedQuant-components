@@ -145,11 +145,30 @@ def test_models_are_frozen_and_reject_extra_fields() -> None:
         )
 
 
+def test_price_inputs_reject_boolean_and_numeric_string_coercion() -> None:
+    for invalid_price in (True, "100.0"):
+        with pytest.raises(ValidationError):
+            Inputs.model_validate(
+                {
+                    "prices": [invalid_price, 101.0],
+                    "price_kind": "adjusted",
+                }
+            )
+
+    with pytest.raises(ValidationError):
+        simple_return((True, 101.0), price_kind=PriceKind.ADJUSTED)
+
+    assert Inputs(prices=(100, 101), price_kind=PriceKind.ADJUSTED).prices == (
+        100.0,
+        101.0,
+    )
+
+
 def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.3.1"
+    assert result.version == "0.3.2"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL

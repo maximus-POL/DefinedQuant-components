@@ -68,6 +68,12 @@ These fields are an authored routing contract, not marketing keywords. Keep them
 synonym stuffing, and use `do_not_use_when` and `unsupported_scope` for adjacent requests the
 component must not answer.
 
+Every completed component must also attach at least one input and one output semantic port with
+`defined_quant_protocol.semantic_port_metadata()`. The closed port describes direction, concept,
+unit, shape, cardinality, convention, ordering, frequency, and provenance requirement. Reuse the
+protocol vocabulary exactly; do not add loose `unit`, `convention`, or component-specific sibling
+keys to `json_schema_extra`.
+
 Treat existing intent and concept identifiers as a derived catalog vocabulary. Before introducing
 a new identifier, inspect the current facets with `search_catalog.py --json` and reuse an exact
 existing value when the semantics truly match. Put natural-language synonyms in `aliases`; do not
@@ -111,7 +117,8 @@ uv run python authoring/check_component.py \
 ```
 
 The checker validates the two-level folder rule, both JSON Schemas, the Pydantic
-model declarations, declarative constraint references, executable evidence inputs and output
+model declarations, closed and correctly directed semantic-port metadata, declarative constraint
+references, executable evidence inputs and output
 paths, invariant-to-test references, agent-case output fields, and a component’s subject-hash
 binding. Every `Output`
 must extend `defined_quant.types.ComponentOutput`, which supplies the shared provenance,
@@ -123,8 +130,11 @@ hidden required arguments. Legacy split contracts and empty optional files are r
 Known answers, boundary cases, and cross-checks use one closed fixture and assertion vocabulary
 and are collected directly from `evidence.yaml` by pytest. The only reserved fixture objects are
 `$float` for explicitly tagged non-finite boundary values and `$repeat` for bounded repeated
-values. Agent cases provide structured adapter inputs and expected compute, ask, or refusal
-outcomes. Invariants remain hand-written property tests referenced by `test_id`.
+values. An input rejected by its Pydantic model uses the closed `input_validation_error` outcome
+with exact JSON-pointer field paths and stable Pydantic error types; contract `domain_error`
+violations remain a separate outcome. Agent cases provide structured adapter inputs and expected
+compute, ask, or refusal outcomes. Invariants remain hand-written property tests referenced by
+`test_id`.
 
 Once every generated evidence case and referenced invariant passes, bind the evidence to the exact
 current behaviour:
@@ -153,7 +163,8 @@ The default output is `dist/catalog/catalog.json`. Catalog schema v2 contains no
 local filesystem path, and its component order and JSON keys are stable. Each component exposes
 group, tags, discovery metadata, positive use cases, negative boundaries, assumptions,
 limitations, trust data, and deterministic JSON Schemas generated from its canonical Pydantic
-`Inputs` and `Output` models. The top-level `operation_protocol` record exports request, manifest,
+`Inputs` and `Output` models. Those schemas carry the closed `x-defined-quant-port` extensions
+consumed by websites and composition tools. The top-level `operation_protocol` record exports request, manifest,
 success, failure, and result schemas directly from `defined_quant_protocol`; the same canonical
 descriptor labels this operation path `unmanaged` and publishes its hash framing, domain, and
 verification vector. Sorted facet arrays cover categories, groups, tags, intents, input concepts,

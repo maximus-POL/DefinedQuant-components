@@ -24,7 +24,12 @@ from defined_quant_protocol import (
     ProvenanceStatus,
     SourceKind,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from authoring.input_validation import (
+    expected_input_validation_issues,
+    input_validation_issues,
+)
 
 EXECUTABLE_EVIDENCE_SECTIONS = ("known_answers", "boundary_cases", "cross_checks")
 
@@ -221,14 +226,32 @@ def execute_numerical_case(component_dir: Path, record: Mapping[str, Any]) -> No
     """Execute one known answer, boundary case, or cross-check from authored data."""
 
     inputs_model, output_model = component_models(component_dir)
-    component = load_component(component_dir)
     inputs = materialize_fixture(record.get("inputs"))
     if not isinstance(inputs, Mapping):
         raise AssertionError("evidence inputs must materialize to an object")
-    validated_inputs = inputs_model.model_validate(inputs)
     expectation = _as_mapping(record.get("expect"), label="expect")
     expected_outcome = expectation.get("outcome")
+    try:
+        validated_inputs = inputs_model.model_validate(inputs)
+    except ValidationError as exc:
+        actual_issues = input_validation_issues(exc)
+        if expected_outcome != "input_validation_error":
+            raise AssertionError(
+                f"expected {expected_outcome!r} but Inputs validation failed with "
+                f"{actual_issues!r}"
+            ) from exc
+        expected_issues = expected_input_validation_issues(expectation)
+        if actual_issues != expected_issues:
+            raise AssertionError(
+                f"input validation issues {actual_issues!r} do not equal "
+                f"{expected_issues!r}"
+            ) from exc
+        return
 
+    if expected_outcome == "input_validation_error":
+        raise AssertionError("expected input validation to fail but Inputs were valid")
+
+    component = load_component(component_dir)
     try:
         raw_result = component(**validated_inputs.model_dump(mode="python"))
     except DQError as exc:
@@ -387,6 +410,8 @@ __all__ = [
     "execute_agent_case",
     "execute_numerical_case",
     "generated_item_name",
+    "expected_input_validation_issues",
+    "input_validation_issues",
     "load_evidence",
     "materialize_fixture",
 ]

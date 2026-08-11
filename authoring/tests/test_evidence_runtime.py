@@ -11,7 +11,9 @@ from typing import Any
 import jsonschema  # type: ignore[import-untyped]
 import pytest
 from defined_quant.market_data.simple_return.component import Inputs, Output
+from pydantic import BaseModel, Field
 
+from authoring import evidence_runtime
 from authoring.check_component import _evidence_test_ids, _validate_evidence
 from authoring.evidence_runtime import (
     execute_numerical_case,
@@ -22,6 +24,14 @@ from authoring.evidence_runtime import (
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENT_DIR = ROOT / "categories" / "market_data" / "simple_return"
 EVIDENCE_PATH = COMPONENT_DIR / "evidence.yaml"
+
+
+class InputValidationInputs(BaseModel):
+    values: tuple[float, ...] = Field(min_length=1)
+
+
+class InputValidationOutput(BaseModel):
+    result: float
 
 
 def _record(evidence: dict[str, Any], section: str, record_id: str) -> dict[str, Any]:
@@ -104,6 +114,75 @@ def test_schema_rejects_ad_hoc_expected_dialects() -> None:
     assert any("expected" in error.message for error in errors)
 
 
+def test_schema_accepts_only_closed_input_validation_issues() -> None:
+    evidence = load_evidence(EVIDENCE_PATH)
+    record = _record(evidence, "boundary_cases", "bc_001")
+    record["expect"] = {
+        "outcome": "input_validation_error",
+        "issues": [{"path": "/prices", "type": "too_short"}],
+    }
+
+    assert not _schema_errors(evidence)
+
+    record["expect"]["violation_ids"] = []
+    assert _schema_errors(evidence)
+
+    del record["expect"]["violation_ids"]
+    record["expect"]["issues"][0]["message"] = "unstable prose is not evidence"
+    assert _schema_errors(evidence)
+
+
+def test_input_validation_expectation_compares_exact_structured_issues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        evidence_runtime,
+        "component_models",
+        lambda _component_dir: (InputValidationInputs, InputValidationOutput),
+    )
+    monkeypatch.setattr(
+        evidence_runtime,
+        "load_component",
+        lambda _component_dir: pytest.fail("invalid inputs must not execute the component"),
+    )
+    record: dict[str, Any] = {
+        "inputs": {"values": []},
+        "expect": {
+            "outcome": "input_validation_error",
+            "issues": [{"path": "/values", "type": "too_short"}],
+        },
+    }
+
+    execute_numerical_case(COMPONENT_DIR, record)
+
+    record["expect"]["issues"] = [{"path": "/other", "type": "too_short"}]
+    with pytest.raises(AssertionError, match="do not equal"):
+        execute_numerical_case(COMPONENT_DIR, record)
+
+
+def test_input_validation_expectation_fails_when_inputs_are_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        evidence_runtime,
+        "component_models",
+        lambda _component_dir: (InputValidationInputs, InputValidationOutput),
+    )
+    monkeypatch.setattr(evidence_runtime, "load_component", lambda _component_dir: object())
+
+    with pytest.raises(AssertionError, match="Inputs were valid"):
+        execute_numerical_case(
+            COMPONENT_DIR,
+            {
+                "inputs": {"values": [1.0]},
+                "expect": {
+                    "outcome": "input_validation_error",
+                    "issues": [{"path": "/values", "type": "too_short"}],
+                },
+            },
+        )
+
+
 def test_checker_rejects_pseudo_inputs_against_the_component_model() -> None:
     evidence = load_evidence(EVIDENCE_PATH)
     record = _record(evidence, "boundary_cases", "bc_016_at_visualization_limit")
@@ -124,6 +203,46 @@ def test_checker_rejects_pseudo_inputs_against_the_component_model() -> None:
     assert any("synthetic_constant_price_fixtures" in error for error in errors)
 
 
+def test_checker_verifies_expected_input_validation_issues() -> None:
+    record: dict[str, Any] = {
+        "id": "invalid_values",
+        "description": "Empty values fail the declared input cardinality.",
+        "inputs": {"values": []},
+        "expect": {
+            "outcome": "input_validation_error",
+            "issues": [{"path": "/values", "type": "too_short"}],
+        },
+    }
+    evidence = {
+        "known_answers": [],
+        "invariants": [],
+        "boundary_cases": [record],
+        "cross_checks": [],
+        "agent_cases": [],
+    }
+
+    errors = _validate_evidence(
+        EVIDENCE_PATH,
+        evidence,
+        COMPONENT_DIR,
+        InputValidationInputs,
+        set(InputValidationInputs.model_fields),
+        set(InputValidationOutput.model_fields),
+    )
+    assert not errors
+
+    record["expect"]["issues"] = [{"path": "/values", "type": "missing"}]
+    errors = _validate_evidence(
+        EVIDENCE_PATH,
+        evidence,
+        COMPONENT_DIR,
+        InputValidationInputs,
+        set(InputValidationInputs.model_fields),
+        set(InputValidationOutput.model_fields),
+    )
+    assert any("input validation issues" in error and "do not equal" in error for error in errors)
+
+
 def test_blessing_names_every_generated_and_invariant_case() -> None:
     evidence = load_evidence(EVIDENCE_PATH)
     test_ids = _evidence_test_ids(evidence)
@@ -133,4 +252,3 @@ def test_blessing_names_every_generated_and_invariant_case() -> None:
     assert "boundary_case_bc_016_above_visualization_limit" in test_ids
     assert "agent_case_missing_price_kind" in test_ids
     assert "test_evidence_inv_004" in test_ids
-

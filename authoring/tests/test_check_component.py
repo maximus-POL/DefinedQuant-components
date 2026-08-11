@@ -6,7 +6,19 @@ from pathlib import Path
 
 import pytest
 from defined_quant.types import ComponentOutput
-from pydantic import BaseModel
+from defined_quant_protocol import (
+    PortCardinality,
+    PortConcept,
+    PortConvention,
+    PortDirection,
+    PortFrequency,
+    PortOrdering,
+    PortProvenanceRequirement,
+    PortShape,
+    PortUnit,
+    semantic_port_metadata,
+)
+from pydantic import BaseModel, Field
 
 from authoring.check_component import (
     _validate_callable_signature,
@@ -14,6 +26,7 @@ from authoring.check_component import (
     _validate_formula_surfaces,
     _validate_guidance,
     _validate_output_model,
+    _validate_semantic_port_metadata,
 )
 
 
@@ -33,11 +46,93 @@ class InvalidOutput(BaseModel):
     value: float
 
 
+def _port_metadata(
+    direction: PortDirection,
+    *,
+    shape: PortShape = PortShape.ORDERED_SERIES,
+    cardinality: PortCardinality = PortCardinality.ONE_OR_MORE,
+) -> dict[str, object]:
+    return semantic_port_metadata(
+        direction=direction,
+        concept=PortConcept.PERIODIC_RETURN_SERIES,
+        unit=PortUnit.DECIMAL,
+        shape=shape,
+        cardinality=cardinality,
+        convention=PortConvention.LOG_PERIODIC_RETURN,
+        ordering=PortOrdering.PRESERVE_SOURCE_ORDER,
+        frequency=PortFrequency.INHERITED,
+        provenance_requirement=PortProvenanceRequirement.SOURCE_OR_COMPONENT_BOUND,
+    )
+
+
 def test_output_must_extend_the_shared_component_envelope() -> None:
     _validate_output_model("example.component", ValidOutput)
 
     with pytest.raises(ValueError, match="must extend defined_quant.types.ComponentOutput"):
         _validate_output_model("example.component", InvalidOutput)
+
+
+def test_component_models_require_closed_directional_semantic_ports() -> None:
+    class ValidInputPort(BaseModel):
+        values: tuple[float, ...] = Field(
+            min_length=1,
+            json_schema_extra=_port_metadata(PortDirection.INPUT)
+        )
+
+    class MissingPort(BaseModel):
+        values: tuple[float, ...]
+
+    class AdHocPort(BaseModel):
+        values: tuple[float, ...] = Field(
+            json_schema_extra={"unit": "decimal", "convention": "log_return"}
+        )
+
+    class ScalarClaimingSeries(BaseModel):
+        value: float = Field(json_schema_extra=_port_metadata(PortDirection.INPUT))
+
+    class SeriesClaimingScalar(BaseModel):
+        values: tuple[float, ...] = Field(
+            min_length=1,
+            json_schema_extra=_port_metadata(
+                PortDirection.INPUT,
+                shape=PortShape.SCALAR,
+                cardinality=PortCardinality.EXACTLY_ONE,
+            )
+        )
+
+    assert _validate_semantic_port_metadata(
+        ValidInputPort,
+        direction="input",
+    ) == []
+    assert any(
+        "at least one input semantic port" in error
+        for error in _validate_semantic_port_metadata(MissingPort, direction="input")
+    )
+    assert any(
+        "missing 'x-defined-quant-port'" in error
+        for error in _validate_semantic_port_metadata(AdHocPort, direction="input")
+    )
+    assert any(
+        "expected 'output'" in error
+        for error in _validate_semantic_port_metadata(
+            ValidInputPort,
+            direction="output",
+        )
+    )
+    assert any(
+        "contradicts its Pydantic field shape 'scalar'" in error
+        for error in _validate_semantic_port_metadata(
+            ScalarClaimingSeries,
+            direction="input",
+        )
+    )
+    assert any(
+        "contradicts its Pydantic field shape 'ordered_series'" in error
+        for error in _validate_semantic_port_metadata(
+            SeriesClaimingScalar,
+            direction="input",
+        )
+    )
 
 
 def test_callable_accepts_every_input_as_an_explicit_keyword() -> None:

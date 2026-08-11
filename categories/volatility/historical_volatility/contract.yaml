@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "id": "dq.volatility.historical_volatility",
+  "slug": "historical_volatility",
+  "title": "Historical Volatility",
+  "category": "volatility",
+  "group": "realized_risk",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {
+    "profile": "statistic",
+    "version": 1
+  },
+  "callable": "defined_quant.volatility.historical_volatility.component:historical_volatility",
+  "summary": "Estimates sample volatility from explicit log periodic returns and annualizes it with an explicit factor.",
+  "discovery": {
+    "aliases": [
+      "annualized historical volatility",
+      "historical standard deviation",
+      "log return volatility",
+      "sample return volatility",
+      "sample standard deviation of returns",
+      "square root annualized volatility"
+    ],
+    "intents": [
+      "annualize_log_return_volatility",
+      "calculate_historical_volatility",
+      "estimate_sample_return_volatility"
+    ],
+    "input_concepts": [
+      "annualization_factor",
+      "log_return_series",
+      "return_convention"
+    ],
+    "output_concepts": [
+      "annualized_volatility",
+      "calculation_diagnostics",
+      "datapoint_lineage",
+      "periodic_volatility"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Maksymilian Tylek",
+      "github": "makstylek"
+    }
+  ],
+  "tags": ["annualization", "lineage", "risk", "statistics", "volatility"],
+  "assumptions": [
+    "Supplied observations are comparable decimal log returns for one periodic series.",
+    "The sample standard deviation uses an n − 1 denominator.",
+    "Square-root-of-time scaling is accepted for the caller-supplied annualization factor."
+  ],
+  "limitations": [
+    "The component accepts log periodic returns only and does not convert simple returns.",
+    "It does not infer an annualization factor, observation frequency, timestamps, a market calendar, or a gap policy.",
+    "Square-root-of-time scaling may be inappropriate when return variance is not stable across horizons or observations are serially dependent.",
+    "The estimate is descriptive, not a volatility forecast, confidence interval, robust estimator, or model of changing volatility.",
+    "Finite inputs whose periodic or annualized result overflows or whose meaningful non-zero dispersion rounds to zero are rejected.",
+    "No visualization is emitted; the component returns numerical and lineage data only."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "risk",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-08-11",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "return_convention_change",
+    "annualization_policy_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller needs sample standard deviation of explicit log periodic returns.",
+      "The caller supplies the annualization factor explicitly and accepts square-root-of-time scaling.",
+      "The requested result is descriptive periodic and annualized historical volatility."
+    ],
+    "do_not_use_when": [
+      "The return convention is simple, unknown, or mixed.",
+      "The annualization factor is missing or expected to be inferred from a frequency label.",
+      "The request is for a volatility forecast, implied volatility, downside deviation, confidence interval, or time-varying volatility model.",
+      "The input series needs fetching, cleaning, sorting, alignment, outlier treatment, or gap repair."
+    ],
+    "unsupported_scope": [
+      "Conversion between simple and log returns.",
+      "Frequency, timestamp, exchange-calendar, holiday, or missing-session inference.",
+      "Forecasting, GARCH-family models, implied volatility, downside risk, robust scale estimators, or confidence intervals.",
+      "Data sourcing, cleaning, ordering, alignment, outlier treatment, or gap repair."
+    ],
+    "required_questions": [
+      {
+        "id": "annualization_factor",
+        "ask": "What explicit number of observation periods per year should be used?",
+        "why": "The annualized result changes with this factor, and the component never infers it.",
+        "resolves_to": "annualization_factor",
+        "default": null
+      },
+      {
+        "id": "return_kind",
+        "ask": "Are the supplied observations log periodic returns?",
+        "why": "This component accepts only the log-return semantic port and refuses simple or unknown conventions.",
+        "resolves_to": "return_kind",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "sampling_consistency",
+        "ask": "Were the returns observed on a consistent basis without unresolved gaps?",
+        "why": "The component does not inspect timestamps or assess whether the annualization factor matches the observations."
+      },
+      {
+        "id": "square_root_scaling",
+        "ask": "Is square-root-of-time scaling appropriate for the intended interpretation?",
+        "why": "Serial dependence and changing variance can make the scaling assumption unreliable."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "insufficient_returns",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "returns", "measure": "count"},
+          "op": "lt",
+          "right": {"value": 2}
+        },
+        "message": "insufficient_returns: At least two log periodic returns are required for sample volatility."
+      },
+      {
+        "id": "non_finite_returns",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "returns", "measure": "all_finite"},
+          "op": "eq",
+          "right": {"value": false}
+        },
+        "message": "non_finite_returns: Every return must be finite."
+      },
+      {
+        "id": "non_finite_annualization_factor",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "annualization_factor", "measure": "all_finite"},
+          "op": "eq",
+          "right": {"value": false}
+        },
+        "message": "non_finite_annualization_factor: The annualization factor must be finite."
+      },
+      {
+        "id": "non_positive_annualization_factor",
+        "severity": "blocking",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "annualization_factor", "measure": "all_finite"},
+              "op": "eq",
+              "right": {"value": true}
+            },
+            {
+              "left": {"field": "annualization_factor"},
+              "op": "le",
+              "right": {"value": 0}
+            }
+          ]
+        },
+        "message": "non_positive_annualization_factor: The annualization factor must be greater than zero."
+      },
+      {
+        "id": "unsupported_return_kind",
+        "severity": "blocking",
+        "when": {
+          "left": {"field": "return_kind"},
+          "op": "ne",
+          "right": {"value": "log"}
+        },
+        "message": "unsupported_return_kind: Historical volatility accepts log periodic returns only."
+      },
+      {
+        "id": "small_sample",
+        "severity": "warning",
+        "when": {
+          "all": [
+            {
+              "left": {"field": "returns", "measure": "count"},
+              "op": "ge",
+              "right": {"value": 2}
+            },
+            {
+              "left": {"field": "returns", "measure": "count"},
+              "op": "lt",
+              "right": {"value": 30}
+            }
+          ]
+        },
+        "message": "small_sample: Fewer than 30 returns were supplied, so the descriptive estimate may be unstable."
+      }
+    ],
+    "interpretation": "Report decimal periodic sample volatility, the explicitly annualized result, sample size, n − 1 convention, log-return convention, annualization factor, exact scalar derivations, permanent disclosures, state-dependent warnings, and provenance. Do not imply that the component inferred a calendar or frequency, converted returns, forecast volatility, or assessed statistical uncertainty."
+  },
+  "display": {
+    "profile": "statistic",
+    "formula": "a = r₀; cᵢ = rᵢ − a; dᵢ = cᵢ if every cᵢ is finite, otherwise dᵢ = rᵢ; s = maxᵢ |dᵢ|; if s = 0, σ̂ = 0; otherwise μ = fsum(dᵢ / s) / n, h₀ = 0, hᵢ₊₁ = hypot(hᵢ, dᵢ / s − μ), and σ̂ = s × (hₙ / sqrt(n − 1)); σ̂annual = σ̂ × sqrt(A)",
+    "intent": "Use when a downstream calculation needs periodic and explicitly annualized sample volatility from log returns.",
+    "output": "Periodic and annualized decimal volatility, explicit factor, sample size, degrees-of-freedom adjustment 1, log-return kind, two scalar derivations, disclosures, warnings, and provenance; no visualization.",
+    "section_order": [
+      "intuition",
+      "formula",
+      "worked_example",
+      "common_mistakes",
+      "limitations"
+    ],
+    "visible_optional_facets": [],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

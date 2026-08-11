@@ -1,0 +1,800 @@
+{
+  "schema_version": 1,
+  "component_id": "dq.volatility.historical_volatility",
+  "validated_subject_hash": "50b61b56acf03937a5aa98ebbfc92c7aa6010020d395220fdc0c54a22a3a2b6e",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "description": "Two symmetric log returns have a hand-derived sample volatility and factor-four annualization.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 4.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "approx",
+            "value": 0.01414213562373095,
+            "rtol": 1e-12,
+            "atol": 1e-15
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "approx",
+            "value": 0.0282842712474619,
+            "rtol": 1e-12,
+            "atol": 1e-15
+          },
+          {
+            "path": "/annualization_factor",
+            "op": "equal",
+            "value": 4.0
+          },
+          {
+            "path": "/sample_size",
+            "op": "equal",
+            "value": 2
+          },
+          {
+            "path": "/degrees_of_freedom_adjustment",
+            "op": "equal",
+            "value": 1
+          },
+          {
+            "path": "/return_kind",
+            "op": "equal",
+            "value": "log"
+          },
+          {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 2
+          },
+          {
+            "path": "/derivations/0/output",
+            "op": "equal",
+            "value": {
+              "field": "periodic_volatility",
+              "index": 0
+            }
+          },
+          {
+            "path": "/derivations/0/inputs",
+            "op": "equal",
+            "value": [
+              {
+                "field": "returns",
+                "index": 0,
+                "citation_id": null
+              },
+              {
+                "field": "returns",
+                "index": 1,
+                "citation_id": null
+              }
+            ]
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "centered_scaled_hypot_sample_stdev_n_minus_1(returns)"
+          },
+          {
+            "path": "/derivations/1/inputs",
+            "op": "equal",
+            "value": [
+              {
+                "field": "returns",
+                "index": 0,
+                "citation_id": null
+              },
+              {
+                "field": "returns",
+                "index": 1,
+                "citation_id": null
+              },
+              {
+                "field": "annualization_factor",
+                "index": 0,
+                "citation_id": null
+              }
+            ]
+          },
+          {
+            "path": "/derivations/1/expression",
+            "op": "equal",
+            "value": "centered_scaled_hypot_sample_stdev_n_minus_1(returns) * sqrt(annualization_factor)"
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "The symmetric two-return worked example matches the n minus 1 formula and square-root scaling."
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "A constant finite return sample has exact zero periodic and annualized volatility."
+    },
+    {
+      "id": "inv_003",
+      "test_id": "test_evidence_inv_003",
+      "description": "Adding the same finite constant to every return leaves sample volatility unchanged."
+    },
+    {
+      "id": "inv_004",
+      "test_id": "test_evidence_inv_004",
+      "description": "Multiplying every return by a positive scale multiplies both volatility outputs by that scale."
+    },
+    {
+      "id": "inv_005",
+      "test_id": "test_evidence_inv_005",
+      "description": "Exactly two scalar derivations reference every return and the explicit factor at canonical indices."
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001_two_returns",
+      "description": "The minimum valid sample of two returns is computed with a small-sample warning.",
+      "inputs": {
+        "returns": [
+          0.0,
+          0.01
+        ],
+        "annualization_factor": 1.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/sample_size",
+            "op": "equal",
+            "value": 2
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "small_sample:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_002_twenty_nine_returns",
+      "description": "Twenty-nine returns remain calculable and trigger the small-sample warning.",
+      "inputs": {
+        "returns": {
+          "$repeat": {
+            "value": 0.0,
+            "count": 29
+          }
+        },
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/sample_size",
+            "op": "equal",
+            "value": 29
+          },
+          {
+            "path": "/warnings",
+            "op": "contains_prefix",
+            "value": "small_sample:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_003_thirty_returns",
+      "description": "The small-sample warning clears at exactly thirty returns.",
+      "inputs": {
+        "returns": {
+          "$repeat": {
+            "value": 0.0,
+            "count": 30
+          }
+        },
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/sample_size",
+            "op": "equal",
+            "value": 30
+          },
+          {
+            "path": "/warnings",
+            "op": "not_contains_prefix",
+            "value": "small_sample:"
+          },
+          {
+            "path": "/visualizations",
+            "op": "length_equal",
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_004_one_return",
+      "description": "One return is insufficient for an n minus 1 sample estimate.",
+      "inputs": {
+        "returns": [
+          0.01
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "insufficient_returns"
+        ]
+      }
+    },
+    {
+      "id": "bc_005_empty_returns",
+      "description": "An empty return series is insufficient.",
+      "inputs": {
+        "returns": [],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "input_validation_error",
+        "issues": [
+          {
+            "path": "/returns",
+            "type": "too_short"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_006_nan_return",
+      "description": "A tagged NaN return is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          0.0,
+          {
+            "$float": "nan"
+          }
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_returns"
+        ]
+      }
+    },
+    {
+      "id": "bc_007_positive_infinity_return",
+      "description": "A tagged positive-infinity return is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          0.0,
+          {
+            "$float": "positive_infinity"
+          }
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_returns"
+        ]
+      }
+    },
+    {
+      "id": "bc_008_negative_infinity_return",
+      "description": "A tagged negative-infinity return is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          0.0,
+          {
+            "$float": "negative_infinity"
+          }
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_returns"
+        ]
+      }
+    },
+    {
+      "id": "bc_009_zero_factor",
+      "description": "A zero annualization factor is blocking.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 0.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_positive_annualization_factor"
+        ]
+      }
+    },
+    {
+      "id": "bc_010_negative_factor",
+      "description": "A negative annualization factor is blocking.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": -1.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_positive_annualization_factor"
+        ]
+      }
+    },
+    {
+      "id": "bc_011_nan_factor",
+      "description": "A tagged NaN annualization factor is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": {
+          "$float": "nan"
+        },
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_annualization_factor"
+        ]
+      }
+    },
+    {
+      "id": "bc_012_positive_infinity_factor",
+      "description": "A tagged positive-infinity annualization factor is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": {
+          "$float": "positive_infinity"
+        },
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_annualization_factor"
+        ]
+      }
+    },
+    {
+      "id": "bc_013_negative_infinity_factor",
+      "description": "A tagged negative-infinity annualization factor is materialized and blocked.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": {
+          "$float": "negative_infinity"
+        },
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_annualization_factor"
+        ]
+      }
+    },
+    {
+      "id": "bc_014_simple_return_kind",
+      "description": "Simple returns are refused instead of silently entering a log-return port.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "simple"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "unsupported_return_kind"
+        ]
+      }
+    },
+    {
+      "id": "bc_015_periodic_overflow",
+      "description": "Extreme opposite finite returns whose sample volatility overflows are blocking.",
+      "inputs": {
+        "returns": [
+          -1.3e+308,
+          1.3e+308
+        ],
+        "annualization_factor": 1.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
+    },
+    {
+      "id": "bc_016_annualized_overflow",
+      "description": "A finite periodic estimate whose explicitly annualized result overflows is blocking.",
+      "inputs": {
+        "returns": [
+          -1e+308,
+          1e+308
+        ],
+        "annualization_factor": 4.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
+    },
+    {
+      "id": "bc_017_annualized_underflow",
+      "description": "Meaningful subnormal dispersion that annualizes to exact zero is blocking.",
+      "inputs": {
+        "returns": [
+          0.0,
+          5e-324
+        ],
+        "annualization_factor": 5e-324,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
+    },
+    {
+      "id": "bc_018_true_zero_with_subnormal_factor",
+      "description": "True zero dispersion remains exactly zero under a subnormal positive factor.",
+      "inputs": {
+        "returns": [
+          0.0,
+          0.0
+        ],
+        "annualization_factor": 5e-324,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "equal",
+            "value": 0.0
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "equal",
+            "value": 0.0
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "zero_dispersion_sample_stdev_n_minus_1(returns)"
+          },
+          {
+            "path": "/derivations/1/expression",
+            "op": "equal",
+            "value": "zero_dispersion_sample_stdev_n_minus_1(returns) * sqrt(annualization_factor)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_019_raw_fallback_branch",
+      "description": "Opposite-sign finite extremes use the raw scaled fallback when centering overflows.",
+      "inputs": {
+        "returns": [
+          -1e+308,
+          1e+308
+        ],
+        "annualization_factor": 1.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "approx",
+            "value": 1.4142135623730951e+308,
+            "rtol": 1e-15,
+            "atol": 0.0
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "approx",
+            "value": 1.4142135623730951e+308,
+            "rtol": 1e-15,
+            "atol": 0.0
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "raw_fallback_scaled_hypot_sample_stdev_n_minus_1(returns)"
+          },
+          {
+            "path": "/derivations/1/expression",
+            "op": "equal",
+            "value": "raw_fallback_scaled_hypot_sample_stdev_n_minus_1(returns) * sqrt(annualization_factor)"
+          }
+        ]
+      }
+    }
+  ],
+  "cross_checks": [
+    {
+      "id": "cc_001_statistics_stdev",
+      "description": "A three-return result agrees with Python statistics.stdev and explicit square-root scaling.",
+      "inputs": {
+        "returns": [
+          -0.02,
+          0.0,
+          0.03
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "approx",
+            "value": 0.025166114784235832,
+            "rtol": 1e-14,
+            "atol": 1e-15
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "approx",
+            "value": 0.3994996871087636,
+            "rtol": 1e-14,
+            "atol": 1e-15
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "external_implementation",
+        "produced_by": "Python standard library statistics.stdev and math.sqrt",
+        "citation": "Independent calculation with Python 3.13 standard-library functions."
+      }
+    },
+    {
+      "id": "cc_002_large_common_offset",
+      "description": "Adjacent large finite returns retain their representable dispersion and agree with Python statistics.stdev.",
+      "inputs": {
+        "returns": [
+          1e+308,
+          1.0000000000000002e+308
+        ],
+        "annualization_factor": 1.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "approx",
+            "value": 1.4112722170374585e+292,
+            "rtol": 1e-15,
+            "atol": 0.0
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "approx",
+            "value": 1.4112722170374585e+292,
+            "rtol": 1e-15,
+            "atol": 0.0
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "external_implementation",
+        "produced_by": "Python standard library statistics.stdev",
+        "citation": "Independent calculation with Python 3.13 standard-library statistics.stdev."
+      }
+    }
+  ],
+  "agent_cases": [
+    {
+      "id": "complete_log_return_request",
+      "prompt": "Calculate historical volatility from these log returns using my explicit factor of 252.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.0,
+          0.02
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "action": "compute",
+        "fields": [
+          "periodic_volatility",
+          "annualized_volatility",
+          "annualization_factor",
+          "sample_size",
+          "degrees_of_freedom_adjustment",
+          "return_kind",
+          "disclosures",
+          "warnings",
+          "derivations",
+          "component_id",
+          "version",
+          "subject_hash"
+        ]
+      },
+      "rationale": "The structured fixture supplies both interpretation-bearing inputs and a valid return sample."
+    },
+    {
+      "id": "missing_annualization_factor",
+      "prompt": "Annualize the volatility of these log returns.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "return_kind": "log"
+      },
+      "expect": {
+        "action": "ask",
+        "question_fields": [
+          "annualization_factor"
+        ]
+      },
+      "rationale": "The real adapter must ask for the answer-changing factor rather than assume one."
+    },
+    {
+      "id": "missing_return_kind",
+      "prompt": "Calculate volatility from these returns using factor 252.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 252.0
+      },
+      "expect": {
+        "action": "ask",
+        "question_fields": [
+          "return_kind"
+        ]
+      },
+      "rationale": "The real adapter must ask for the return convention before using the log-only port."
+    },
+    {
+      "id": "missing_both_conventions",
+      "prompt": "Calculate annualized historical volatility for these returns.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ]
+      },
+      "expect": {
+        "action": "ask",
+        "question_fields": [
+          "annualization_factor",
+          "return_kind"
+        ]
+      },
+      "rationale": "Both answer-changing interpretation inputs are absent and must be surfaced together."
+    },
+    {
+      "id": "simple_return_refusal",
+      "prompt": "Calculate this component using simple periodic returns and factor 252.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "simple"
+      },
+      "expect": {
+        "action": "refuse",
+        "code": "domain_error",
+        "violation_ids": [
+          "unsupported_return_kind"
+        ]
+      },
+      "rationale": "The adapter executes the semantic convention refusal instead of relabelling simple returns."
+    },
+    {
+      "id": "small_sample_compute",
+      "prompt": "Compute the descriptive estimate from two log returns and retain any warning.",
+      "inputs": {
+        "returns": [
+          -0.01,
+          0.01
+        ],
+        "annualization_factor": 252.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "action": "compute",
+        "fields": [
+          "periodic_volatility",
+          "annualized_volatility",
+          "warnings",
+          "disclosures"
+        ]
+      },
+      "rationale": "A small valid sample is uncertain but meaningful, so the component computes with a warning."
+    }
+  ]
+}
