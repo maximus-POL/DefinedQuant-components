@@ -17,20 +17,15 @@ visible separately; passing repository checks does not upgrade a component's fin
 ## Find a component
 
 Start in [`categories/`](categories/). Categories are ordinary folders with a `README.md` that
-explains their scope. The first working component is:
-
-[`categories/market_data/simple_return/`](categories/market_data/simple_return/)
+explains their scope. The catalog includes Simple Return, Log Return, and Historical Volatility:
 
 ```text
 categories/
-└── market_data/
-    ├── README.md
-    └── simple_return/
-        ├── README.md
-        ├── component.py
-        ├── contract.yaml
-        ├── evidence.yaml
-        └── test_component.py
+├── market_data/
+│   ├── log_return/
+│   └── simple_return/
+└── volatility/
+    └── historical_volatility/
 ```
 
 There is no generated folder maze and no profile-specific template tree. A component always has
@@ -61,7 +56,7 @@ runs any component through the same canonical contracts used by Python callers. 
 formulas and guidance remain beside the component under `categories/`; the integration layer must
 not hard-code one component.
 
-## Run the working example
+## Run a working example
 
 From this folder:
 
@@ -84,9 +79,10 @@ print(result.returns)
 PY
 ```
 
-The result is a typed object, not a bare number. It includes units, assumptions, warnings,
-provenance, and a renderer-neutral visualization specification. The shared chart renderer can
-turn that specification into deterministic SVG without adding a plotting-library dependency.
+The result is a typed object, not a bare number. It includes units, assumptions, constant
+disclosures, state-dependent warnings, datapoint derivations, provenance, and a renderer-neutral
+visualization specification. The shared chart renderer can turn that specification into
+deterministic SVG without adding a plotting-library dependency.
 
 ## Typed generic operations
 
@@ -105,9 +101,10 @@ manifest is an internally reconciled record, not a signed or independent executi
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
-Protocol 0.2.0 separately introduces an atomic managed-authorization foundation. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.2.0` at
-subject `146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484`, with explicit opt-in to
+Protocol 0.3.0 adds closed semantic ports while retaining the atomic managed-authorization
+foundation introduced in 0.2.0. Its packaged
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.2` at
+subject `8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.
@@ -116,8 +113,12 @@ Resolution timestamps are operational audit metadata and do not change a plan's 
 resolved answers do. Dataset timestamps are semantic input and are hash-bound. Because frozen
 Pydantic models are shallow, callers must treat nested JSON as immutable and revalidate after any
 nested mutation. This foundation performs no calculation and makes no source-verification claim.
-Semantic port metadata, multi-step composition, source-bound execution, citations, and portable
-research bundles remain deferred.
+Every component publishes closed field-level semantic ports in its generated JSON Schemas. The
+catalog can therefore prove that Log Return's return series and convention are compatible with
+Historical Volatility's corresponding inputs, while Simple Return is refused at that boundary.
+Port compatibility does not execute or authorize a chain, and every consumer constraint still
+applies. Calculation derivations use nullable citation join keys; authentic source bindings,
+managed multi-step execution, and portable research bundles remain deferred.
 
 See [the catalog-wide host skill](.agents/skills/use-defined-quant/SKILL.md) for discovery,
 inspection, request construction, execution, and result-handling instructions.
@@ -140,6 +141,12 @@ uv run --no-editable mypy -p defined_quant_protocol
 Normal development uses an editable install. The type-check command asks `uv` to check the same
 merged package layout users receive in the wheel, because static type checkers do not execute the
 small runtime path extension used by the readable two-source layout.
+
+Runtime discovery is filesystem-backed. Stable component-ID subject hashes are memoized per
+catalog root for ordinary calculations, while the runner and managed validator explicitly
+invalidate and freshly verify the installed subject at their trust boundaries. Zipimport and
+single-file frozen packaging are not currently supported because contracts must remain readable to
+both discovery and preflight.
 
 To add a component:
 
@@ -170,11 +177,14 @@ Python. Adding a component therefore requires no website code change.
 - Required discovery aliases and stable intent/input/output concepts make the same catalog
   searchable by humans, developer tools, websites, and autonomous agents without loading every
   calculation.
-- `evidence.yaml` names executable evidence and binds it to the exact behavior hash.
+- `evidence.yaml` supplies closed, executable fixtures and assertions and binds their passing run
+  to the exact behavior hash.
 - Every current component remains lifecycle `draft`, with author-asserted evidence and no
   independent domain review.
 - Constraints use a closed operator vocabulary; no contract content is evaluated as Python.
 - Anything that changes the answer must be supplied or declared explicitly.
+- Closed semantic ports compare direction, concept, unit, shape, cardinality, convention,
+  ordering, frequency, and provenance requirements before fields are composed.
 - A typed operation binds what was calculated. Caller provenance records what the caller asserts;
   it is not source authentication, authorization, or a managed verification claim.
 

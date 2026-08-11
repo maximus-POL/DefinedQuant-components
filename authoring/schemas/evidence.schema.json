@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://definedquant.org/schemas/evidence.schema.json",
-  "title": "Defined Quant component evidence",
+  "title": "Defined Quant executable component evidence",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
     "agent_cases"
   ],
   "properties": {
-    "schema_version": {"const": 0},
+    "schema_version": {"const": 1},
     "component_id": {"$ref": "#/$defs/componentId"},
     "validated_subject_hash": {
       "oneOf": [
@@ -53,17 +53,181 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
     },
-    "jsonValue": {
-      "type": ["null", "boolean", "number", "string", "array", "object"]
+    "scalar": {
+      "type": ["null", "boolean", "number", "string"]
     },
-    "tolerance": {
+    "floatFixture": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rtol", "atol"],
+      "required": ["$float"],
       "properties": {
+        "$float": {
+          "enum": ["nan", "positive_infinity", "negative_infinity"]
+        }
+      }
+    },
+    "repeatFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["$repeat"],
+      "properties": {
+        "$repeat": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "count"],
+          "properties": {
+            "value": {"$ref": "#/$defs/fixtureValue"},
+            "count": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        }
+      }
+    },
+    "plainObject": {
+      "type": "object",
+      "propertyNames": {"pattern": "^(?!\\$).+"},
+      "additionalProperties": {"$ref": "#/$defs/fixtureValue"}
+    },
+    "fixtureValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/scalar"},
+        {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fixtureValue"}
+        },
+        {"$ref": "#/$defs/plainObject"},
+        {"$ref": "#/$defs/floatFixture"},
+        {"$ref": "#/$defs/repeatFixture"}
+      ]
+    },
+    "componentInputs": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {"$ref": "#/$defs/fixtureValue"}
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^/(?:[a-z][a-z0-9_]*|0|[1-9][0-9]*)(?:/(?:[a-z][a-z0-9_]*|0|[1-9][0-9]*))*$"
+    },
+    "equalAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value"],
+      "properties": {
+        "path": {"$ref": "#/$defs/jsonPointer"},
+        "op": {"const": "equal"},
+        "value": {"$ref": "#/$defs/fixtureValue"}
+      }
+    },
+    "approxAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value", "rtol", "atol"],
+      "properties": {
+        "path": {"$ref": "#/$defs/jsonPointer"},
+        "op": {"const": "approx"},
+        "value": {"$ref": "#/$defs/fixtureValue"},
         "rtol": {"type": "number", "minimum": 0},
         "atol": {"type": "number", "minimum": 0}
       }
+    },
+    "lengthAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value"],
+      "properties": {
+        "path": {"$ref": "#/$defs/jsonPointer"},
+        "op": {"const": "length_equal"},
+        "value": {"type": "integer", "minimum": 0}
+      }
+    },
+    "containmentAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value"],
+      "properties": {
+        "path": {"$ref": "#/$defs/jsonPointer"},
+        "op": {"enum": ["contains", "not_contains"]},
+        "value": {"$ref": "#/$defs/fixtureValue"}
+      }
+    },
+    "prefixAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value"],
+      "properties": {
+        "path": {"$ref": "#/$defs/jsonPointer"},
+        "op": {"enum": ["contains_prefix", "not_contains_prefix"]},
+        "value": {"type": "string", "minLength": 1}
+      }
+    },
+    "assertion": {
+      "oneOf": [
+        {"$ref": "#/$defs/equalAssertion"},
+        {"$ref": "#/$defs/approxAssertion"},
+        {"$ref": "#/$defs/lengthAssertion"},
+        {"$ref": "#/$defs/containmentAssertion"},
+        {"$ref": "#/$defs/prefixAssertion"}
+      ]
+    },
+    "successExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "assertions"],
+      "properties": {
+        "outcome": {"const": "success"},
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assertion"}
+        }
+      }
+    },
+    "errorExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "code", "violation_ids"],
+      "properties": {
+        "outcome": {"const": "error"},
+        "code": {"type": "string", "minLength": 1},
+        "violation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "inputValidationIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+        },
+        "type": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+      }
+    },
+    "inputValidationErrorExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "issues"],
+      "properties": {
+        "outcome": {"const": "input_validation_error"},
+        "issues": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/inputValidationIssue"}
+        }
+      }
+    },
+    "expectation": {
+      "oneOf": [
+        {"$ref": "#/$defs/successExpectation"},
+        {"$ref": "#/$defs/errorExpectation"},
+        {"$ref": "#/$defs/inputValidationErrorExpectation"}
+      ]
     },
     "provenance": {
       "type": "object",
@@ -80,98 +244,106 @@
     "knownAnswer": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "test_id",
-        "description",
-        "inputs",
-        "expected",
-        "tolerance",
-        "provenance"
-      ],
+      "required": ["id", "description", "inputs", "expect", "provenance"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
         "description": {"type": "string", "minLength": 1},
-        "inputs": {"$ref": "#/$defs/jsonValue"},
-        "expected": {"$ref": "#/$defs/jsonValue"},
-        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "inputs": {"$ref": "#/$defs/componentInputs"},
+        "expect": {"$ref": "#/$defs/successExpectation"},
         "provenance": {"$ref": "#/$defs/provenance"}
       }
     },
     "invariant": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "test_id", "description", "kind"],
+      "required": ["id", "test_id", "description"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
         "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
-        "description": {"type": "string", "minLength": 1},
-        "kind": {"type": "string", "minLength": 1},
-        "tolerance": {"$ref": "#/$defs/tolerance"}
+        "description": {"type": "string", "minLength": 1}
       }
     },
     "boundaryCase": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "test_id", "description", "inputs"],
-      "anyOf": [
-        {"required": ["expected"]},
-        {"required": ["expected_error"]},
-        {"required": ["expected_warning"]}
-      ],
+      "required": ["id", "description", "inputs", "expect"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
         "description": {"type": "string", "minLength": 1},
-        "inputs": {"$ref": "#/$defs/jsonValue"},
-        "expected": {"$ref": "#/$defs/jsonValue"},
-        "expected_error": {"type": "string", "minLength": 1},
-        "expected_warning": {"type": "string", "minLength": 1},
-        "tolerance": {"$ref": "#/$defs/tolerance"}
+        "inputs": {"$ref": "#/$defs/componentInputs"},
+        "expect": {"$ref": "#/$defs/expectation"}
       }
     },
     "crossCheck": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "test_id",
-        "description",
-        "inputs",
-        "expected",
-        "tolerance",
-        "provenance"
-      ],
+      "required": ["id", "description", "inputs", "expect", "provenance"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "test_id": {"type": "string", "pattern": "^test_[a-zA-Z0-9_]+$"},
         "description": {"type": "string", "minLength": 1},
-        "inputs": {"$ref": "#/$defs/jsonValue"},
-        "expected": {"$ref": "#/$defs/jsonValue"},
-        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "inputs": {"$ref": "#/$defs/componentInputs"},
+        "expect": {"$ref": "#/$defs/successExpectation"},
         "provenance": {"$ref": "#/$defs/provenance"}
       }
+    },
+    "computeExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "fields"],
+      "properties": {
+        "action": {"const": "compute"},
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+        }
+      }
+    },
+    "askExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "question_fields"],
+      "properties": {
+        "action": {"const": "ask"},
+        "question_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+        }
+      }
+    },
+    "refuseExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "code", "violation_ids"],
+      "properties": {
+        "action": {"const": "refuse"},
+        "code": {"enum": ["domain_error", "unsupported_scope"]},
+        "violation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "agentExpectation": {
+      "oneOf": [
+        {"$ref": "#/$defs/computeExpectation"},
+        {"$ref": "#/$defs/askExpectation"},
+        {"$ref": "#/$defs/refuseExpectation"}
+      ]
     },
     "agentCase": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "prompt",
-        "expected_action",
-        "expected_fields",
-        "rationale"
-      ],
+      "required": ["id", "prompt", "inputs", "expect", "rationale"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
         "prompt": {"type": "string", "minLength": 1},
-        "expected_action": {"enum": ["compute", "ask", "refuse"]},
-        "expected_fields": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {"type": "string", "minLength": 1}
-        },
+        "inputs": {"$ref": "#/$defs/componentInputs"},
+        "expect": {"$ref": "#/$defs/agentExpectation"},
         "rationale": {"type": "string", "minLength": 1}
       }
     }

@@ -23,10 +23,12 @@ for _entry in sys.path:
 from defined_quant.catalog import (  # noqa: E402
     component_models,
     component_record,
+    invalidate_subject_cache,
     iter_components,
     load_component,
     subject_hash,
     subject_manifest,
+    verify_subject,
 )
 from defined_quant.charts import render_svg, save_svg, visualization_hash  # noqa: E402
 from defined_quant.discovery import (  # noqa: E402
@@ -64,6 +66,7 @@ __all__ = [
     "component_facets",
     "create_authorization_binding",
     "create_manual_approval",
+    "invalidate_subject_cache",
     "iter_components",
     "load_component",
     "load_execution_policy",
@@ -75,6 +78,7 @@ __all__ = [
     "subject_manifest",
     "tokenize",
     "validate_plan",
+    "verify_subject",
     "verify_authorization",
     "visualization_hash",
 ]

@@ -58,7 +58,53 @@ jobs:
         run: |
           uv venv .wheel-check
           uv pip install --python .wheel-check/bin/python dist/*.whl
-          .wheel-check/bin/python -c 'from math import isclose; from defined_quant import iter_components, load_execution_policy; from defined_quant.market_data.simple_return.component import simple_return; from defined_quant_protocol import PROTOCOL_VERSION; assert PROTOCOL_VERSION == "0.2.0"; assert [item.component_id for item in iter_components()] == ["dq.market_data.simple_return"]; policy = load_execution_policy("simple_return_csv_v1"); ref = policy.components[0].component; assert (ref.id, ref.version, ref.subject_hash) == ("dq.market_data.simple_return", "0.2.0", "146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484"); values = simple_return(prices=[100, 101], price_kind="adjusted").returns; assert len(values) == 1 and isclose(values[0], 0.01, rel_tol=0.0, abs_tol=1e-15)'
+          .wheel-check/bin/python - <<'PY'
+          from math import isclose
+
+          from defined_quant import iter_components, load_execution_policy
+          from defined_quant.market_data.log_return.component import (
+              Output as LogReturnOutput,
+              log_return,
+          )
+          from defined_quant.market_data.simple_return.component import simple_return
+          from defined_quant.volatility.historical_volatility.component import (
+              Inputs as HistoricalVolatilityInputs,
+              historical_volatility,
+          )
+          from defined_quant_protocol import PROTOCOL_VERSION, require_compatible_ports
+
+          assert PROTOCOL_VERSION == "0.3.0"
+          assert [item.component_id for item in iter_components()] == [
+              "dq.market_data.log_return",
+              "dq.market_data.simple_return",
+              "dq.volatility.historical_volatility",
+          ]
+          policy = load_execution_policy("simple_return_csv_v1")
+          ref = policy.components[0].component
+          assert (ref.id, ref.version, ref.subject_hash) == (
+              "dq.market_data.simple_return",
+              "0.3.2",
+              "8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d",
+          )
+          simple = simple_return(prices=[100, 101], price_kind="adjusted")
+          assert len(simple.returns) == len(simple.derivations) == 1
+          assert simple.disclosures
+          assert isclose(simple.returns[0], 0.01, rel_tol=0.0, abs_tol=1e-15)
+          require_compatible_ports(
+              LogReturnOutput,
+              "returns",
+              HistoricalVolatilityInputs,
+              "returns",
+          )
+          logarithmic = log_return(prices=[100, 101, 99], price_kind="adjusted")
+          volatility = historical_volatility(
+              logarithmic.returns,
+              return_kind=logarithmic.return_kind,
+              annualization_factor=252.0,
+          )
+          assert volatility.sample_size == 2
+          assert len(volatility.derivations) == 2
+          PY
 
       - name: Export static catalog for this commit
         run: |

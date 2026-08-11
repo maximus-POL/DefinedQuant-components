@@ -48,6 +48,7 @@ dev-mode-dirs = ["shared", "categories", "protocol"]
 "protocol/py.typed" = "defined_quant_protocol/py.typed"
 
 [tool.pytest.ini_options]
+addopts = ["--import-mode=importlib", "-p", "authoring.pytest_evidence"]
 testpaths = ["categories", "authoring/tests", ".agents/skills"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
@@ -62,3 +63,4 @@ select = ["E", "F", "I", "UP"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+explicit_package_bases = true

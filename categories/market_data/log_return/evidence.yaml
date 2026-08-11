@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d",
+  "component_id": "dq.market_data.log_return",
+  "validated_subject_hash": "06332d5d8858fec0d473bdea5c257897482b127e4cf2df9e48d780d518bc4f27",
   "known_answers": [
     {
       "id": "ka_001",
-      "description": "Two hand-derived simple returns from three prices.",
+      "description": "Two hand-derived log returns from three positive prices.",
       "inputs": {
         "prices": [
           100.0,
@@ -21,8 +21,8 @@
             "path": "/returns",
             "op": "approx",
             "value": [
-              0.05,
-              -0.02
+              0.04879016416943201,
+              -0.020202707317519466
             ],
             "rtol": 1e-12,
             "atol": 1e-12
@@ -30,7 +30,7 @@
           {
             "path": "/return_kind",
             "op": "equal",
-            "value": "simple"
+            "value": "log"
           },
           {
             "path": "/derivations",
@@ -64,7 +64,7 @@
           {
             "path": "/derivations/0/expression",
             "op": "equal",
-            "value": "(prices[1] - prices[0]) / prices[0]"
+            "value": "log1p((prices[1] - prices[0]) / prices[0])"
           }
         ]
       },
@@ -79,17 +79,17 @@
     {
       "id": "inv_001",
       "test_id": "test_evidence_inv_001",
-      "description": "Compounding every simple return reproduces the terminal-to-initial price ratio."
+      "description": "Summing adjacent log returns reproduces the terminal-minus-initial log price."
     },
     {
       "id": "inv_002",
       "test_id": "test_evidence_inv_002",
-      "description": "Multiplying every price by the same positive scale leaves returns unchanged."
+      "description": "Multiplying every price by the same positive scale leaves log returns unchanged."
     },
     {
       "id": "inv_003",
       "test_id": "test_evidence_inv_003",
-      "description": "A constant positive price series produces exact zero returns."
+      "description": "A constant positive price series produces exact zero log returns."
     },
     {
       "id": "inv_004",
@@ -99,13 +99,13 @@
     {
       "id": "inv_005",
       "test_id": "test_evidence_inv_005",
-      "description": "Every return has one ordered derivation referencing its exact adjacent source prices."
+      "description": "Every return has one ordered derivation recording the arithmetic branch that ran."
     }
   ],
   "boundary_cases": [
     {
       "id": "bc_001",
-      "description": "Two prices produce exactly one return.",
+      "description": "Two prices produce exactly one log return.",
       "inputs": {
         "prices": [
           100.0,
@@ -120,7 +120,7 @@
             "path": "/returns",
             "op": "approx",
             "value": [
-              0.01
+              0.009950330853168083
             ],
             "rtol": 1e-12,
             "atol": 1e-12
@@ -187,7 +187,7 @@
       }
     },
     {
-      "id": "bc_004",
+      "id": "bc_004_duplicate",
       "description": "Duplicate timestamps are blocking.",
       "inputs": {
         "prices": [
@@ -209,7 +209,7 @@
       }
     },
     {
-      "id": "bc_005",
+      "id": "bc_004_reverse",
       "description": "Reverse-ordered timestamps are refused rather than sorted.",
       "inputs": {
         "prices": [
@@ -231,8 +231,8 @@
       }
     },
     {
-      "id": "bc_006",
-      "description": "Missing timestamps preserve order but visibly mark chronology and gaps unassessed.",
+      "id": "bc_005",
+      "description": "Missing timestamps preserve order but expose chronology and gap limitations.",
       "inputs": {
         "prices": [
           100.0,
@@ -272,7 +272,7 @@
       }
     },
     {
-      "id": "bc_007",
+      "id": "bc_006",
       "description": "A frequency declaration without timestamps is blocking.",
       "inputs": {
         "prices": [
@@ -291,8 +291,8 @@
       }
     },
     {
-      "id": "bc_008",
-      "description": "A frequency label is retained but never mistaken for a market-calendar gap policy.",
+      "id": "bc_007",
+      "description": "A declared frequency is retained without implying calendar-aware gap checks.",
       "inputs": {
         "prices": [
           100.0,
@@ -322,17 +322,12 @@
             "path": "/warnings",
             "op": "equal",
             "value": []
-          },
-          {
-            "path": "/disclosures",
-            "op": "contains_prefix",
-            "value": "gap_check_not_assessed:"
           }
         ]
       }
     },
     {
-      "id": "bc_009",
+      "id": "bc_008",
       "description": "Fewer than two prices is blocking.",
       "inputs": {
         "prices": [
@@ -349,7 +344,7 @@
       }
     },
     {
-      "id": "bc_010_zero",
+      "id": "bc_009_zero",
       "description": "A zero price is blocking.",
       "inputs": {
         "prices": [
@@ -367,7 +362,7 @@
       }
     },
     {
-      "id": "bc_010_negative",
+      "id": "bc_009_negative",
       "description": "A negative price is blocking.",
       "inputs": {
         "prices": [
@@ -385,7 +380,7 @@
       }
     },
     {
-      "id": "bc_011_nan",
+      "id": "bc_010_nan",
       "description": "A tagged NaN price is materialized and blocked.",
       "inputs": {
         "prices": [
@@ -405,7 +400,7 @@
       }
     },
     {
-      "id": "bc_011_positive_infinity",
+      "id": "bc_010_infinity",
       "description": "A tagged positive-infinity price is materialized and blocked.",
       "inputs": {
         "prices": [
@@ -425,28 +420,8 @@
       }
     },
     {
-      "id": "bc_011_negative_infinity",
-      "description": "A tagged negative-infinity price is materialized and blocked.",
-      "inputs": {
-        "prices": [
-          100.0,
-          {
-            "$float": "negative_infinity"
-          }
-        ],
-        "price_kind": "adjusted"
-      },
-      "expect": {
-        "outcome": "error",
-        "code": "domain_error",
-        "violation_ids": [
-          "non_finite_prices"
-        ]
-      }
-    },
-    {
-      "id": "bc_012",
-      "description": "Unadjusted prices are valid but carry a total-return interpretation warning.",
+      "id": "bc_011",
+      "description": "Unadjusted prices carry a total-return interpretation warning.",
       "inputs": {
         "prices": [
           100.0,
@@ -471,8 +446,8 @@
       }
     },
     {
-      "id": "bc_013",
-      "description": "Close finite prices retain relative precision.",
+      "id": "bc_012",
+      "description": "Close finite prices use log1p and retain relative precision.",
       "inputs": {
         "prices": [
           1e+16,
@@ -487,17 +462,22 @@
             "path": "/returns",
             "op": "approx",
             "value": [
-              2e-16
+              1.9999999999999997e-16
             ],
             "rtol": 1e-12,
             "atol": 0.0
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log1p((prices[1] - prices[0]) / prices[0])"
           }
         ]
       }
     },
     {
-      "id": "bc_014",
-      "description": "A finite positive price pair whose simple return overflows is blocking.",
+      "id": "bc_013_rise",
+      "description": "An extreme positive price ratio uses the finite log-difference fallback.",
       "inputs": {
         "prices": [
           1e-308,
@@ -506,16 +486,28 @@
         "price_kind": "adjusted"
       },
       "expect": {
-        "outcome": "error",
-        "code": "domain_error",
-        "violation_ids": [
-          "non_finite_result"
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              1418.3924172843322
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1]) - log(prices[0])"
+          }
         ]
       }
     },
     {
-      "id": "bc_015",
-      "description": "A finite positive price pair whose simple return rounds to total loss is blocking.",
+      "id": "bc_013_fall",
+      "description": "An extreme negative price ratio uses the finite log-difference fallback.",
       "inputs": {
         "prices": [
           1e+308,
@@ -524,15 +516,147 @@
         "price_kind": "adjusted"
       },
       "expect": {
-        "outcome": "error",
-        "code": "domain_error",
-        "violation_ids": [
-          "non_finite_result"
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              -1418.3924172843322
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1]) - log(prices[0])"
+          }
         ]
       }
     },
     {
-      "id": "bc_016_at_visualization_limit",
+      "id": "bc_013_representable_large_fall",
+      "description": "A large decline with a finite positive binary64 ratio uses the direct ratio-log branch.",
+      "inputs": {
+        "prices": [
+          1.0,
+          1e-16
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              -36.841361487904734
+            ],
+            "rtol": 1e-15,
+            "atol": 1e-15
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1] / prices[0])"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_013_subnormal_ratio_fall",
+      "description": "A nonzero subnormal binary64 price ratio uses log differences rather than the low-relative-precision quotient.",
+      "inputs": {
+        "prices": [
+          1.4751157857084535e+66,
+          4.301863441684936e-258
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              -744.9672583282089
+            ],
+            "rtol": 0.0,
+            "atol": 1.2e-13
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1]) - log(prices[0])"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_013_large_same_scale_fall",
+      "description": "Large same-scale prices use the finite-ratio branch without cancellation between their logarithms.",
+      "inputs": {
+        "prices": [
+          3.8128310418816054e+303,
+          1.681130672805337e+303
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              -0.8189053822553604
+            ],
+            "rtol": 0.0,
+            "atol": 4e-16
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1] / prices[0])"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_013_scaled_large_same_scale_fall",
+      "description": "Scaling both large same-scale prices preserves the finite-ratio log return.",
+      "inputs": {
+        "prices": [
+          38.128310418816056,
+          16.81130672805337
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/returns",
+            "op": "approx",
+            "value": [
+              -0.8189053822553604
+            ],
+            "rtol": 0.0,
+            "atol": 4e-16
+          },
+          {
+            "path": "/derivations/0/expression",
+            "op": "equal",
+            "value": "log(prices[1] / prices[0])"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_014_at_visualization_limit",
       "description": "501 prices preserve 500 returns and emit one exact visualization.",
       "inputs": {
         "prices": {
@@ -584,7 +708,7 @@
       }
     },
     {
-      "id": "bc_016_above_visualization_limit",
+      "id": "bc_014_above_visualization_limit",
       "description": "502 prices preserve 501 returns and omit only the over-limit visualization.",
       "inputs": {
         "prices": {
@@ -633,7 +757,7 @@
   "agent_cases": [
     {
       "id": "complete_adjusted_request",
-      "prompt": "Calculate and chart simple returns for adjusted prices 100, 105, and 102.9 in that order.",
+      "prompt": "Calculate and chart log returns for adjusted prices 100, 105, and 102.9 in that order.",
       "inputs": {
         "prices": [
           100.0,
@@ -661,7 +785,7 @@
     },
     {
       "id": "missing_price_kind",
-      "prompt": "Calculate simple returns for prices 100 and 105.",
+      "prompt": "Calculate log returns for prices 100 and 105.",
       "inputs": {
         "prices": [
           100.0,
@@ -674,11 +798,11 @@
           "price_kind"
         ]
       },
-      "rationale": "The real adapter must surface the required price-kind question."
+      "rationale": "The real adapter surfaces the required price-kind question."
     },
     {
       "id": "reverse_ordered_timestamps",
-      "prompt": "Calculate adjusted-price returns for reverse-ordered timestamps.",
+      "prompt": "Calculate adjusted-price log returns for reverse-ordered timestamps.",
       "inputs": {
         "prices": [
           100.0,
@@ -724,7 +848,7 @@
     },
     {
       "id": "frequency_without_timestamps",
-      "prompt": "Calculate daily adjusted-price returns without supplying timestamps.",
+      "prompt": "Calculate daily adjusted-price log returns without supplying timestamps.",
       "inputs": {
         "prices": [
           100.0,
@@ -740,7 +864,7 @@
           "frequency_without_timestamps"
         ]
       },
-      "rationale": "The executable adapter fixture proves that a frequency label cannot replace timestamps."
+      "rationale": "The executable adapter proves that a frequency label cannot replace timestamps."
     }
   ]
 }

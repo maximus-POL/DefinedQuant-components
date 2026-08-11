@@ -66,6 +66,7 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     assert listed["filters"]["output_concepts"] == ["simple_return_series"]
     assert listed["components"][0]["facets"]["output_concepts"] == [
         "calculation_diagnostics",
+        "datapoint_lineage",
         "periodic_return_series",
         "return_timestamps",
         "simple_return_series",
@@ -84,7 +85,7 @@ def test_catalog_lists_filters_and_inspects_installed_components() -> None:
     }
     assert "simple_return_series" in shown["facets"]["output_concepts"]
     assert len(shown["subject_hash"]) == 64
-    assert shown["operation_protocol"]["protocol_version"] == "0.2.0"
+    assert shown["operation_protocol"]["protocol_version"] == "0.3.0"
     assert shown["operation_protocol"]["schemas"]["request"]["title"] == "OperationRequest"
     assert shown["operation_protocol"] == operation_protocol_schema()
     assert shown["source_path"] == "categories/market_data/simple_return"
@@ -96,7 +97,7 @@ def test_catalog_search_explains_positive_boundary_and_unmatched_terms() -> None
         _command(
             str(CATALOG),
             "search",
-            "total return from prices",
+            "simple total return from prices",
             "--limit",
             "3",
         )
@@ -214,9 +215,54 @@ def test_runner_validates_executes_and_renders_component(
     ]
 
 
+def test_runner_executes_scalar_component_when_requested_artifacts_are_absent(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "volatility-input.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "returns": [-0.01, 0.0, 0.02],
+                "annualization_factor": 252.0,
+                "return_kind": "log",
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "volatility-output"
+
+    response = OperationSuccess.model_validate(
+        _json_output(
+            _command(
+                str(RUNNER),
+                "--component",
+                "dq.volatility.historical_volatility",
+                "--input",
+                str(input_path),
+                "--output-dir",
+                str(output_dir),
+            )
+        )
+    )
+
+    assert response.manifest.component.id == "dq.volatility.historical_volatility"
+    assert response.manifest.artifacts == ()
+    result = json.loads(
+        (output_dir / response.manifest.result.path).read_text(encoding="utf-8")
+    )
+    assert result["return_kind"] == "log"
+    assert result["annualization_factor"] == 252.0
+    assert result["sample_size"] == 3
+    assert len(result["derivations"]) == 2
+    assert result["visualizations"] == []
+
+
 def test_runner_returns_structured_input_error(tmp_path: Path) -> None:
     input_path = tmp_path / "invalid-input.json"
-    input_path.write_text(json.dumps({"prices": [100.0]}), encoding="utf-8")
+    input_path.write_text(
+        json.dumps({"prices": [100.0, 101.0], "price_kind": "invented"}),
+        encoding="utf-8",
+    )
 
     completed = _command(
         str(RUNNER),

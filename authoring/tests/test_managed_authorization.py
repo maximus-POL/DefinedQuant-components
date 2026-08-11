@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import defined_quant.plan_validation as plan_validation
 import pytest
 from defined_quant import (
     create_authorization_binding,
@@ -46,8 +47,8 @@ from pydantic import ValidationError
 
 SIMPLE_RETURN = ComponentRef(
     id="dq.market_data.simple_return",
-    version="0.2.0",
-    subject_hash="146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484",
+    version="0.3.2",
+    subject_hash="8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d",
 )
 TIMESTAMPS = [
     "2026-07-24T16:00:00Z",
@@ -140,6 +141,27 @@ def _authorized_chain() -> tuple[
     )
     binding = create_authorization_binding(plan, outcome, approval)
     return policy, plan, outcome, approval, binding
+
+
+def test_plan_validation_freshly_verifies_installed_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str | Path | None]] = []
+    original: Any = getattr(plan_validation, "verify_subject")
+
+    def verified(component_id: str, *, root: str | Path | None = None) -> str:
+        calls.append((component_id, root))
+        return original(component_id, root=root)
+
+    monkeypatch.setattr(plan_validation, "verify_subject", verified)
+    policy = load_execution_policy("simple_return_csv_v1")
+
+    outcome = validate_plan(_plan(policy=policy), policy)
+
+    assert isinstance(outcome, ValidationReceipt)
+    assert len(calls) == 1
+    assert calls[0][0] == "dq.market_data.simple_return"
+    assert isinstance(calls[0][1], Path)
 
 
 def test_exact_subject_atomic_plan_receipt_and_manual_approval_authorize() -> None:
@@ -352,7 +374,7 @@ def test_managed_profile_requires_nonempty_timestamps(timestamps: list[str] | No
             version=SIMPLE_RETURN.version,
             subject_hash=SIMPLE_RETURN.subject_hash,
         ),
-        SIMPLE_RETURN.model_copy(update={"version": "0.2.1"}),
+        SIMPLE_RETURN.model_copy(update={"version": "0.3.3"}),
         SIMPLE_RETURN.model_copy(update={"subject_hash": "b" * 64}),
     ],
 )
@@ -385,7 +407,7 @@ def test_unknown_profile_and_unbound_policy_are_outside_managed_scope() -> None:
 def test_caller_constructed_policy_cannot_replace_the_packaged_allowlist() -> None:
     packaged = load_execution_policy("simple_return_csv_v1")
     caller_policy = ExecutionPolicy.model_validate(
-        {**packaged.model_dump(mode="json"), "version": "1.0.1"}
+        {**packaged.model_dump(mode="json"), "version": "1.0.6"}
     )
     plan = _plan(policy=caller_policy)
 
@@ -421,7 +443,7 @@ def test_plan_receipt_approval_policy_and_component_mutations_fail_independently
         update={"validator": RunnerIdentity(name="other_validator", version="0.1.0")}
     )
     changed_approval = approval.model_copy(update={"approved_by": "different_reviewer"})
-    changed_policy = policy.model_copy(update={"version": "1.0.1"})
+    changed_policy = policy.model_copy(update={"version": "1.0.6"})
     changed_component_plan = plan.model_copy(
         update={
             "step": plan.step.model_copy(
@@ -556,7 +578,7 @@ def test_manual_approval_and_success_receipt_schemas_are_closed_and_unique() -> 
 def test_managed_protocol_descriptor_is_reproducible_and_authorization_only() -> None:
     descriptor = managed_authorization_protocol_schema()
 
-    assert descriptor["protocol_version"] == "0.2.0"
+    assert descriptor["protocol_version"] == "0.3.0"
     assert descriptor["execution_mode"] == "managed_authorization_only"
     assert descriptor["hash_framing"] == operation_protocol_schema()["hash_framing"]
     assert descriptor["hash_domains"] == {
@@ -568,6 +590,19 @@ def test_managed_protocol_descriptor_is_reproducible_and_authorization_only() ->
         "authorization_binding": "managed.authorization_binding.v1",
     }
     assert "execution_result" not in descriptor["schemas"]
+
+
+def test_analysis_plan_defaults_to_protocol_0_3_and_reads_protocol_0_2() -> None:
+    current = _plan()
+    previous = current.model_dump(mode="json")
+    previous["protocol_version"] = "0.2.0"
+
+    assert current.protocol_version == "0.3.0"
+    assert AnalysisPlan.model_validate(previous).protocol_version == "0.2.0"
+
+    previous["protocol_version"] = "0.1.0"
+    with pytest.raises(ValidationError):
+        AnalysisPlan.model_validate(previous)
 
 
 def test_direct_operation_request_remains_visibly_unmanaged_without_managed_fields() -> None:

@@ -73,7 +73,6 @@ def _record(
 
 def test_tokenization_is_unicode_safe_deterministic_and_small_stemmed() -> None:
     assert tokenize("  PLEASE calculate Price_Returns—Café returns!  ") == (
-        "calculate",
         "price",
         "returns",
         "café",
@@ -98,15 +97,31 @@ def test_search_and_filters_use_nfkc_casefold_normalization() -> None:
     assert result.hits[0].matched_terms == ("strasse", "return")
 
 
-def test_catalog_v1_reference_query_keeps_its_explainable_score() -> None:
+def test_real_catalog_ranks_simple_return_for_period_price_change() -> None:
     result = search_components(
         "calculate period price changes",
         root=CATALOG_ROOT,
     )
 
-    assert result.total_matches == 1
+    assert result.total_matches >= 1
     assert result.hits[0].record.component_id == "dq.market_data.simple_return"
-    assert result.hits[0].score == 124
+    assert result.hits[0].positive_matches
+
+
+def test_real_catalog_ranks_log_return_and_historical_volatility_by_intent() -> None:
+    logarithmic = search_components(
+        "compute continuously compounded returns",
+        root=CATALOG_ROOT,
+    )
+    volatility = search_components(
+        "annualized historical volatility from log returns",
+        root=CATALOG_ROOT,
+    )
+
+    assert logarithmic.hits[0].record.component_id == "dq.market_data.log_return"
+    assert volatility.hits[0].record.component_id == (
+        "dq.volatility.historical_volatility"
+    )
 
 
 def test_alias_and_concept_fields_outrank_explanatory_prose() -> None:

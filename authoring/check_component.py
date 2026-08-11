@@ -9,6 +9,7 @@ import importlib
 import importlib.util
 import inspect
 import json
+import math
 import os
 import re
 import subprocess
@@ -17,13 +18,24 @@ import tempfile
 import types
 import unicodedata
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import jsonschema  # type: ignore[import-untyped]
 import yaml  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+if __package__:
+    from authoring.input_validation import (
+        expected_input_validation_issues,
+        input_validation_issues,
+    )
+else:
+    from input_validation import (  # type: ignore[import-not-found,no-redef]
+        expected_input_validation_issues,
+        input_validation_issues,
+    )
 
 REQUIRED_COMPONENT_FILES = {
     "README.md",
@@ -88,14 +100,30 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     try:
         text = path.read_text(encoding="utf-8")
         try:
-            value = json.loads(text)
+            value = json.loads(text, parse_constant=_invalid_json_constant)
         except json.JSONDecodeError:
             value = yaml.load(text, Loader=ContractLoader)
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        _reject_non_finite(value)
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError) as exc:
         raise ValueError(f"cannot read YAML: {exc}") from exc
     if not isinstance(value, dict):
         raise ValueError("file must contain one mapping")
     return value
+
+
+def _invalid_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant is forbidden: {value}")
+
+
+def _reject_non_finite(value: Any) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("raw non-finite numbers are forbidden; use a tagged $float fixture")
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _reject_non_finite(item)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for item in value:
+            _reject_non_finite(item)
 
 
 def _load_schema(root: Path, filename: str) -> dict[str, Any]:
@@ -432,9 +460,48 @@ def _validate_output_model(module_name: str, output: Any) -> type[BaseModel]:
     return output
 
 
+def _validate_semantic_port_metadata(
+    model: type[BaseModel],
+    *,
+    direction: str,
+) -> list[str]:
+    """Require closed semantic metadata wherever a model field declares schema extras."""
+
+    from defined_quant_protocol import (
+        PortDirection,
+        SemanticPortError,
+        extract_semantic_port,
+    )
+
+    expected = PortDirection(direction)
+    errors: list[str] = []
+    port_count = 0
+    for field_name, field_info in model.model_fields.items():
+        if field_info.json_schema_extra is None:
+            continue
+        port_count += 1
+        try:
+            extract_semantic_port(model, field_name, expected)
+        except SemanticPortError as exc:
+            errors.append(str(exc))
+    if port_count == 0:
+        errors.append(
+            f"{model.__name__} must declare at least one {direction} semantic port"
+        )
+    return errors
+
+
 def _import_contract_models(
     root: Path, contract: Mapping[str, Any]
-) -> tuple[set[str], set[str], dict[str, Any], set[str]]:
+) -> tuple[
+    set[str],
+    set[str],
+    dict[str, Any],
+    set[str],
+    str,
+    type[BaseModel],
+    type[BaseModel],
+]:
     _bootstrap_checkout_package(root)
 
     callable_path = contract.get("callable")
@@ -444,12 +511,15 @@ def _import_contract_models(
     module = importlib.import_module(module_name)
     inputs = getattr(module, "Inputs", None)
     output = getattr(module, "Output", None)
+    formula = getattr(module, "FORMULA", None)
     component = getattr(module, callable_name, None)
     if not isinstance(inputs, type) or not issubclass(inputs, BaseModel):
         raise ValueError(f"{module_name}.Inputs must be a Pydantic model")
     output_model = _validate_output_model(module_name, output)
     if not callable(component):
         raise ValueError(f"{callable_path} does not resolve to a callable")
+    if not isinstance(formula, str) or not formula.strip():
+        raise ValueError(f"{module_name}.FORMULA must be a non-empty string")
 
     input_fields = set(inputs.model_fields)
     _validate_callable_signature(component, input_fields)
@@ -459,7 +529,61 @@ def _import_contract_models(
         for name, field in inputs.model_fields.items()
         if not field.is_required()
     }
-    return input_fields, required_inputs, defaults, set(output_model.model_fields)
+    return (
+        input_fields,
+        required_inputs,
+        defaults,
+        set(output_model.model_fields),
+        formula,
+        inputs,
+        output_model,
+    )
+
+
+def _markdown_section(text: str, heading: str) -> str | None:
+    marker = f"## {heading}"
+    lines = text.splitlines()
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == marker) + 1
+    except StopIteration:
+        return None
+    end = next(
+        (index for index in range(start, len(lines)) if lines[index].startswith("## ")),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def _validate_formula_surfaces(
+    component_dir: Path,
+    contract: Mapping[str, Any],
+    implementation_formula: str,
+) -> list[str]:
+    """Keep the imported implementation formula aligned with public formula surfaces."""
+
+    errors: list[str] = []
+    contract_path = component_dir / "contract.yaml"
+    display = contract.get("display")
+    display_formula = display.get("formula") if isinstance(display, Mapping) else None
+    if display_formula != implementation_formula:
+        errors.append(
+            f"{contract_path}: display.formula must exactly match component.FORMULA "
+            f"{implementation_formula!r}"
+        )
+
+    readme_path = component_dir / "README.md"
+    try:
+        formula_section = _markdown_section(readme_path.read_text(encoding="utf-8"), "Formula")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"{readme_path}: cannot read formula surface: {exc}")
+    else:
+        rendered_formula = f"`{implementation_formula}`"
+        if formula_section is None or rendered_formula not in formula_section:
+            errors.append(
+                f"{readme_path}: Formula section must include component.FORMULA exactly as "
+                f"inline code {rendered_formula!r}"
+            )
+    return errors
 
 
 def _condition_fields(value: Any) -> Iterable[str]:
@@ -472,6 +596,23 @@ def _condition_fields(value: Any) -> Iterable[str]:
     elif isinstance(value, list):
         for child in value:
             yield from _condition_fields(child)
+
+
+def _has_literal_only_comparison(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    for operator in ("all", "any"):
+        children = value.get(operator)
+        if isinstance(children, list):
+            return any(_has_literal_only_comparison(child) for child in children)
+    left = value.get("left")
+    right = value.get("right")
+    return (
+        isinstance(left, Mapping)
+        and isinstance(right, Mapping)
+        and "value" in left
+        and "value" in right
+    )
 
 
 def _duplicates(values: Iterable[str]) -> set[str]:
@@ -498,6 +639,18 @@ def _validate_guidance(
     referenced.update(_condition_fields(guidance.get("allowed_defaults", [])))
     for field in sorted(referenced - input_fields):
         errors.append(f"{path}: guidance references unknown input field {field!r}")
+
+    raw_constraints = guidance.get("constraints", [])
+    constraints = raw_constraints if isinstance(raw_constraints, list) else []
+    for constraint in constraints:
+        if not isinstance(constraint, Mapping) or constraint.get("severity") != "warning":
+            continue
+        if _has_literal_only_comparison(constraint.get("when")):
+            constraint_id = constraint.get("id", "unknown")
+            errors.append(
+                f"{path}: warning constraint {constraint_id!r} contains an input-independent "
+                "comparison; constant output context belongs in Output.disclosures"
+            )
 
     raw_questions = guidance.get("required_questions", [])
     questions = raw_questions if isinstance(raw_questions, list) else []
@@ -566,13 +719,15 @@ def _validate_evidence(
     path: Path,
     evidence: Mapping[str, Any],
     component_dir: Path,
+    input_model: type[BaseModel] | None,
+    input_fields: set[str],
     output_fields: set[str],
 ) -> list[str]:
     errors: list[str] = []
     test_functions = _test_functions(component_dir)
     evidence_ids: list[str] = []
     test_ids: list[str] = []
-    for section in EVIDENCE_SECTIONS:
+    for section in (*EVIDENCE_SECTIONS, "agent_cases"):
         records = evidence.get(section, [])
         if not isinstance(records, list):
             continue
@@ -580,33 +735,121 @@ def _validate_evidence(
             if not isinstance(record, Mapping):
                 continue
             record_id = record.get("id")
-            test_id = record.get("test_id")
             if isinstance(record_id, str):
                 evidence_ids.append(record_id)
-            if isinstance(test_id, str):
-                test_ids.append(test_id)
-                if test_id not in test_functions:
+            if section == "invariants":
+                test_id = record.get("test_id")
+                if isinstance(test_id, str):
+                    test_ids.append(test_id)
+                    if test_id not in test_functions:
+                        errors.append(
+                            f"{path}: test_id {test_id!r} is not defined in test_component.py"
+                        )
+
+            expectation = record.get("expect")
+            input_validation_expectation = (
+                expectation
+                if isinstance(expectation, Mapping)
+                and expectation.get("outcome") == "input_validation_error"
+                else None
+            )
+            raw_inputs = record.get("inputs")
+            if section != "invariants" and isinstance(raw_inputs, Mapping):
+                unknown_inputs = sorted(set(raw_inputs) - input_fields)
+                for field in unknown_inputs:
+                    errors.append(f"{path}: evidence input field {field!r} is absent from Inputs")
+                if section != "agent_cases" and input_model is not None and not unknown_inputs:
+                    try:
+                        materialized = _materialize_evidence_fixture(raw_inputs)
+                        input_model.model_validate(materialized)
+                    except ValidationError as exc:
+                        if input_validation_expectation is None:
+                            errors.append(
+                                f"{path}: evidence record {record_id!r} has invalid Inputs: "
+                                f"{exc}"
+                            )
+                        else:
+                            actual_issues = input_validation_issues(exc)
+                            try:
+                                expected_issues = expected_input_validation_issues(
+                                    input_validation_expectation
+                                )
+                            except AssertionError as issue_error:
+                                errors.append(
+                                    f"{path}: evidence record {record_id!r} has invalid "
+                                    f"input-validation issues: {issue_error}"
+                                )
+                            else:
+                                if actual_issues != expected_issues:
+                                    errors.append(
+                                        f"{path}: evidence record {record_id!r} input "
+                                        f"validation issues {actual_issues!r} do not equal "
+                                        f"{expected_issues!r}"
+                                    )
+                    except (TypeError, ValueError) as exc:
+                        errors.append(
+                            f"{path}: evidence record {record_id!r} has invalid Inputs: {exc}"
+                        )
+                    else:
+                        if input_validation_expectation is not None:
+                            errors.append(
+                                f"{path}: evidence record {record_id!r} expects input "
+                                "validation to fail but Inputs are valid"
+                            )
+
+            if not isinstance(expectation, Mapping):
+                continue
+            if section == "agent_cases":
+                for field in expectation.get("fields", []):
+                    if field not in output_fields:
+                        errors.append(
+                            f"{path}: agent case expected field {field!r} is absent from Output"
+                        )
+                continue
+            for assertion in expectation.get("assertions", []):
+                if not isinstance(assertion, Mapping):
+                    continue
+                pointer = assertion.get("path")
+                if not isinstance(pointer, str):
+                    continue
+                root_field = pointer.removeprefix("/").split("/", maxsplit=1)[0]
+                if root_field not in output_fields:
                     errors.append(
-                        f"{path}: test_id {test_id!r} is not defined in test_component.py"
+                        f"{path}: assertion path {pointer!r} starts with a field absent from Output"
                     )
     for duplicate in sorted(_duplicates(evidence_ids)):
         errors.append(f"{path}: duplicate evidence id {duplicate!r}")
     for duplicate in sorted(_duplicates(test_ids)):
         errors.append(f"{path}: duplicate evidence test_id {duplicate!r}")
 
-    agent_ids: list[str] = []
-    for case in evidence.get("agent_cases", []):
-        if not isinstance(case, Mapping):
-            continue
-        case_id = case.get("id")
-        if isinstance(case_id, str):
-            agent_ids.append(case_id)
-        for field in case.get("expected_fields", []):
-            if field not in output_fields:
-                errors.append(f"{path}: agent case expected field {field!r} is absent from Output")
-    for duplicate in sorted(_duplicates(agent_ids)):
-        errors.append(f"{path}: duplicate agent case id {duplicate!r}")
     return errors
+
+
+def _materialize_evidence_fixture(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_materialize_evidence_fixture(item) for item in value]
+    if not isinstance(value, Mapping):
+        return value
+    if set(value) == {"$float"}:
+        values = {
+            "nan": float("nan"),
+            "positive_infinity": float("inf"),
+            "negative_infinity": float("-inf"),
+        }
+        tag = value["$float"]
+        if not isinstance(tag, str) or tag not in values:
+            raise ValueError(f"unsupported $float fixture {tag!r}")
+        return values[tag]
+    if set(value) == {"$repeat"}:
+        repeat = value["$repeat"]
+        if not isinstance(repeat, Mapping):
+            raise ValueError("$repeat must be an object")
+        count = repeat.get("count")
+        if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 10_000:
+            raise ValueError("$repeat count must be an integer between 1 and 10000")
+        item = _materialize_evidence_fixture(repeat.get("value"))
+        return [item for _ in range(count)]
+    return {str(key): _materialize_evidence_fixture(item) for key, item in value.items()}
 
 
 def _validate_optional_content(component_dir: Path) -> list[str]:
@@ -725,16 +968,53 @@ def _validate_component(
 
     errors.extend(_inspect_component_python(component_dir, contract))
     try:
-        input_fields, required_inputs, input_defaults, output_fields = _import_contract_models(
-            root, contract
-        )
+        (
+            input_fields,
+            required_inputs,
+            input_defaults,
+            output_fields,
+            implementation_formula,
+            input_model,
+            output_model,
+        ) = _import_contract_models(root, contract)
     except (ImportError, AttributeError, TypeError, ValueError) as exc:
         errors.append(f"{component_dir / 'component.py'}: cannot load models: {exc}")
-        input_fields, required_inputs, input_defaults, output_fields = (
+        (
+            input_fields,
+            required_inputs,
+            input_defaults,
+            output_fields,
+            implementation_formula,
+            input_model,
+            output_model,
+        ) = (
             set(),
             set(),
             {},
             set(),
+            "",
+            None,
+            None,
+        )
+    if input_model is not None:
+        errors.extend(
+            f"{component_dir / 'component.py'}: {message}"
+            for message in _validate_semantic_port_metadata(
+                input_model,
+                direction="input",
+            )
+        )
+    if output_model is not None:
+        errors.extend(
+            f"{component_dir / 'component.py'}: {message}"
+            for message in _validate_semantic_port_metadata(
+                output_model,
+                direction="output",
+            )
+        )
+    if implementation_formula:
+        errors.extend(
+            _validate_formula_surfaces(component_dir, contract, implementation_formula)
         )
     errors.extend(
         _validate_guidance(
@@ -749,7 +1029,16 @@ def _validate_component(
     if evidence is not None:
         if evidence.get("component_id") != component_id:
             errors.append(f"{evidence_path}: component_id must be {component_id!r}")
-        errors.extend(_validate_evidence(evidence_path, evidence, component_dir, output_fields))
+        errors.extend(
+            _validate_evidence(
+                evidence_path,
+                evidence,
+                component_dir,
+                input_model,
+                input_fields,
+                output_fields,
+            )
+        )
         binding = evidence.get("validated_subject_hash")
         if binding is None and contract.get("lifecycle") == "published":
             errors.append(f"{evidence_path}: published components need validated_subject_hash")
@@ -806,10 +1095,19 @@ def validate(
 
 def _evidence_test_ids(evidence: Mapping[str, Any]) -> set[str]:
     ids: set[str] = set()
-    for section in EVIDENCE_SECTIONS:
+    for section in ("known_answers", "boundary_cases", "cross_checks", "agent_cases"):
         for record in evidence.get(section, []):
-            if isinstance(record, Mapping) and isinstance(record.get("test_id"), str):
-                ids.add(record["test_id"])
+            if isinstance(record, Mapping) and isinstance(record.get("id"), str):
+                prefixes = {
+                    "known_answers": "known_answer",
+                    "boundary_cases": "boundary_case",
+                    "cross_checks": "cross_check",
+                    "agent_cases": "agent_case",
+                }
+                ids.add(f"{prefixes[section]}_{record['id']}")
+    for record in evidence.get("invariants", []):
+        if isinstance(record, Mapping) and isinstance(record.get("test_id"), str):
+            ids.add(record["test_id"])
     return ids
 
 
@@ -822,7 +1120,7 @@ def _run_component_tests(root: Path, component_dir: Path) -> tuple[int, set[str]
                 sys.executable,
                 "-m",
                 "pytest",
-                str(component_dir / "test_component.py"),
+                str(component_dir),
                 f"--junitxml={report}",
             ],
             cwd=root,

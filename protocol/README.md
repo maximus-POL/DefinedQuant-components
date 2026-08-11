@@ -1,10 +1,10 @@
 # Defined Quant protocols
 
-`defined_quant_protocol` 0.2.0 provides closed, typed interchange formats for generic component
-operations and atomic managed authorization. It is versioned independently from the component
-catalog and ships in the same Python distribution for now. The package depends only on Pydantic
-and the Python standard library; it does not import component implementations, discovery,
-renderers, or any host application.
+`defined_quant_protocol` 0.3.0 provides closed, typed interchange formats for generic component
+operations, semantic component ports, and atomic managed authorization. It is versioned
+independently from the component catalog and ships in the same Python distribution for now. The
+package depends only on Pydantic and the Python standard library; it does not import component
+implementations, discovery, renderers, or any host application.
 
 ## Unmanaged component operations
 
@@ -17,14 +17,14 @@ current runner requires a new output directory and does not support mutable over
 Publication uses the host's atomic no-replace rename primitive on Linux, macOS, and Windows; a
 host without that primitive receives a typed failure instead of a weaker overwrite fallback.
 
-The direct `OperationRequest` path remains explicitly unmanaged in protocol 0.2.0. Its provenance
+The direct `OperationRequest` path remains explicitly unmanaged in protocol 0.3.0. Its provenance
 status is either `unverified` or `caller_confirmed`; it cannot claim that values are source-bound.
 An operation request does not become managed merely because the package now also defines managed
 authorization records.
 
-New operation manifests default to protocol 0.2.0. The unchanged unmanaged manifest shape still
-parses protocol 0.1.0 records, so adding the separate authorization surface does not invalidate
-existing operation bundles.
+New operation manifests default to protocol 0.3.0. The unchanged unmanaged manifest shape still
+parses protocol 0.1.0 and 0.2.0 records, so adding semantic ports does not invalidate existing
+operation bundles.
 
 Every path stored in an `OperationManifest` is a relative POSIX bundle-member path using portable
 safe-ASCII names. Each segment contains only letters, digits, underscores, and hyphens, with dots
@@ -71,16 +71,39 @@ Integrations should consume that descriptor instead of reconstructing its fields
 normative vector suite, including Unicode ordering, number equivalence, safe-integer boundaries,
 and refusal cases, is executable in `authoring/tests/test_agent_protocol.py`.
 
+## Semantic component ports
+
+Protocol 0.3.0 defines the closed `x-defined-quant-port` JSON Schema extension carried by selected
+Pydantic input and output fields. A `SemanticPort` declares direction, concept, unit, shape,
+cardinality, convention, ordering, frequency, and provenance requirement. No partial payload,
+sibling ad-hoc metadata key, or invented vocabulary value is accepted.
+
+`compare_semantic_ports()` compares an output field with an input field across all eight semantic
+dimensions and returns typed differences; `require_compatible_ports()` fails closed on any
+difference. A producer's provenance guarantee must satisfy the consumer's declared requirement.
+Current unmanaged component inputs declare `not_required`, because this protocol does not
+authenticate caller data. Component-produced outputs may truthfully declare `component_bound`.
+An `exactly_one` port is non-nullable, and an ordered `one_or_more` port must expose
+`minItems >= 1` in its generated field schema. Compatibility JSON Schema enforces producer/output
+and consumer/input direction plus empty-versus-nonempty difference consistency. Recomputing the
+exact differences from both port payloads remains a runtime Pydantic invariant.
+
+Port compatibility establishes that one field can be considered for another field; it does not
+move data, bypass the consumer's input constraints, authorize a multi-step plan, or turn an
+unverified input into a source-bound value. `depends_on` binds implementation dependencies into a
+subject hash and is not a substitute for port compatibility.
+
 ## Atomic managed authorization
 
-Protocol 0.2.0 adds an authorization-only foundation for one immutable, one-step `AnalysisPlan`.
+Protocol 0.2.0 introduced the authorization-only foundation for one immutable, one-step
+`AnalysisPlan`. New plans use protocol 0.3.0 while protocol 0.2.0 plans remain readable.
 The packaged `simple_return_csv_v1` execution policy currently permits exactly this draft subject,
 with explicit draft opt-in:
 
 ```text
 dq.market_data.simple_return
-version:      0.2.0
-subject_hash: 146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484
+version:      0.3.2
+subject_hash: 8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d
 ```
 
 The catalog-aware validator checks that exact allowlist binding, required questions, the canonical
@@ -104,10 +127,11 @@ the plan hash. Changing a timestamp therefore invalidates an existing receipt an
 `managed_authorization_protocol_schema()` publishes the policy, plan, validation, approval, and
 authorization schemas plus their hash domains. This surface validates and authorizes; it does not
 call the calculation, authenticate a data source, issue citations, or produce an execution
-attestation or `ResearchBundle`. Source-bound execution and portable research bundles remain
-deferred. Semantic port metadata and multi-step composition, including Log Return to Historical
-Volatility, are also deferred; adding them changes the authorized subject and requires a new
-component version and re-freeze.
+attestation or `ResearchBundle`. Component result schemas may expose indexed calculation
+derivations, but nullable citation join keys do not authenticate their inputs. Semantic ports make
+compatible fields inspectable, including the Log Return to Historical Volatility boundary, but
+this authorization surface remains deliberately one-step. Source-bound execution, managed
+multi-step composition, and portable research bundles remain deferred.
 
 Pydantic's frozen configuration prevents model-field reassignment but is shallow: nested JSON
 containers supplied as component input or a dataset binding must be treated as immutable by

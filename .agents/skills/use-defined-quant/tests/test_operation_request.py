@@ -133,6 +133,12 @@ def test_typed_request_is_portable_hash_bound_and_repeatable(tmp_path: Path) -> 
     assert manifest.operation_hash == manifest.request.operation_hash
     assert manifest.input.sha256 == _sha256(first_dir / manifest.input.path)
     assert manifest.result.sha256 == _sha256(first_dir / manifest.result.path)
+    result = json.loads((first_dir / manifest.result.path).read_text(encoding="utf-8"))
+    assert result["warnings"] == []
+    assert result["disclosures"] == [
+        "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
+        "so gaps were not assessed."
+    ]
     result_members = (manifest.input.path, manifest.result.path)
     assert all(not Path(member).is_absolute() for member in result_members)
     assert all(not Path(artifact.path).is_absolute() for artifact in manifest.artifacts)
@@ -166,7 +172,12 @@ def test_exact_component_identity_mismatch_refuses_before_output(tmp_path: Path)
 
 
 def test_invalid_component_input_retains_valid_request_hash(tmp_path: Path) -> None:
-    request = _request(input_data={"prices": [100.0]})
+    request = _request(
+        input_data={
+            "prices": [100.0, 101.0],
+            "price_kind": "vendor_defined",
+        }
+    )
     request_path = tmp_path / "invalid-input.json"
     _write_request(request_path, request)
     output_dir = tmp_path / "output"
@@ -176,6 +187,21 @@ def test_invalid_component_input_retains_valid_request_hash(tmp_path: Path) -> N
     assert failure.operation_hash == request.operation_hash
     assert failure.error.code == "invalid_component_input"
     assert failure.error.component == request.component
+    assert not output_dir.exists()
+
+
+def test_missing_required_question_is_typed_as_ambiguous_input(tmp_path: Path) -> None:
+    request = _request(input_data={"prices": [100.0, 101.0]})
+    request_path = tmp_path / "missing-question.json"
+    _write_request(request_path, request)
+    output_dir = tmp_path / "output"
+
+    failure = _failure(_command(request_path, output_dir))
+
+    assert failure.error.code == "component_refused"
+    component_error = failure.error.details["component_error"]
+    assert component_error["code"] == "ambiguous_input"
+    assert component_error["details"]["questions"][0]["field"] == "price_kind"
     assert not output_dir.exists()
 
 
@@ -196,6 +222,66 @@ def test_component_domain_refusal_is_distinct_from_input_validation(tmp_path: Pa
     assert failure.error.code == "component_refused"
     assert failure.error.details["component_error"]["code"] == "domain_error"
     assert not output_dir.exists()
+
+
+def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> None:
+    request = _request(
+        input_data={
+            "prices": [100.0] * 502,
+            "price_kind": "adjusted",
+        }
+    )
+    request_path = tmp_path / "over-chart-limit.json"
+    _write_request(request_path, request)
+    output_dir = tmp_path / "output"
+
+    success = _success(_command(request_path, output_dir))
+    result = json.loads((output_dir / success.manifest.result.path).read_text(encoding="utf-8"))
+
+    assert result["returns"] == [0.0] * 501
+    assert len(result["derivations"]) == 501
+    assert result["derivations"][0] == {
+        "output": {"field": "returns", "index": 0},
+        "inputs": [
+            {"field": "prices", "index": 0, "citation_id": None},
+            {"field": "prices", "index": 1, "citation_id": None},
+        ],
+        "expression": "(prices[1] - prices[0]) / prices[0]",
+        "value": 0.0,
+    }
+    assert result["visualizations"] == []
+    assert any(
+        warning.startswith("visualization_omitted:") for warning in result["warnings"]
+    )
+    assert success.manifest.artifacts == ()
+
+
+def test_component_reference_uses_explicit_fresh_subject_verification() -> None:
+    completed = _python_probe(
+        """
+import json
+import sys
+sys.path.insert(0, sys.argv[1])
+import run_component as runner
+
+calls = []
+def verified(component_id, *, root=None):
+    calls.append({"component_id": component_id, "root": str(root)})
+    return "1" * 64
+
+runner.verify_subject = verified
+record = runner.component_record("dq.market_data.simple_return")
+reference = runner._component_ref(record)
+print(json.dumps({"calls": calls, "reference": reference.model_dump(mode="json")}))
+"""
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 0
+    assert len(payload["calls"]) == 1
+    assert payload["calls"][0]["component_id"] == "dq.market_data.simple_return"
+    assert Path(payload["calls"][0]["root"]).is_absolute()
+    assert payload["reference"]["subject_hash"] == "1" * 64
 
 
 def test_runtime_configuration_is_rejected_inside_request(tmp_path: Path) -> None:

@@ -7,7 +7,12 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from defined_quant_protocol import operation_protocol_schema
+from defined_quant.market_data.simple_return.component import FORMULA
+from defined_quant_protocol import (
+    PORT_SCHEMA_KEY,
+    PortConvention,
+    operation_protocol_schema,
+)
 
 from authoring import export_catalog
 
@@ -55,9 +60,29 @@ def test_component_export_shape_contains_agent_routing_and_boundaries() -> None:
     assert record["do_not_use_when"]
     assert record["limitations"]
     assert record["unsupported"]
+    assert record["formula"] == FORMULA
     assert record["schemas"]["input"]["type"] == "object"
     assert record["schemas"]["output"]["type"] == "object"
     assert "prices" in record["schemas"]["input"]["properties"]
+    assert "derivations" in record["schemas"]["output"]["properties"]
+    assert "disclosures" in record["schemas"]["output"]["properties"]
+    assert "derivations" in record["schemas"]["output"]["required"]
+    assert "Derivation" in record["schemas"]["output"]["$defs"]
+    assert record["schemas"]["input"]["properties"]["prices"][PORT_SCHEMA_KEY][
+        "direction"
+    ] == "input"
+    assert record["schemas"]["output"]["properties"]["returns"][PORT_SCHEMA_KEY][
+        "direction"
+    ] == "output"
+
+    volatility = export_catalog._component_record(
+        root / "categories" / "volatility" / "historical_volatility"
+    )
+    assert volatility["schemas"]["output"]["properties"]["annualized_volatility"][
+        PORT_SCHEMA_KEY
+    ]["convention"] == (
+        PortConvention.SAMPLE_STANDARD_DEVIATION_N_MINUS_1_SQUARE_ROOT_ANNUALIZATION.value
+    )
 
 
 def test_catalog_v2_has_deterministic_schemas_and_top_level_facets(
@@ -101,6 +126,15 @@ def test_catalog_v2_has_deterministic_schemas_and_top_level_facets(
         "source",
     }
     assert artifact["schema_version"] == 2
+    assert [component["id"] for component in artifact["components"]] == [
+        "dq.market_data.log_return",
+        "dq.market_data.simple_return",
+        "dq.volatility.historical_volatility",
+    ]
+    assert [category["id"] for category in artifact["categories"]] == [
+        "market_data",
+        "volatility",
+    ]
     protocol = artifact["operation_protocol"]
     assert protocol == operation_protocol_schema()
     assert protocol["package"] == "defined_quant_protocol"

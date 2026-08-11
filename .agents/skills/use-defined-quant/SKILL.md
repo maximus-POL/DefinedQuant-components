@@ -143,8 +143,9 @@ settings belongs inside the request or its operation hash.
    be reported as an operational failure. On success, standard output contains an
    `OperationSuccess` whose manifest is also written to `manifest.json`.
 5. Read `result.json` and `manifest.json`. Present the result with its component ID, version,
-   subject hash, unit, assumptions, transformations, warnings, and any component-specific
-   interpretation fields. Verify content hashes before trusting materialized members.
+   subject hash, unit, assumptions, disclosures, transformations, state-dependent warnings,
+   datapoint derivations, and any component-specific interpretation fields. Verify content hashes
+   before trusting materialized members.
 6. Manifest member paths are normalized relative POSIX paths such as `result.json` or
    `01-chart.svg`; they never contain the host output root. Resolve a member against the selected
    output directory only for local access. Do not write that resolved host path back into the
@@ -157,6 +158,13 @@ trusted SVG renderer. Components without visualizations still produce normalized
 structured result, and manifest members. Production execution is catalog-wide and must not branch
 on a particular component ID.
 
+Before passing one component field into another, inspect both generated schemas and compare their
+`x-defined-quant-port` metadata. The producer must be an output, the consumer must be an input,
+and concept, unit, shape, cardinality, convention, ordering, frequency, and provenance requirement
+must be compatible. Use the canonical `compare_semantic_ports` or `require_compatible_ports`
+helper rather than matching selected strings. Compatibility does not move values, waive the
+consumer's constraints, authorize a multi-step plan, or make `depends_on` an execution edge.
+
 ## Data and interpretation boundaries
 
 - Keep data acquisition separate from calculation. A host tool may supply observations, but
@@ -165,10 +173,11 @@ on a particular component ID.
   transformation.
 - Describe synthetic inputs as synthetic and sourced inputs with their actual provenance.
 - Treat provenance references as caller context, not cell-level citations or authenticated source
-  bindings. This unmanaged protocol cannot establish that an exact CSV cell, filing passage, or
-  provider response supplied a value.
-- Do not claim an approved `AnalysisPlan`, validation receipt, authorization, deterministic
-  evaluation, or portable `ResearchBundle`; those records are not part of this protocol version.
+  bindings. A component derivation may identify exact input indices, but a null or caller-populated
+  citation ID does not prove that a CSV cell, filing passage, or provider response supplied a value.
+- Do not claim that a direct operation created an approved `AnalysisPlan`, validation receipt,
+  authorization, deterministic evaluation, or portable `ResearchBundle`; this unmanaged adapter
+  produces none of those records.
 - Do not turn a deterministic calculation into financial advice or imply evidence, review, or
   scope beyond the component's contract.
 

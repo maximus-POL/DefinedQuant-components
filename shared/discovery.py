@@ -52,6 +52,8 @@ _STOPWORDS = frozenset(
         "at",
         "be",
         "by",
+        "calculate",
+        "compute",
         "for",
         "from",
         "how",

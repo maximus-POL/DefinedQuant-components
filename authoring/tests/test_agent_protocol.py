@@ -299,13 +299,16 @@ def test_manifest_reconciles_request_identity_hash_and_members() -> None:
         )
 
 
-def test_manifest_defaults_to_protocol_0_2_and_parses_protocol_0_1() -> None:
+def test_manifest_defaults_to_protocol_0_3_and_parses_older_protocols() -> None:
     current = _manifest()
-    legacy_payload = current.model_dump(mode="json")
-    legacy_payload["protocol_version"] = "0.1.0"
+    protocol_0_1 = current.model_dump(mode="json")
+    protocol_0_1["protocol_version"] = "0.1.0"
+    protocol_0_2 = current.model_dump(mode="json")
+    protocol_0_2["protocol_version"] = "0.2.0"
 
-    assert current.protocol_version == "0.2.0"
-    assert OperationManifest.model_validate(legacy_payload).protocol_version == "0.1.0"
+    assert current.protocol_version == "0.3.0"
+    assert OperationManifest.model_validate(protocol_0_1).protocol_version == "0.1.0"
+    assert OperationManifest.model_validate(protocol_0_2).protocol_version == "0.2.0"
 
 
 def test_manifest_refuses_a_request_mutated_after_hash_capture() -> None:
@@ -367,7 +370,7 @@ def test_failure_and_schema_are_closed_and_discriminated() -> None:
     }
     assert set(schemas) == {"failure", "manifest", "request", "result", "success"}
     assert protocol["package"] == "defined_quant_protocol"
-    assert protocol["protocol_version"] == "0.2.0"
+    assert protocol["protocol_version"] == "0.3.0"
     assert protocol["execution_mode"] == "unmanaged"
     assert protocol["canonicalization_id"] == CANONICALIZATION_ID
     assert protocol["hash_algorithm"] == "sha256"

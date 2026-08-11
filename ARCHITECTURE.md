@@ -43,6 +43,7 @@ components/
 │   ├── canonical.py
 │   ├── operation.py
 │   ├── plan.py
+│   ├── ports.py
 │   ├── policy.py
 │   ├── version.py
 │   └── py.typed
@@ -95,6 +96,11 @@ Each component has one canonical implementation file and two machine-readable do
 - Defines Pydantic `Inputs` and `Output`.
 - Defines the deterministic callable.
 - Is canonical for types, units, conventions, and defaults.
+- Declares closed `x-defined-quant-port` metadata on composable fields; the authoring checker
+  rejects partial, invented, wrongly directed, or sibling ad-hoc port metadata.
+- Separates assumptions, permanent disclosures, transformations, and state-dependent warnings in
+  the shared output envelope; input-independent comparisons in contract warning rules are
+  rejected.
 - May return typed, renderer-neutral visualization specifications.
 
 `contract.yaml`
@@ -111,8 +117,10 @@ Each component has one canonical implementation file and two machine-readable do
 `evidence.yaml`
 
 - The subject hash that the evidence applies to.
-- Known answers, invariants, boundary cases, and cross-checks, each tied to an executable test.
-- Agent-use cases used to test correct invocation/refusal behavior.
+- Known answers, boundary cases, and cross-checks are single-invocation fixtures collected and
+  executed directly by pytest through a closed assertion vocabulary.
+- Invariants name hand-written property tests; agent cases execute structured requests through the
+  real adapter and assert compute, clarification, or refusal behavior.
 - Does not grant domain review.
 
 `README.md` is the human trust surface. It explains the implementation but cannot redefine it.
@@ -130,9 +138,9 @@ Each component has one canonical implementation file and two machine-readable do
 - declared component and external dependencies.
 - all contract fields used by canonical agent routing, including discovery metadata.
 
-Evidence content binds separately to the subject and named tests. Exact-commit CI records what
-actually ran. Domain review, when added, binds the exact reviewed subject and explanatory content.
-None of these dimensions is collapsed into a single trust badge.
+Evidence content binds separately to the subject and to the generated or named tests that consumed
+it. Exact-commit CI records what actually ran. Domain review, when added, binds the exact reviewed
+subject and explanatory content. None of these dimensions is collapsed into a single trust badge.
 
 ## 6. Visualization boundary
 
@@ -174,7 +182,8 @@ The adapter is a host convenience layer, not another source of truth. It cannot 
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
 
-`defined_quant_protocol` 0.2.0 provides the closed operation and managed-authorization records. An
+`defined_quant_protocol` 0.3.0 provides the closed operation, semantic-port, and
+managed-authorization records. An
 `OperationRequest` binds an exact component ID, version, and `subject_hash` to a candidate input
 object, explicit caller provenance, and a bounded artifact request. Catalog roots and output
 directories are trusted runtime settings and never fields in the semantic request. The request
@@ -186,7 +195,8 @@ unsupported hosts fail rather than falling back to a replace operation.
 The generic adapter then performs the following catalog-wide sequence:
 
 1. Validate the closed operation request.
-2. Discover the component by stable ID and refuse a version or `subject_hash` mismatch.
+2. Discover the component by stable ID, freshly recompute and cache its filesystem-backed
+   `subject_hash`, and refuse an exact version or subject mismatch.
 3. Validate input through that component's canonical Pydantic `Inputs` model.
 4. Invoke only the callable declared by the component catalog.
 5. Validate the return value through the canonical Pydantic `Output` model and verify its
@@ -195,9 +205,15 @@ The generic adapter then performs the following catalog-wide sequence:
 7. Emit a typed result whose manifest records relative POSIX member names and content hashes.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
-but adding another conforming component requires no runner edit. Pydantic models also remain the
-canonical source for structural compatibility between possible component steps; an empty or
-populated `depends_on` list in `contract.yaml` is not a substitute for model compatibility.
+but adding another conforming component requires no runner edit. Pydantic models remain canonical
+for field structure, and their closed semantic-port metadata establishes field-level meaning.
+Composition compares direction, concept, unit, shape, cardinality, convention, ordering,
+frequency, and provenance requirements before a producer output can feed a consumer input. An
+empty or populated `depends_on` list in `contract.yaml` binds implementation dependencies; it is
+not a substitute for port compatibility.
+Ordinary stable-ID subject lookups reuse the freshly verified cache entry; path and explicit-record
+lookups remain uncached for authoring. The current catalog and preflight require filesystem-backed
+contracts, so zipimport and single-file frozen layouts are outside the supported runtime boundary.
 
 The operation result is intentionally **unmanaged**. The trusted local runner enforces the sequence
 above; its manifest records an internally reconciled assertion about the exact request, component,
@@ -209,8 +225,8 @@ assertion, not a provider or Defined Quant attestation.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
-`dq.market_data.simple_return` version `0.2.0`, subject
-`146be4d2e60af11a8b383640d4905ab78aad9eeafdaaabacae6e05c336dca484`, with explicit opt-in to its
+`dq.market_data.simple_return` version `0.3.2`, subject
+`8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a
@@ -223,11 +239,13 @@ the semantic plan hash, while the answer and other resolution meaning remain bou
 timestamps are semantic data and are included in both the dataset and plan hashes. Frozen Pydantic
 records provide shallow immutability only, so mutation of nested JSON requires revalidation.
 
-This boundary neither executes Simple Return nor authenticates the dataset source. It issues no
-source citations, execution attestation, evaluation record, or `ResearchBundle`. Semantic port
-metadata, multi-step composition (including Log Return to Historical Volatility), source-bound
-execution, and portable bundle verification remain deferred. Adding semantic ports changes the
-component subject and therefore requires a version change and re-freeze before authorization.
+This boundary neither executes Simple Return nor authenticates the dataset source. Simple Return's
+output binds every return index to its two source-price indices through a closed derivation record,
+but its nullable citation IDs make no source claim. Log Return and Historical Volatility now form
+the first machine-checkable semantic chain: both the return series and the log-return convention
+ports match, while the simple-return convention does not. This compatibility neither executes nor
+authorizes a multi-step plan. Exact source citations, execution attestation, evaluation records,
+managed composition, `ResearchBundle` generation, and source-bound execution remain deferred.
 
 ## 9. Static publication
 
@@ -235,7 +253,8 @@ component subject and therefore requires a version change and re-freeze before a
 deterministic, website-safe catalog artifact containing sanitized component metadata and trust
 bindings. Catalog schema v2 exports component groups, tags, discovery fields, use/do-not-use
 boundaries, limitations, deterministic top-level facet values, and each component's Pydantic
-input/output JSON Schemas. It also exports request, manifest, success, failure, and result schemas
+input/output JSON Schemas, including their closed semantic-port extensions. It also exports
+request, manifest, success, failure, and result schemas
 plus canonicalization, hash framing, domain, and a fixed verification vector directly from
 `defined_quant_protocol`, labeled as unmanaged.
 
@@ -256,13 +275,14 @@ source code.
 
 ## 10. Current claim boundary
 
-All current components have lifecycle `draft`, author-asserted evidence, and no independent domain
-review. The typed operation protocol improves reproducibility and interface verification without
-changing those facts.
+All three current components have lifecycle `draft`, author-asserted evidence, and no independent
+domain review. The typed operation protocol improves reproducibility and interface verification
+without changing those facts.
 
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return
 subject. These records authorize a future calculation but do not perform one. The bound dataset is
-explicitly `unverified`, and no source-bound dataset, citation set, deterministic evaluation
-record, managed execution result, or `ResearchBundle` exists yet. Direct Python calls and generic
-operation requests remain unmanaged and cannot receive a managed or independently verified label.
+explicitly `unverified`. Datapoint derivations expose calculation lineage, but no source-bound
+dataset, populated citation set, deterministic evaluation record, managed execution result, or
+`ResearchBundle` exists yet. Direct Python calls and generic operation requests remain unmanaged
+and cannot receive a managed or independently verified label.

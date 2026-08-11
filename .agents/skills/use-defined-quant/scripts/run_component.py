@@ -13,7 +13,7 @@ import re
 import shutil
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -27,8 +27,9 @@ from defined_quant import (  # noqa: E402
     component_models,
     component_record,
     load_component,
+    preflight,
     save_svg,
-    subject_hash,
+    verify_subject,
     visualization_hash,
 )
 from defined_quant.catalog import ComponentRecord  # noqa: E402
@@ -336,7 +337,10 @@ def _component_ref(
 ) -> ComponentRef:
     try:
         digest = _quiet_component_call(
-            lambda: subject_hash(record),
+            lambda: verify_subject(
+                record.component_id,
+                root=record.path.parents[1],
+            ),
             component=requested,
         )
         return ComponentRef(id=record.component_id, version=record.version, subject_hash=digest)
@@ -407,6 +411,7 @@ def _legacy_request(
 
 
 def _validate_input(
+    record: ComponentRecord,
     model: type[BaseModel],
     request: OperationRequest,
 ) -> BaseModel:
@@ -416,6 +421,29 @@ def _validate_input(
             component=request.component,
         )
     except ValidationError as exc:
+        errors = exc.errors(include_url=False)
+        missing_fields = {
+            str(error["loc"][0])
+            for error in errors
+            if error.get("type") == "missing" and error.get("loc")
+        }
+        guidance = record.metadata.get("guidance")
+        questions = (
+            guidance.get("required_questions", []) if isinstance(guidance, Mapping) else []
+        )
+        question_fields = {
+            str(question["resolves_to"])
+            for question in questions
+            if isinstance(question, Mapping) and "resolves_to" in question
+        }
+        if errors and len(missing_fields) == len(errors) and missing_fields <= question_fields:
+            try:
+                _quiet_component_call(
+                    lambda: preflight(record.component_id, **request.input),
+                    component=request.component,
+                )
+            except DQError as question:
+                raise _mapped_dq_error(question, component=request.component) from question
         raise AdapterError(
             OperationErrorCode.INVALID_COMPONENT_INPUT,
             "Input does not satisfy the component's canonical Inputs model.",
@@ -802,7 +830,7 @@ def _run(
         )
     except DQError as exc:
         raise _mapped_dq_error(exc, component=request.component) from exc
-    validated_input = _validate_input(inputs_model, request)
+    validated_input = _validate_input(record, inputs_model, request)
     input_bytes = _normalized_model_bytes(
         validated_input,
         request=request,

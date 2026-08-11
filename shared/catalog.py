@@ -7,10 +7,12 @@ import hashlib
 import importlib
 import inspect
 import json
+import re
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime
 from enum import Enum
+from functools import cache
 from pathlib import Path
 from typing import Any, cast
 
@@ -44,6 +46,7 @@ _BEHAVIOUR_COMPONENT_FIELDS = (
     "supported_python",
 )
 _SEMANTIC_DISPLAY_FIELDS = ("formula", "intent", "output")
+_COMPONENT_ID = re.compile(r"^dq\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,7 +402,11 @@ def _public_symbols(record: ComponentRecord) -> list[str]:
     return sorted(symbols)
 
 
-def _subject_manifest(record: ComponentRecord, stack: tuple[str, ...]) -> dict[str, Any]:
+def _subject_manifest(
+    record: ComponentRecord,
+    stack: tuple[str, ...],
+    catalog_root: Path,
+) -> dict[str, Any]:
     if record.component_id in stack:
         cycle = " -> ".join((*stack, record.component_id))
         raise ComponentContractError(
@@ -433,8 +440,12 @@ def _subject_manifest(record: ComponentRecord, stack: tuple[str, ...]) -> dict[s
     external_dependencies: list[str] = []
     for dependency in dependencies:
         if dependency.startswith("dq."):
-            dependency_record = _resolve_record(dependency)
-            dependency_manifest = _subject_manifest(dependency_record, current_stack)
+            dependency_record = _resolve_record(dependency, root=catalog_root)
+            dependency_manifest = _subject_manifest(
+                dependency_record,
+                current_stack,
+                catalog_root,
+            )
             component_dependencies[dependency] = hashlib.sha256(
                 _canonical_json(dependency_manifest)
             ).hexdigest()
@@ -473,7 +484,21 @@ def subject_manifest(
     """Build the canonical behaviour-and-contract manifest used by ``subject_hash``."""
 
     record = _resolve_record(identifier, root=root)
-    return _subject_manifest(record, ())
+    catalog_root = _catalog_root(root) if root is not None else record.path.parents[1]
+    return _subject_manifest(record, (), catalog_root)
+
+
+def _fresh_subject_hash(
+    identifier: str | Path | ComponentRecord,
+    *,
+    root: str | Path | None = None,
+) -> str:
+    return hashlib.sha256(_canonical_json(subject_manifest(identifier, root=root))).hexdigest()
+
+
+@cache
+def _cached_subject_hash(component_id: str, catalog_root: str) -> str:
+    return _fresh_subject_hash(component_id, root=Path(catalog_root))
 
 
 def subject_hash(
@@ -481,9 +506,36 @@ def subject_hash(
     *,
     root: str | Path | None = None,
 ) -> str:
-    """Return the SHA-256 identity of component behaviour and enforceable contract."""
+    """Return the SHA-256 identity of component behaviour and enforceable contract.
 
-    return hashlib.sha256(_canonical_json(subject_manifest(identifier, root=root))).hexdigest()
+    Stable component-ID lookups are cached by normalized catalog root. Path and ``ComponentRecord``
+    inputs remain fresh so authoring tools can hash explicit filesystem or synthetic records.
+    """
+
+    if isinstance(identifier, str) and _COMPONENT_ID.fullmatch(identifier) is not None:
+        catalog_root = _catalog_root(root)
+        return _cached_subject_hash(identifier, str(catalog_root))
+    return _fresh_subject_hash(identifier, root=root)
+
+
+def invalidate_subject_cache() -> None:
+    """Clear every subject cache entry, including dependency-derived identities."""
+
+    importlib.invalidate_caches()
+    _cached_subject_hash.cache_clear()
+
+
+def verify_subject(
+    component_id: str,
+    *,
+    root: str | Path | None = None,
+) -> str:
+    """Recompute one installed stable-ID subject from disk and seed the runtime cache."""
+
+    if _COMPONENT_ID.fullmatch(component_id) is None:
+        raise ComponentContractError("verify_subject requires a stable component ID")
+    invalidate_subject_cache()
+    return subject_hash(component_id, root=root)
 
 
 __all__ = [
@@ -492,8 +544,10 @@ __all__ = [
     "ComponentRecord",
     "component_models",
     "component_record",
+    "invalidate_subject_cache",
     "iter_components",
     "load_component",
     "subject_hash",
     "subject_manifest",
+    "verify_subject",
 ]

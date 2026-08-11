@@ -1,7 +1,8 @@
 # Simple Return
 
 > Experimental Technical Preview. This component is draft, has author-supplied evidence, and has
-> no domain review. Canonical inputs, outputs, units, and defaults live in `component.py`.
+> no domain review. Canonical inputs, outputs, units, defaults, and semantic ports live in
+> `component.py`.
 
 ## Intuition
 
@@ -11,11 +12,9 @@ The component preserves caller order. It never sorts, reverses, fills, fetches, 
 
 ## Formula
 
-For ordered prices \(p_0, p_1, \ldots, p_n\), each output is:
-
-\[
-r_i = \frac{p_i}{p_{i-1}} - 1,\qquad i=1,\ldots,n
-\]
+For ordered prices \(P_0, P_1, \ldots, P_n\), the canonical executed formula is
+`rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁` for \(t=1,\ldots,n\). The difference is evaluated before division to
+retain relative precision when adjacent binary64 prices are close.
 
 The output uses decimal units: `0.05` means `5%`. Its declared return convention is `simple`, not
 `log`.
@@ -24,18 +23,39 @@ The output uses decimal units: `0.05` means `5%`. Its declared return convention
 
 For prices `[100.0, 105.0, 102.9]`:
 
-- \(105 / 100 - 1 = 0.05\)
-- \(102.9 / 105 - 1 = -0.02\)
+- \((105 - 100) / 100 = 0.05\)
+- \((102.9 - 105) / 105 = -0.02\)
 
 The result is `[0.05, -0.02]`. Compounding the two outputs gives
 \((1.05)(0.98)=1.029\), the same ratio as \(102.9/100\).
 
+## Datapoint lineage
+
+Every `returns[i]` has one closed `Derivation` record. It names `returns[i]` as the output,
+references `prices[i]` and `prices[i + 1]` in order, records the indexed expression that ran, and
+repeats the exact result value. `InputRef.citation_id` is currently `null`; it is the stable join
+point where a later source adapter can attach exact source-cell citations without asking a
+consumer to reconstruct the indexing rule from prose. The expression is inspectable metadata and
+is never evaluated as code.
+
+## Semantic ports
+
+The generated schemas mark the price-series and price-kind inputs and the return-series and
+return-kind outputs with closed semantic ports. The output convention is
+`simple_periodic_return`; a log-only consumer therefore receives a typed compatibility difference
+instead of silently accepting or relabelling the values.
+
 ## Visualization
 
-The structured output contains one renderer-neutral `VisualizationSpec`. Its plotted values are
-the same return tuple as the numerical result, with decimal units and percentage display
-formatting. A trusted shared renderer can turn that closed specification into SVG without asking
-the component to recalculate or passing through caller-supplied markup.
+For results of up to 500 returns, the structured output contains one renderer-neutral
+`VisualizationSpec`. Its plotted values are the same return tuple as the numerical result, with
+decimal units and percentage display formatting. A trusted shared renderer can turn that closed
+specification into SVG without asking the component to recalculate or passing through
+caller-supplied markup.
+
+For longer results, the full return tuple remains in `returns`, `visualizations` is empty, and a
+`visualization_omitted` warning states the 500-point presentation limit. Presentation never
+truncates or prevents the numerical result.
 
 When timestamps are present, each point is labelled by the interval-end timestamp. Without
 timestamps, labels are observation-end indices and the output visibly warns that chronology could
@@ -56,8 +76,10 @@ not be verified.
 
 Use this component for deterministic adjacent-period price returns when the ordered observations
 and adjusted/unadjusted convention are explicit. It is also suitable as a trusted transform inside
-an agent workflow because the result carries provenance, warnings, conventions, and its chart
-specification together.
+an agent workflow because the result separates permanent disclosures from state-dependent
+warnings and carries provenance, conventions, and, when the result is within the presentation
+limit, its chart specification together. Each returned datapoint also carries exact,
+machine-validated lineage to its two adjacent source prices.
 
 ## Inappropriate uses
 
@@ -71,5 +93,7 @@ The output describes the supplied series; it does not establish that the series 
 point-in-time correct, survivorship-bias free, or suitable for investment decisions. A declared
 frequency is retained as disclosure only. Calendar-aware gap detection requires an explicit
 calendar and gap policy that this draft contract does not yet define, so `gap_check` is always
-`not_assessed`. A positive finite price pair whose return overflows or is indistinguishable from
-total loss in binary64 is rejected.
+`not_assessed` and that permanent context appears in `disclosures`, not `warnings`. Warnings are
+reserved for findings caused by the supplied state, such as unverified ordering, unadjusted-price
+interpretation, or an omitted over-limit chart. A positive finite price pair whose return
+overflows or is indistinguishable from total loss in binary64 is rejected.

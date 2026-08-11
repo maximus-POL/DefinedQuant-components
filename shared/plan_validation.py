@@ -13,7 +13,7 @@ from datetime import datetime
 from importlib import resources
 from typing import Any
 
-from defined_quant.catalog import component_models, component_record, subject_hash
+from defined_quant.catalog import component_models, component_record, verify_subject
 from defined_quant.types import (
     AmbiguousInput,
     ComponentContractError,
@@ -362,7 +362,11 @@ def validate_plan(
         record = component_record(plan.step.component.id)
         installed_ref_matches = (
             record.version == plan.step.component.version
-            and subject_hash(record) == plan.step.component.subject_hash
+            and verify_subject(
+                record.component_id,
+                root=record.path.parents[1],
+            )
+            == plan.step.component.subject_hash
         )
     except (ComponentContractError, ComponentLoadError, ComponentNotFound):
         return _blocked(
