@@ -101,7 +101,7 @@ def test_authored_expectation_is_the_assertion_that_executes() -> None:
 
 def test_schema_rejects_ad_hoc_expected_dialects() -> None:
     evidence = load_evidence(EVIDENCE_PATH)
-    record = _record(evidence, "boundary_cases", "bc_016_at_visualization_limit")
+    record = _record(evidence, "boundary_cases", "bc_016_large_visualization")
     record["expected"] = {
         "return_counts": [500, 501],
         "visualization_counts": [1, 0],
@@ -185,7 +185,7 @@ def test_input_validation_expectation_fails_when_inputs_are_valid(
 
 def test_checker_rejects_pseudo_inputs_against_the_component_model() -> None:
     evidence = load_evidence(EVIDENCE_PATH)
-    record = _record(evidence, "boundary_cases", "bc_016_at_visualization_limit")
+    record = _record(evidence, "boundary_cases", "bc_016_large_visualization")
     record["inputs"] = {
         "synthetic_constant_price_fixtures": [501, 502],
         "price_kind": "adjusted",
@@ -248,7 +248,6 @@ def test_blessing_names_every_generated_and_invariant_case() -> None:
     test_ids = _evidence_test_ids(evidence)
 
     assert "known_answer_ka_001" in test_ids
-    assert "boundary_case_bc_016_at_visualization_limit" in test_ids
-    assert "boundary_case_bc_016_above_visualization_limit" in test_ids
+    assert "boundary_case_bc_016_large_visualization" in test_ids
     assert "agent_case_missing_price_kind" in test_ids
     assert "test_evidence_inv_004" in test_ids

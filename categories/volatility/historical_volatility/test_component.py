@@ -234,7 +234,7 @@ def test_output_provenance_and_subject_binding() -> None:
     )
 
     assert result.component_id == "dq.volatility.historical_volatility"
-    assert result.version == "0.1.0"
+    assert result.version == "0.1.1"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.VOLATILITY

@@ -26,6 +26,7 @@ _PALETTE = (
     "#0F766E",
     "#475569",
 )
+_MIN_MARKER_SPACING = 7.0
 
 
 def visualization_hash(spec: VisualizationSpec) -> str:
@@ -54,9 +55,12 @@ def _coordinate(value: float, low: float, high: float, top: float, bottom: float
 
 
 def _domain(spec: VisualizationSpec) -> tuple[float, float]:
-    values = [value for series in spec.series for value in series.values]
-    low = min(values)
-    high = max(values)
+    low = math.inf
+    high = -math.inf
+    for series in spec.series:
+        for value in series.values:
+            low = min(low, value)
+            high = max(high, value)
     if spec.kind is ChartKind.BAR:
         low = min(low, 0.0)
         high = max(high, 0.0)
@@ -96,14 +100,25 @@ def _footer_lines(spec: VisualizationSpec) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _category_labels(categories: tuple[str, ...]) -> tuple[str, ...]:
+def _category_label_indexes(category_count: int) -> tuple[int, ...]:
+    step = max(1, math.ceil(category_count / 8))
+    indexes = list(range(0, category_count, step))
+    if indexes[-1] != category_count - 1:
+        indexes.append(category_count - 1)
+    return tuple(indexes)
+
+
+def _category_labels(
+    categories: tuple[str, ...], indexes: tuple[int, ...]
+) -> tuple[str, ...]:
+    selected = tuple(categories[index] for index in indexes)
     parsed: list[datetime] = []
-    for value in categories:
+    for value in selected:
         try:
             parsed.append(datetime.fromisoformat(value.replace("Z", "+00:00")))
         except ValueError:
             return tuple(
-                value if len(value) <= 18 else value[:15] + "..." for value in categories
+                value if len(value) <= 18 else value[:15] + "..." for value in selected
             )
     dates = [value.date().isoformat() for value in parsed]
     if len(set(dates)) == len(dates):
@@ -194,7 +209,12 @@ def render_svg(spec: VisualizationSpec) -> str:
     if spec.kind is ChartKind.LINE:
         for series_index, series in enumerate(spec.series):
             color = _PALETTE[series_index]
-            coordinates: list[tuple[float, float]] = []
+            path_commands: list[str] = []
+            show_markers = (
+                category_count == 1
+                or plot_width / (category_count - 1) >= _MIN_MARKER_SPACING
+            )
+            markers: list[str] = []
             for index, value in enumerate(series.values):
                 x = (
                     left + plot_width / 2
@@ -202,39 +222,49 @@ def render_svg(spec: VisualizationSpec) -> str:
                     else left + index * plot_width / (category_count - 1)
                 )
                 y = _coordinate(value, low, high, top, bottom)
-                coordinates.append((x, y))
-            for (left_x, left_y), (right_x, right_y) in zip(
-                coordinates, coordinates[1:], strict=False
-            ):
-                parts.append(
-                    f'<line x1="{left_x:.2f}" y1="{left_y:.2f}" '
-                    f'x2="{right_x:.2f}" y2="{right_y:.2f}" stroke="{color}" '
-                    'stroke-width="2.25" stroke-linecap="round"/>'
-                )
-            for x, y in coordinates:
-                parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.6" fill="{color}"/>')
+                command = "M" if index == 0 else "L"
+                path_commands.append(f"{command}{x:.2f},{y:.2f}")
+                if show_markers:
+                    markers.append(
+                        f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.6" fill="{color}"/>'
+                    )
+            parts.append(
+                f'<path d="{" ".join(path_commands)}" fill="none" stroke="{color}" '
+                'stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>'
+            )
+            parts.extend(markers)
     else:
         group_width = plot_width / category_count
         usable_width = group_width * 0.74
         bar_width = usable_width / len(spec.series)
         zero_y = _coordinate(0.0, low, high, top, bottom)
-        for category_index in range(category_count):
-            group_start = left + category_index * group_width + (group_width - usable_width) / 2
-            for series_index, series in enumerate(spec.series):
+        rectangle_width = max(bar_width - 1.5, 0.8)
+        for series_index, series in enumerate(spec.series):
+            path_commands = []
+            for category_index in range(category_count):
+                group_start = (
+                    left
+                    + category_index * group_width
+                    + (group_width - usable_width) / 2
+                )
                 value_y = _coordinate(series.values[category_index], low, high, top, bottom)
                 rectangle_y = min(value_y, zero_y)
                 rectangle_height = max(abs(zero_y - value_y), 0.8)
                 x = group_start + series_index * bar_width
-                parts.append(
-                    f'<rect x="{x:.2f}" y="{rectangle_y:.2f}" '
-                    f'width="{max(bar_width - 1.5, 0.8):.2f}" height="{rectangle_height:.2f}" '
-                    f'fill="{_PALETTE[series_index]}"/>'
+                path_commands.append(
+                    f"M{x:.2f},{rectangle_y:.2f}h{rectangle_width:.2f}"
+                    f"v{rectangle_height:.2f}h-{rectangle_width:.2f}Z"
                 )
+            parts.append(
+                f'<path d="{" ".join(path_commands)}" fill="{_PALETTE[series_index]}"/>'
+            )
 
-    label_step = max(1, math.ceil(category_count / 8))
-    for index, label in enumerate(_category_labels(spec.categories)):
-        if index % label_step != 0 and index != category_count - 1:
-            continue
+    label_indexes = _category_label_indexes(category_count)
+    for index, label in zip(
+        label_indexes,
+        _category_labels(spec.categories, label_indexes),
+        strict=True,
+    ):
         x = (
             left + plot_width / 2
             if category_count == 1

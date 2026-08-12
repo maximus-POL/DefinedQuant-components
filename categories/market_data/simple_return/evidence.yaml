@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.simple_return",
-  "validated_subject_hash": "8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d",
+  "validated_subject_hash": "acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed",
   "known_answers": [
     {
       "id": "ka_001",
@@ -532,60 +532,8 @@
       }
     },
     {
-      "id": "bc_016_at_visualization_limit",
-      "description": "501 prices preserve 500 returns and emit one exact visualization.",
-      "inputs": {
-        "prices": {
-          "$repeat": {
-            "value": 100.0,
-            "count": 501
-          }
-        },
-        "price_kind": "adjusted"
-      },
-      "expect": {
-        "outcome": "success",
-        "assertions": [
-          {
-            "path": "/returns",
-            "op": "approx",
-            "value": {
-              "$repeat": {
-                "value": 0.0,
-                "count": 500
-              }
-            },
-            "rtol": 0.0,
-            "atol": 0.0
-          },
-          {
-            "path": "/visualizations",
-            "op": "length_equal",
-            "value": 1
-          },
-          {
-            "path": "/visualizations/0/series/0/values",
-            "op": "approx",
-            "value": {
-              "$repeat": {
-                "value": 0.0,
-                "count": 500
-              }
-            },
-            "rtol": 0.0,
-            "atol": 0.0
-          },
-          {
-            "path": "/warnings",
-            "op": "not_contains_prefix",
-            "value": "visualization_omitted:"
-          }
-        ]
-      }
-    },
-    {
-      "id": "bc_016_above_visualization_limit",
-      "description": "502 prices preserve 501 returns and omit only the over-limit visualization.",
+      "id": "bc_016_large_visualization",
+      "description": "502 prices preserve 501 returns and emit one complete visualization.",
       "inputs": {
         "prices": {
           "$repeat": {
@@ -613,16 +561,23 @@
           {
             "path": "/visualizations",
             "op": "length_equal",
-            "value": 0
+            "value": 1
           },
           {
-            "path": "/derivations",
-            "op": "length_equal",
-            "value": 501
+            "path": "/visualizations/0/series/0/values",
+            "op": "approx",
+            "value": {
+              "$repeat": {
+                "value": 0.0,
+                "count": 501
+              }
+            },
+            "rtol": 0.0,
+            "atol": 0.0
           },
           {
             "path": "/warnings",
-            "op": "contains_prefix",
+            "op": "not_contains_prefix",
             "value": "visualization_omitted:"
           }
         ]

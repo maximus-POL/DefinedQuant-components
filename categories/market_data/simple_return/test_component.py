@@ -168,7 +168,7 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.3.2"
+    assert result.version == "0.3.3"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL
@@ -228,6 +228,16 @@ def test_result_and_svg_are_deterministic() -> None:
 
     assert first.model_dump_json() == second.model_dump_json()
     assert render_svg(first.visualizations[0]) == render_svg(second.visualizations[0])
+
+
+def test_large_result_always_contains_the_complete_visualization() -> None:
+    result = simple_return((100.0,) * 502, price_kind=PriceKind.ADJUSTED)
+
+    assert len(result.returns) == 501
+    assert len(result.derivations) == 501
+    assert result.visualizations[0].series[0].values == result.returns
+    assert len(result.visualizations[0].categories) == len(result.returns)
+    assert not any(value.startswith("visualization_omitted:") for value in result.warnings)
 
 
 def test_missing_price_kind_is_an_explicit_question() -> None:

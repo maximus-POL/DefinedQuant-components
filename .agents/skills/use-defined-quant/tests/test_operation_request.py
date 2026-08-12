@@ -224,14 +224,14 @@ def test_component_domain_refusal_is_distinct_from_input_validation(tmp_path: Pa
     assert not output_dir.exists()
 
 
-def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> None:
+def test_large_return_result_preserves_full_result_and_svg(tmp_path: Path) -> None:
     request = _request(
         input_data={
             "prices": [100.0] * 502,
             "price_kind": "adjusted",
         }
     )
-    request_path = tmp_path / "over-chart-limit.json"
+    request_path = tmp_path / "large-return-result.json"
     _write_request(request_path, request)
     output_dir = tmp_path / "output"
 
@@ -249,11 +249,16 @@ def test_over_chart_limit_preserves_full_result_without_svg(tmp_path: Path) -> N
         "expression": "(prices[1] - prices[0]) / prices[0]",
         "value": 0.0,
     }
-    assert result["visualizations"] == []
-    assert any(
+    assert result["visualizations"][0]["series"][0]["values"] == [0.0] * 501
+    assert not any(
         warning.startswith("visualization_omitted:") for warning in result["warnings"]
     )
-    assert success.manifest.artifacts == ()
+    assert len(success.manifest.artifacts) == 1
+    artifact = success.manifest.artifacts[0]
+    assert artifact.visualization_id == "simple_periodic_returns"
+    svg = (output_dir / artifact.path).read_text(encoding="utf-8")
+    assert svg.count("<path ") == 1
+    assert "<circle " not in svg
 
 
 def test_component_reference_uses_explicit_fresh_subject_verification() -> None:

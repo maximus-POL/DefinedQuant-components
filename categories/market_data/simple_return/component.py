@@ -8,7 +8,6 @@ from typing import Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
-    MAX_VISUALIZATION_POINTS,
     AxisSpec,
     ChartKind,
     ChartSeries,
@@ -39,7 +38,7 @@ from defined_quant_protocol import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.market_data.simple_return"
-COMPONENT_VERSION = "0.3.2"
+COMPONENT_VERSION = "0.3.3"
 FORMULA = "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁"
 _GAP_DISCLOSURES = (
     "gap_check_not_assessed: This component does not apply a calendar-aware gap policy, "
@@ -285,18 +284,12 @@ def simple_return(
         f"Computed each value as {FORMULA}.",
         "Associated each return with the interval-end timestamp when timestamps were supplied.",
     )
-    visualizations = (
-        (
-            _visualization(
-                returns=returns,
-                inputs=inputs,
-                assumptions=assumptions,
-                warnings=warnings,
-                ordering_status=ordering_status,
-            ),
-        )
-        if len(returns) <= MAX_VISUALIZATION_POINTS
-        else ()
+    visualization = _visualization(
+        returns=returns,
+        inputs=inputs,
+        assumptions=assumptions,
+        warnings=warnings,
+        ordering_status=ordering_status,
     )
 
     return Output(
@@ -309,7 +302,7 @@ def simple_return(
         warnings=warnings,
         transformations=transformations,
         derivations=_derivations(returns),
-        visualizations=visualizations,
+        visualizations=(visualization,),
         returns=returns,
         price_kind=inputs.price_kind,
         return_timestamps=(

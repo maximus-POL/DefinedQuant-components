@@ -5,7 +5,7 @@
   "title": "Log Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -56,15 +56,14 @@
   "limitations": [
     "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
     "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
-    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed.",
-    "Results longer than 500 returns retain the full numerical output but omit visualizations with an explicit warning."
+    "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed."
   ],
   "depends_on": [],
   "references": [],
   "owner": "makstylek",
   "materiality": "foundational",
   "supported_python": [">=3.11", "<3.14"],
-  "last_material_review": "2026-08-11",
+  "last_material_review": "2026-08-12",
   "next_review_trigger": [
     "implementation_change",
     "scope_expansion",
@@ -256,16 +255,6 @@
         "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
       },
       {
-        "id": "visualization_omitted",
-        "severity": "warning",
-        "when": {
-          "left": {"field": "prices", "measure": "count"},
-          "op": "gt",
-          "right": {"value": 501}
-        },
-        "message": "visualization_omitted: More than 500 returns were calculated. The full return series is preserved in returns, but no visualization was emitted because the renderer accepts at most 500 points."
-      },
-      {
         "id": "unadjusted_price_interpretation",
         "severity": "warning",
         "when": {
@@ -282,7 +271,7 @@
     "profile": "time_series",
     "formula": "rₜ = log1p((Pₜ − Pₜ₋₁) / Pₜ₋₁) if Pₜ ≥ Pₜ₋₁ / 2 and Pₜ₋₁ ≥ Pₜ / 2; otherwise q = Pₜ / Pₜ₋₁ and rₜ = log(q) if 2⁻¹⁰²² ≤ q < ∞, else log(Pₜ) − log(Pₜ₋₁)",
     "intent": "Use when a downstream calculation needs log returns and the caller can state whether prices are adjusted or unadjusted.",
-    "output": "A full log-return series of length n − 1 with one indexed branch-aware derivation per value, return kind, ordering status, disclosures, warnings, provenance, and an optional visualization for up to 500 returns.",
+    "output": "A full log-return series of length n − 1 with one indexed branch-aware derivation per value, return kind, ordering status, disclosures, warnings, provenance, and a visualization of the complete series.",
     "section_order": [
       "intuition",
       "formula",

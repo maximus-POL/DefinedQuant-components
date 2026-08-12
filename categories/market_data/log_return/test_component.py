@@ -296,7 +296,7 @@ def test_output_provenance_and_subject_binding() -> None:
     result = log_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.log_return"
-    assert result.version == "0.1.0"
+    assert result.version == "0.1.1"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL
@@ -336,17 +336,14 @@ def test_output_rejects_incomplete_reindexed_or_false_branch_lineage() -> None:
         Output.model_validate(payload)
 
 
-def test_visualization_limit_preserves_every_numerical_return() -> None:
-    at_limit = log_return((100.0,) * 501, price_kind=PriceKind.ADJUSTED)
-    above_limit = log_return((100.0,) * 502, price_kind=PriceKind.ADJUSTED)
+def test_large_result_always_contains_the_complete_visualization() -> None:
+    result = log_return((100.0,) * 502, price_kind=PriceKind.ADJUSTED)
 
-    assert len(at_limit.returns) == 500
-    assert at_limit.visualizations[0].series[0].values == at_limit.returns
-    assert not any(value.startswith("visualization_omitted:") for value in at_limit.warnings)
-    assert len(above_limit.returns) == 501
-    assert len(above_limit.derivations) == 501
-    assert above_limit.visualizations == ()
-    assert any(value.startswith("visualization_omitted:") for value in above_limit.warnings)
+    assert len(result.returns) == 501
+    assert len(result.derivations) == 501
+    assert result.visualizations[0].series[0].values == result.returns
+    assert len(result.visualizations[0].categories) == len(result.returns)
+    assert not any(value.startswith("visualization_omitted:") for value in result.warnings)
 
 
 def test_return_timestamps_align_to_interval_ends() -> None:

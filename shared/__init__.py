@@ -51,7 +51,7 @@ from defined_quant.plan_validation import (  # noqa: E402
 )
 from defined_quant.validation import preflight  # noqa: E402
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "__version__",

@@ -9,7 +9,6 @@ from typing import Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
-    MAX_VISUALIZATION_POINTS,
     AxisSpec,
     ChartKind,
     ChartSeries,
@@ -40,7 +39,7 @@ from defined_quant_protocol import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.market_data.log_return"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = (
     "rₜ = log1p((Pₜ − Pₜ₋₁) / Pₜ₋₁) if Pₜ ≥ Pₜ₋₁ / 2 and Pₜ₋₁ ≥ Pₜ / 2; "
     "otherwise q = Pₜ / Pₜ₋₁ and rₜ = log(q) if 2⁻¹⁰²² ≤ q < ∞, else "
@@ -314,18 +313,12 @@ def log_return(
         f"Computed each value as {FORMULA}.",
         "Associated each return with the interval-end timestamp when timestamps were supplied.",
     )
-    visualizations = (
-        (
-            _visualization(
-                returns=returns,
-                inputs=inputs,
-                assumptions=assumptions,
-                warnings=warnings,
-                ordering_status=ordering_status,
-            ),
-        )
-        if len(returns) <= MAX_VISUALIZATION_POINTS
-        else ()
+    visualization = _visualization(
+        returns=returns,
+        inputs=inputs,
+        assumptions=assumptions,
+        warnings=warnings,
+        ordering_status=ordering_status,
     )
 
     return Output(
@@ -338,7 +331,7 @@ def log_return(
         warnings=warnings,
         transformations=transformations,
         derivations=derivations,
-        visualizations=visualizations,
+        visualizations=(visualization,),
         returns=returns,
         price_kind=inputs.price_kind,
         return_timestamps=(
