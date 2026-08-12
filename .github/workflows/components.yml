@@ -83,13 +83,16 @@ jobs:
           ref = policy.components[0].component
           assert (ref.id, ref.version, ref.subject_hash) == (
               "dq.market_data.simple_return",
-              "0.3.2",
-              "8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d",
+              "0.3.3",
+              "acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed",
           )
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1
           assert simple.disclosures
           assert isclose(simple.returns[0], 0.01, rel_tol=0.0, abs_tol=1e-15)
+          large = simple_return(prices=[100.0] * 502, price_kind="adjusted")
+          assert len(large.returns) == 501
+          assert large.visualizations[0].series[0].values == large.returns
           require_compatible_ports(
               LogReturnOutput,
               "returns",
@@ -110,7 +113,7 @@ jobs:
         run: |
           uv run python authoring/export_catalog.py \
             --commit-sha "${GITHUB_SHA}" \
-            --release-version "0.1.0" \
+            --release-version "0.1.1" \
             --release-label "Experimental Technical Preview"
 
       - name: Upload exact-SHA public artifacts
