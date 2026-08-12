@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
@@ -57,15 +57,14 @@
     "The component does not fetch, clean, sort, reverse, or validate the provenance of market data.",
     "It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.",
     "A frequency label alone is not a market calendar, so calendar-aware gaps are not assessed in this version.",
-    "A finite positive price pair whose simple return overflows or rounds to total loss is rejected.",
-    "Results longer than 500 returns retain the full numerical output but omit visualizations with an explicit warning."
+    "A finite positive price pair whose simple return overflows or rounds to total loss is rejected."
   ],
   "depends_on": [],
   "references": [],
   "owner": "makstylek",
   "materiality": "foundational",
   "supported_python": [">=3.11", "<3.14"],
-  "last_material_review": "2026-07-28",
+  "last_material_review": "2026-08-12",
   "next_review_trigger": [
     "implementation_change",
     "scope_expansion",
@@ -257,16 +256,6 @@
         "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
       },
       {
-        "id": "visualization_omitted",
-        "severity": "warning",
-        "when": {
-          "left": {"field": "prices", "measure": "count"},
-          "op": "gt",
-          "right": {"value": 501}
-        },
-        "message": "visualization_omitted: More than 500 returns were calculated. The full return series is preserved in returns, but no visualization was emitted because the renderer accepts at most 500 points."
-      },
-      {
         "id": "unadjusted_price_interpretation",
         "severity": "warning",
         "when": {
@@ -283,7 +272,7 @@
     "profile": "time_series",
     "formula": "rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁",
     "intent": "Use when a downstream calculation needs simple returns and the caller can state whether prices are adjusted or unadjusted.",
-    "output": "A full return series of length n − 1 with one indexed derivation per value, return kind, ordering status, gap assessment, constant disclosures, state-dependent warnings, provenance, and an optional visualization for up to 500 returns.",
+    "output": "A full return series of length n − 1 with one indexed derivation per value, return kind, ordering status, gap assessment, constant disclosures, state-dependent warnings, provenance, and a visualization of the complete series.",
     "section_order": [
       "intuition",
       "formula",

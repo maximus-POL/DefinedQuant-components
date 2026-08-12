@@ -103,8 +103,8 @@ It does not prove that caller-supplied data is true, authorize an analysis, crea
 
 Protocol 0.3.0 adds closed semantic ports while retaining the atomic managed-authorization
 foundation introduced in 0.2.0. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.2` at
-subject `8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`, with explicit opt-in to
+`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.3` at
+subject `acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.

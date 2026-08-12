@@ -29,8 +29,8 @@ input state; constant output context belongs in `disclosures`.
 
 Protocol 0.3.0 adds semantic ports while retaining the separate authorization-only path introduced
 in 0.2.0. The packaged `simple_return_csv_v1`
-profile allowlists exactly `dq.market_data.simple_return` version `0.3.2`, subject
-`8c1be7c15bb097ab027d00bc6dad7f175763d9a5787855df4c726c3618644b3d`. It requires explicit draft
+profile allowlists exactly `dq.market_data.simple_return` version `0.3.3`, subject
+`acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.

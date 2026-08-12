@@ -19,7 +19,6 @@ from .rate import Rate
 from .series import NumericSeries
 from .units import Compounding, Frequency, PriceKind, ReturnKind, Unit
 from .visualization import (
-    MAX_VISUALIZATION_POINTS,
     AxisSpec,
     ChartKind,
     ChartSeries,
@@ -46,7 +45,6 @@ __all__ = [
     "Finding",
     "Frequency",
     "InputRef",
-    "MAX_VISUALIZATION_POINTS",
     "Money",
     "NumberFormat",
     "NumericSeries",

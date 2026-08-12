@@ -47,10 +47,9 @@ distinguish it from a simple-return producer without importing or guessing from 
 
 ## Visualization
 
-Results of up to 500 returns contain one renderer-neutral line-chart specification whose values
-are exactly the full numerical return tuple. For longer results, `returns` and every derivation are
-still complete, `visualizations` is empty, and a `visualization_omitted` warning states the
-presentation limit.
+Every result contains one renderer-neutral line-chart specification whose values are exactly the
+full numerical return tuple. Dense charts retain every return in the line while omitting point
+markers that would overlap at the selected width.
 
 With timestamps, points use interval-end timestamps. Without timestamps, labels use observation
 end indices and a warning states that chronology was not verified.

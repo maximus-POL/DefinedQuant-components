@@ -30,7 +30,7 @@ from defined_quant_protocol import (
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.volatility.historical_volatility"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = (
     "a = r₀; cᵢ = rᵢ − a; dᵢ = cᵢ if every cᵢ is finite, otherwise dᵢ = rᵢ; "
     "s = maxᵢ |dᵢ|; if s = 0, σ̂ = 0; otherwise μ = fsum(dᵢ / s) / n, h₀ = 0, "

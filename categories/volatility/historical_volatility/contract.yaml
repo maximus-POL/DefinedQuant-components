@@ -5,7 +5,7 @@
   "title": "Historical Volatility",
   "category": "volatility",
   "group": "realized_risk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "lifecycle": "draft",
   "template": {
     "profile": "statistic",
@@ -64,7 +64,7 @@
   "owner": "makstylek",
   "materiality": "risk",
   "supported_python": [">=3.11", "<3.14"],
-  "last_material_review": "2026-08-11",
+  "last_material_review": "2026-08-12",
   "next_review_trigger": [
     "implementation_change",
     "scope_expansion",

@@ -47,15 +47,11 @@ instead of silently accepting or relabelling the values.
 
 ## Visualization
 
-For results of up to 500 returns, the structured output contains one renderer-neutral
-`VisualizationSpec`. Its plotted values are the same return tuple as the numerical result, with
-decimal units and percentage display formatting. A trusted shared renderer can turn that closed
-specification into SVG without asking the component to recalculate or passing through
-caller-supplied markup.
-
-For longer results, the full return tuple remains in `returns`, `visualizations` is empty, and a
-`visualization_omitted` warning states the 500-point presentation limit. Presentation never
-truncates or prevents the numerical result.
+The structured output always contains one renderer-neutral `VisualizationSpec`. Its plotted values
+are the same complete return tuple as the numerical result, with decimal units and percentage
+display formatting. A trusted shared renderer can turn that closed specification into SVG without
+asking the component to recalculate or passing through caller-supplied markup. Dense charts retain
+every return in the line while omitting point markers that would overlap at the selected width.
 
 When timestamps are present, each point is labelled by the interval-end timestamp. Without
 timestamps, labels are observation-end indices and the output visibly warns that chronology could
