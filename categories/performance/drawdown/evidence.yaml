@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "component_id": "dq.performance.drawdown",
+  "validated_subject_hash": "5b487ddd64a42348f4de8f8432f4e80dd1d7b5af53e1f8c629ad513530a69c94",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "description": "Peak, 30 percent trough, and later recovery.",
+      "inputs": {
+        "prices": [
+          100.0,
+          120.0,
+          90.0,
+          84.0,
+          108.0,
+          120.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/drawdowns",
+            "op": "approx",
+            "value": [
+              0.0,
+              0.0,
+              -0.25,
+              -0.3,
+              -0.1,
+              0.0
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/maximum_drawdown",
+            "op": "approx",
+            "value": -0.3,
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/peak_index",
+            "op": "equal",
+            "value": 1
+          },
+          {
+            "path": "/trough_index",
+            "op": "equal",
+            "value": 3
+          },
+          {
+            "path": "/recovery_index",
+            "op": "equal",
+            "value": 5
+          },
+          {
+            "path": "/recovered",
+            "op": "equal",
+            "value": true
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "Positive price scaling leaves drawdowns and selected episode unchanged."
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "A non-decreasing path has exact zero drawdowns and maximum drawdown."
+    },
+    {
+      "id": "inv_003",
+      "test_id": "test_evidence_inv_003",
+      "description": "Visualization and indexed lineage cover the complete underwater path."
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "description": "A single observation has zero drawdown and is its own recovered episode.",
+      "inputs": {
+        "prices": [
+          42.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/drawdowns",
+            "op": "equal",
+            "value": [
+              0.0
+            ]
+          },
+          {
+            "path": "/maximum_drawdown",
+            "op": "equal",
+            "value": 0.0
+          },
+          {
+            "path": "/recovery_index",
+            "op": "equal",
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_002",
+      "description": "A non-positive price is blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          0.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_positive_prices"
+        ]
+      }
+    }
+  ],
+  "cross_checks": [],
+  "agent_cases": []
+}

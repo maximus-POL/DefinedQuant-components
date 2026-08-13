@@ -47,11 +47,15 @@ def test_layout_only_display_hints_are_not_subject_bound() -> None:
     assert subject_hash(changed) == subject_hash(record)
 
 
-def test_catalog_discovers_three_real_components_in_stable_order() -> None:
+def test_catalog_discovers_seven_real_components_in_stable_order() -> None:
     assert [record.component_id for record in iter_components(root=ROOT)] == [
         "dq.market_data.log_return",
+        "dq.market_data.monthly_return_matrix",
+        "dq.market_data.rebased_price_index",
         "dq.market_data.simple_return",
+        "dq.performance.drawdown",
         "dq.volatility.historical_volatility",
+        "dq.volatility.rolling_historical_volatility",
     ]
 
 

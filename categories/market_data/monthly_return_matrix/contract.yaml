@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "id": "dq.market_data.monthly_return_matrix",
+  "slug": "monthly_return_matrix",
+  "title": "Monthly Return Matrix",
+  "category": "market_data",
+  "group": "return_transformations",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {"profile": "time_series", "version": 1},
+  "callable": "defined_quant.market_data.monthly_return_matrix.component:monthly_return_matrix",
+  "summary": "Calculates simple returns from consecutive completed month-end prices and places them in a calendar heatmap.",
+  "discovery": {
+    "aliases": [
+      "calendar return heatmap",
+      "monthly performance matrix",
+      "monthly return calendar",
+      "monthly return heatmap",
+      "return regime heatmap"
+    ],
+    "intents": [
+      "calculate_monthly_returns",
+      "show_monthly_return_heatmap",
+      "show_return_regimes"
+    ],
+    "input_concepts": [
+      "completed_month_end_prices",
+      "consecutive_calendar_months",
+      "price_adjustment_kind"
+    ],
+    "output_concepts": [
+      "datapoint_lineage",
+      "monthly_return_heatmap",
+      "monthly_simple_return_series"
+    ]
+  },
+  "authors": [{"name": "Maksymilian Tylek", "github": "makstylek"}],
+  "tags": ["calendar", "heatmap", "monthly", "regime", "return"],
+  "assumptions": [
+    "Every price is a completed month-end observation for its YYYY-MM label.",
+    "All observations refer to one instrument in a consistent price unit.",
+    "The caller's price adjustment label accurately describes the supplied series."
+  ],
+  "limitations": [
+    "The component does not aggregate daily observations or decide which date is a month end.",
+    "Missing months are blocking; it never converts a multi-month change into a one-month return.",
+    "The completed-month assertion is caller-supplied and cannot detect a partial current month.",
+    "Returns exclude or include distributions only according to the provider's supplied price series.",
+    "The heatmap describes observed regimes but does not establish seasonality or forecast returns."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "analytical",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-08-13",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "month_end_policy_change",
+    "visualization_schema_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller supplies consecutive completed month-end prices and YYYY-MM labels.",
+      "The caller wants recurring positive and negative return regimes shown by calendar month.",
+      "Simple monthly price returns, not daily aggregation or total-return reconstruction, are intended."
+    ],
+    "do_not_use_when": [
+      "The inputs are daily prices requiring calendar aggregation.",
+      "The last observation is a partial month or month-end completeness is unknown.",
+      "Months are missing, unordered, duplicated, or need alignment across instruments."
+    ],
+    "unsupported_scope": [
+      "Daily-to-monthly aggregation, exchange-calendar inference, and partial-month detection.",
+      "Total-return reconstruction, currency conversion, cross-instrument alignment, and portfolio aggregation.",
+      "Seasonality testing, statistical significance, forecasting, and causal regime attribution."
+    ],
+    "required_questions": [
+      {
+        "id": "price_kind",
+        "ask": "Are the supplied month-end prices adjusted or unadjusted?",
+        "why": "Corporate actions and distributions affect monthly-return interpretation.",
+        "resolves_to": "price_kind",
+        "default": null
+      },
+      {
+        "id": "observation_kind",
+        "ask": "Can you assert that every observation is a completed month-end price?",
+        "why": "A partial current month must not be compared with completed calendar months.",
+        "resolves_to": "observation_kind",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "adjustment_policy",
+        "ask": "Does the provider's price adjustment policy include cash distributions?",
+        "why": "The component computes price-series returns and cannot infer total-return treatment."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "insufficient_prices",
+        "severity": "blocking",
+        "when": {"left": {"field": "prices", "measure": "count"}, "op": "lt", "right": {"value": 2}},
+        "message": "insufficient_prices: At least two completed month-end prices are required."
+      },
+      {
+        "id": "non_finite_prices",
+        "severity": "blocking",
+        "when": {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_prices: Every price must be finite."
+      },
+      {
+        "id": "non_positive_prices",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "prices", "measure": "count"}, "op": "gt", "right": {"value": 0}},
+          {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "prices", "measure": "min"}, "op": "le", "right": {"value": 0}}
+        ]},
+        "message": "non_positive_prices: Prices must be strictly positive."
+      },
+      {
+        "id": "month_length_mismatch",
+        "severity": "blocking",
+        "when": {"left": {"field": "months", "measure": "count"}, "op": "ne", "right": {"field": "prices", "measure": "count"}},
+        "message": "month_length_mismatch: Month labels and prices must align one-to-one."
+      },
+      {
+        "id": "duplicate_months",
+        "severity": "blocking",
+        "when": {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}},
+        "message": "duplicate_months: Duplicate month labels are not accepted."
+      },
+      {
+        "id": "non_increasing_months",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
+          {"left": {"field": "months", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": false}}
+        ]},
+        "message": "non_increasing_months: Month labels must be strictly increasing; observations are never silently sorted."
+      },
+      {
+        "id": "unsupported_observation_kind",
+        "severity": "blocking",
+        "when": {"left": {"field": "observation_kind"}, "op": "ne", "right": {"value": "completed_month_end"}},
+        "message": "unsupported_observation_kind: The caller must assert completed_month_end observations."
+      },
+      {
+        "id": "unadjusted_price_interpretation",
+        "severity": "warning",
+        "when": {"left": {"field": "price_kind"}, "op": "eq", "right": {"value": "unadjusted"}},
+        "message": "unadjusted_price_interpretation: Corporate-action breaks can distort monthly returns, and distributions are not reinvested."
+      }
+    ],
+    "interpretation": "Report decimal simple returns aligned to interval-end YYYY-MM labels, completed-month assertion, consecutive-month gap status, price kind, indexed lineage, heatmap, disclosures, warnings, and provenance. Describe observed positive and negative regimes only; do not claim tested seasonality, daily aggregation, total-return treatment, or forecasting."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "r_m = (P_m − P_{m−1}) / P_{m−1}",
+    "intent": "Show recurring positive and negative monthly return regimes in a calendar grid.",
+    "output": "A complete consecutive monthly simple-return series, interval-end month labels, explicit observation and price conventions, indexed lineage, provenance, and heatmap visualization.",
+    "section_order": ["intuition", "formula", "worked_example", "visualization", "common_mistakes", "limitations"],
+    "visible_optional_facets": ["visualizations"],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

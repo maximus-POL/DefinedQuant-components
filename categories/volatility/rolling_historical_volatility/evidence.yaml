@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "component_id": "dq.volatility.rolling_historical_volatility",
+  "validated_subject_hash": "b4ebf9e6336bfa85e207e04096413de79964493117ee6786e1565e40d85cd744",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "description": "Two three-return windows with equal sample volatility.",
+      "inputs": {
+        "returns": [
+          0.01,
+          -0.01,
+          0.03,
+          0.01
+        ],
+        "window_length": 3,
+        "annualization_factor": 12.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "approx",
+            "value": [
+              0.02,
+              0.02
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "approx",
+            "value": [
+              0.06928203230275509,
+              0.06928203230275509
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/window_length",
+            "op": "equal",
+            "value": 3
+          },
+          {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 4
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "Every constant complete window has exact zero volatility."
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "There are n-w+1 outputs, each annualized by the explicit square-root factor and backed by two derivations."
+    },
+    {
+      "id": "inv_003",
+      "test_id": "test_evidence_inv_003",
+      "description": "The visualization contains the complete annualized volatility series with volatility units and percent formatting."
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "description": "Window length equal to the return count produces one estimate.",
+      "inputs": {
+        "returns": [
+          0.01,
+          -0.01
+        ],
+        "window_length": 2,
+        "annualization_factor": 12.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/periodic_volatility",
+            "op": "length_equal",
+            "value": 1
+          },
+          {
+            "path": "/annualized_volatility",
+            "op": "length_equal",
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_002",
+      "description": "A window longer than the supplied return series is blocking.",
+      "inputs": {
+        "returns": [
+          0.01,
+          -0.01
+        ],
+        "window_length": 3,
+        "annualization_factor": 12.0,
+        "return_kind": "log"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "window_exceeds_returns"
+        ]
+      }
+    },
+    {
+      "id": "bc_003",
+      "description": "Simple returns are refused.",
+      "inputs": {
+        "returns": [
+          0.01,
+          -0.01
+        ],
+        "window_length": 2,
+        "annualization_factor": 12.0,
+        "return_kind": "simple"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "unsupported_return_kind"
+        ]
+      }
+    }
+  ],
+  "cross_checks": [],
+  "agent_cases": []
+}

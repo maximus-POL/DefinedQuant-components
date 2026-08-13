@@ -128,11 +128,16 @@ def test_catalog_v2_has_deterministic_schemas_and_top_level_facets(
     assert artifact["schema_version"] == 2
     assert [component["id"] for component in artifact["components"]] == [
         "dq.market_data.log_return",
+        "dq.market_data.monthly_return_matrix",
+        "dq.market_data.rebased_price_index",
         "dq.market_data.simple_return",
+        "dq.performance.drawdown",
         "dq.volatility.historical_volatility",
+        "dq.volatility.rolling_historical_volatility",
     ]
     assert [category["id"] for category in artifact["categories"]] == [
         "market_data",
+        "performance",
         "volatility",
     ]
     protocol = artifact["operation_protocol"]

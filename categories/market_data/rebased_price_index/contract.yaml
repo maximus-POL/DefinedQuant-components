@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "id": "dq.market_data.rebased_price_index",
+  "slug": "rebased_price_index",
+  "title": "Rebased Price Index",
+  "category": "market_data",
+  "group": "price_transformations",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {"profile": "time_series", "version": 1},
+  "callable": "defined_quant.market_data.rebased_price_index.component:rebased_price_index",
+  "summary": "Normalizes an ordered positive series to an explicit base observation and value.",
+  "discovery": {
+    "aliases": [
+      "base 100 chart",
+      "indexed performance path",
+      "normalized asset path",
+      "rebase observations",
+      "rebased series chart"
+    ],
+    "intents": [
+      "compare_indexed_paths",
+      "normalize_observation_series",
+      "show_complete_asset_cycle"
+    ],
+    "input_concepts": [
+      "base_observation",
+      "base_value",
+      "ordered_positive_series",
+      "adjustment_kind"
+    ],
+    "output_concepts": [
+      "datapoint_lineage",
+      "normalized_observation_path",
+      "rebased_index"
+    ]
+  },
+  "authors": [{"name": "Maksymilian Tylek", "github": "makstylek"}],
+  "tags": ["index", "normalization", "path", "visualization"],
+  "assumptions": [
+    "All observations refer to the same instrument and price unit.",
+    "The caller's adjusted or unadjusted price label accurately describes the provider series."
+  ],
+  "limitations": [
+    "The component does not fetch, clean, sort, resample, align, or currency-convert prices.",
+    "The index is not a return series, portfolio index, total-return index, or cross-currency comparison.",
+    "A provider's adjusted label is accepted as supplied and its corporate-action policy is not audited.",
+    "Calendar-aware gaps are not assessed even when timestamps and frequency are supplied.",
+    "Finite positive inputs whose normalized value overflows are rejected."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "analytical",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-08-13",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "base_convention_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller wants the direction and complete path of one asset series on an explicit base.",
+      "The caller supplies ordered positive observations, adjustment kind, base observation, and base value.",
+      "The result should preserve every supplied observation in a line chart."
+    ],
+    "do_not_use_when": [
+      "The request is for periodic returns, drawdown, volatility, a portfolio index, or total return.",
+      "Prices need fetching, sorting, resampling, currency conversion, or corporate-action repair.",
+      "The base observation or base value is missing and would have to be guessed."
+    ],
+    "unsupported_scope": [
+      "Return calculation, drawdown measurement, volatility estimation, and calendar aggregation.",
+      "Portfolio weighting, constituent changes, rebalancing, fees, dividends, and currency conversion.",
+      "Data sourcing, cleaning, sorting, alignment, resampling, and gap repair."
+    ],
+    "required_questions": [
+      {
+        "id": "price_kind",
+        "ask": "Are the supplied prices adjusted or unadjusted?",
+        "why": "Corporate actions and distributions change the interpretation of the path.",
+        "resolves_to": "price_kind",
+        "default": null
+      },
+      {
+        "id": "base_index",
+        "ask": "Which zero-based observation index should be the base?",
+        "why": "Changing the base observation changes every index value.",
+        "resolves_to": "base_index",
+        "default": null
+      },
+      {
+        "id": "base_value",
+        "ask": "What positive index value should the base observation equal?",
+        "why": "The component never assumes 100 or any other base value.",
+        "resolves_to": "base_value",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "timestamps",
+        "ask": "Are strictly increasing timestamps available?",
+        "why": "Without timestamps, the component preserves source order but cannot verify chronology."
+      },
+      {
+        "id": "adjustment_policy",
+        "ask": "What adjustment policy did the price provider apply?",
+        "why": "An adjusted label may or may not include cash distributions."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "non_finite_prices",
+        "severity": "blocking",
+        "when": {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_prices: Every price must be finite."
+      },
+      {
+        "id": "non_positive_prices",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "prices", "measure": "count"}, "op": "gt", "right": {"value": 0}},
+          {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "prices", "measure": "min"}, "op": "le", "right": {"value": 0}}
+        ]},
+        "message": "non_positive_prices: Prices must be strictly positive."
+      },
+      {
+        "id": "negative_base_index",
+        "severity": "blocking",
+        "when": {"left": {"field": "base_index"}, "op": "lt", "right": {"value": 0}},
+        "message": "negative_base_index: Base index must be zero or greater."
+      },
+      {
+        "id": "non_finite_base_value",
+        "severity": "blocking",
+        "when": {"left": {"field": "base_value", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_base_value: The base value must be finite."
+      },
+      {
+        "id": "non_positive_base_value",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "base_value", "measure": "all_finite"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "base_value"}, "op": "le", "right": {"value": 0}}
+        ]},
+        "message": "non_positive_base_value: The base value must be greater than zero."
+      },
+      {
+        "id": "timestamp_length_mismatch",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "count"}, "op": "ne", "right": {"field": "prices", "measure": "count"}}
+        ]},
+        "message": "timestamp_length_mismatch: Timestamps and prices must align one-to-one."
+      },
+      {
+        "id": "duplicate_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}}
+        ]},
+        "message": "duplicate_timestamps: Duplicate timestamps are not accepted."
+      },
+      {
+        "id": "non_increasing_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
+          {"left": {"field": "timestamps", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": false}}
+        ]},
+        "message": "non_increasing_timestamps: Timestamps must be strictly increasing; observations are never silently sorted."
+      },
+      {
+        "id": "frequency_without_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "declared_frequency"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}}
+        ]},
+        "message": "frequency_without_timestamps: A declared frequency requires aligned timestamps."
+      },
+      {
+        "id": "ordering_unverified",
+        "severity": "warning",
+        "when": {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}},
+        "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
+      },
+      {
+        "id": "unadjusted_price_interpretation",
+        "severity": "warning",
+        "when": {"left": {"field": "price_kind"}, "op": "eq", "right": {"value": "unadjusted"}},
+        "message": "unadjusted_price_interpretation: Unadjusted prices can contain corporate-action breaks and exclude reinvested distributions."
+      }
+    ],
+    "interpretation": "Report the full unitless index path, explicit base index and value, price convention, ordering and gap status, indexed lineage, visualization, disclosures, warnings, and provenance. Describe direction and relative path only; do not label index levels as returns or imply total-return, currency, portfolio, or calendar inference."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "Iₜ = B × (Pₜ / P_b)",
+    "intent": "Show the direction and complete price cycle on an explicit common base.",
+    "output": "A unitless rebased price index preserving every observation, explicit base metadata, indexed lineage, interpretation state, provenance, and line visualization.",
+    "section_order": ["intuition", "formula", "worked_example", "visualization", "common_mistakes", "limitations"],
+    "visible_optional_facets": ["visualizations"],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

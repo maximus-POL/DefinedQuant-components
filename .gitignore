@@ -9,5 +9,6 @@ venv/
 .mypy_cache/
 /dist/
 /build/
-/docs/
+/docs/*
+!/docs/COMPONENT_IDEAS.md
 /docs/data/

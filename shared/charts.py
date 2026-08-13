@@ -27,6 +27,23 @@ _PALETTE = (
     "#475569",
 )
 _MIN_MARKER_SPACING = 7.0
+_HEATMAP_NEGATIVE = (185, 28, 28)
+_HEATMAP_NEUTRAL = (249, 250, 251)
+_HEATMAP_POSITIVE = (4, 120, 87)
+_MONTH_LABELS = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
 
 
 def visualization_hash(spec: VisualizationSpec) -> str:
@@ -126,6 +143,26 @@ def _category_labels(
     return tuple(value.strftime("%Y-%m-%d %H:%M") for value in parsed)
 
 
+def _interpolate_color(
+    start: tuple[int, int, int],
+    end: tuple[int, int, int],
+    ratio: float,
+) -> str:
+    channels = tuple(
+        round(start_channel + (end_channel - start_channel) * ratio)
+        for start_channel, end_channel in zip(start, end, strict=True)
+    )
+    return "#" + "".join(f"{channel:02X}" for channel in channels)
+
+
+def _heatmap_color(value: float, scale: float) -> str:
+    if scale == 0.0:
+        return _interpolate_color(_HEATMAP_NEUTRAL, _HEATMAP_NEUTRAL, 0.0)
+    ratio = min(abs(value) / scale, 1.0)
+    endpoint = _HEATMAP_POSITIVE if value >= 0.0 else _HEATMAP_NEGATIVE
+    return _interpolate_color(_HEATMAP_NEUTRAL, endpoint, ratio)
+
+
 def render_svg(spec: VisualizationSpec) -> str:
     """Render a safe SVG string with stable bytes for the same validated specification.
 
@@ -133,6 +170,9 @@ def render_svg(spec: VisualizationSpec) -> str:
     has no scripts, event handlers, embedded HTML, external resources, links, or caller-supplied
     style declarations.
     """
+
+    if spec.kind is ChartKind.HEATMAP:
+        return _render_heatmap_svg(spec)
 
     width = spec.width
     height = spec.height
@@ -233,7 +273,7 @@ def render_svg(spec: VisualizationSpec) -> str:
                 'stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>'
             )
             parts.extend(markers)
-    else:
+    elif spec.kind is ChartKind.BAR:
         group_width = plot_width / category_count
         usable_width = group_width * 0.74
         bar_width = usable_width / len(spec.series)
@@ -309,6 +349,143 @@ def render_svg(spec: VisualizationSpec) -> str:
         legend_x += max(48.0, len(series.label) * 6.2)
 
     footer_y = bottom + 57.0
+    for line in footer_lines:
+        parts.append(
+            f'<text x="{left:.2f}" y="{footer_y:.2f}" fill="#4B5563" '
+            f'font-family="system-ui, sans-serif" font-size="10">{escape(line)}</text>'
+        )
+        footer_y += 15.0
+
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def _render_heatmap_svg(spec: VisualizationSpec) -> str:
+    width = spec.width
+    height = spec.height
+    left = 76.0
+    right = float(width - 28)
+    top = 62.0
+    footer_lines = _footer_lines(spec)
+    footer_height = len(footer_lines) * 15.0
+    bottom = float(height) - 96.0 - footer_height
+    if bottom - top < 120.0:
+        raise ValueError("visualization notes leave insufficient space for a chart")
+
+    observations = dict(
+        zip(spec.categories, spec.series[0].values, strict=True)
+    )
+    years = tuple(sorted({int(category[:4]) for category in spec.categories}))
+    cell_width = (right - left) / 12
+    cell_height = (bottom - top) / len(years)
+    scale = max(abs(value) for value in spec.series[0].values)
+    title_id = f"{spec.id}_title"
+    description_id = f"{spec.id}_description"
+    description_parts = [spec.alt_text]
+    description_parts.extend(spec.assumptions)
+    description_parts.extend(spec.warnings)
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" role="img" '
+            f'aria-labelledby="{title_id} {description_id}">'
+        ),
+        f'<title id="{title_id}">{escape(spec.title)}</title>',
+        f'<desc id="{description_id}">{escape(" ".join(description_parts))}</desc>',
+        f'<rect width="{width}" height="{height}" fill="#FFFFFF"/>',
+        (
+            f'<text x="{left:.2f}" y="29" fill="#111827" '
+            f'font-family="system-ui, sans-serif" font-size="18" font-weight="600">'
+            f"{escape(spec.title)}</text>"
+        ),
+    ]
+
+    for month_index, label in enumerate(_MONTH_LABELS):
+        x = left + (month_index + 0.5) * cell_width
+        parts.append(
+            f'<text x="{x:.2f}" y="{top - 10:.2f}" text-anchor="middle" '
+            f'fill="#4B5563" font-family="system-ui, sans-serif" font-size="10">'
+            f"{label}</text>"
+        )
+
+    show_values = cell_width >= 42.0 and cell_height >= 24.0
+    for year_index, year in enumerate(years):
+        y = top + year_index * cell_height
+        parts.append(
+            f'<text x="{left - 9:.2f}" y="{y + cell_height / 2 + 4:.2f}" '
+            f'text-anchor="end" fill="#4B5563" font-family="system-ui, sans-serif" '
+            f'font-size="11">{year}</text>'
+        )
+        for month_index in range(12):
+            category = f"{year:04d}-{month_index + 1:02d}"
+            x = left + month_index * cell_width
+            value = observations.get(category)
+            fill = "#F3F4F6" if value is None else _heatmap_color(value, scale)
+            parts.append(
+                f'<rect x="{x:.2f}" y="{y:.2f}" width="{cell_width:.2f}" '
+                f'height="{cell_height:.2f}" fill="{fill}" stroke="#FFFFFF" '
+                'stroke-width="1"/>'
+            )
+            if value is not None and show_values:
+                label = escape(_format_number(value, spec.y_axis.number_format))
+                text_color = "#FFFFFF" if abs(value) / max(scale, 1e-12) > 0.62 else "#111827"
+                parts.append(
+                    f'<text x="{x + cell_width / 2:.2f}" '
+                    f'y="{y + cell_height / 2 + 3.5:.2f}" text-anchor="middle" '
+                    f'fill="{text_color}" font-family="ui-monospace, monospace" '
+                    f'font-size="9">{label}</text>'
+                )
+
+    parts.append(
+        f'<text x="{(left + right) / 2:.2f}" y="{bottom + 18:.2f}" '
+        f'text-anchor="middle" fill="#374151" font-family="system-ui, sans-serif" '
+        f'font-size="11">{escape(spec.x_axis.label)}</text>'
+    )
+    legend_y = bottom + 31.0
+    legend_width = min(252.0, right - left)
+    legend_x = left
+    legend_steps = 9
+    for step in range(legend_steps):
+        value = -scale + (2.0 * scale * step / (legend_steps - 1))
+        x = legend_x + step * legend_width / legend_steps
+        parts.append(
+            f'<rect x="{x:.2f}" y="{legend_y:.2f}" '
+            f'width="{legend_width / legend_steps + 0.2:.2f}" height="9" '
+            f'fill="{_heatmap_color(value, scale)}"/>'
+        )
+    negative_label = escape(_format_number(-scale, spec.y_axis.number_format))
+    zero_label = escape(_format_number(0.0, spec.y_axis.number_format))
+    positive_label = escape(_format_number(scale, spec.y_axis.number_format))
+    label_y = legend_y + 23.0
+    parts.extend(
+        [
+            (
+                f'<text x="{legend_x:.2f}" y="{label_y:.2f}" fill="#4B5563" '
+                f'font-family="ui-monospace, monospace" font-size="9">'
+                f"{negative_label}</text>"
+            ),
+            (
+                f'<text x="{legend_x + legend_width / 2:.2f}" y="{label_y:.2f}" '
+                f'text-anchor="middle" fill="#4B5563" '
+                f'font-family="ui-monospace, monospace" font-size="9">'
+                f"{zero_label}</text>"
+            ),
+            (
+                f'<text x="{legend_x + legend_width:.2f}" y="{label_y:.2f}" '
+                f'text-anchor="end" fill="#4B5563" '
+                f'font-family="ui-monospace, monospace" font-size="9">'
+                f"{positive_label}</text>"
+            ),
+            (
+                f'<text x="{legend_x + legend_width + 12:.2f}" y="{legend_y + 8:.2f}" '
+                f'fill="#374151" font-family="system-ui, sans-serif" font-size="10">'
+                f"{escape(spec.y_axis.label)} [{escape(spec.y_axis.unit.value)}]</text>"
+            ),
+        ]
+    )
+
+    footer_y = bottom + 72.0
     for line in footer_lines:
         parts.append(
             f'<text x="{left:.2f}" y="{footer_y:.2f}" fill="#4B5563" '

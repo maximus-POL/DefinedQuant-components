@@ -28,6 +28,9 @@ class PortConcept(StrEnum):
     ANNUALIZATION_FACTOR = "annualization_factor"
     PERIODIC_VOLATILITY = "periodic_volatility"
     ANNUALIZED_VOLATILITY = "annualized_volatility"
+    REBASED_PRICE_INDEX_SERIES = "rebased_price_index_series"
+    DRAWDOWN_SERIES = "drawdown_series"
+    MAXIMUM_DRAWDOWN = "maximum_drawdown"
 
 
 class PortUnit(StrEnum):
@@ -65,6 +68,14 @@ class PortConvention(StrEnum):
     SAMPLE_STANDARD_DEVIATION_N_MINUS_1_SQUARE_ROOT_ANNUALIZATION = (
         "sample_standard_deviation_n_minus_1_square_root_annualization"
     )
+    EXPLICIT_BASE_OBSERVATION_REBASING = "explicit_base_observation_rebasing"
+    RUNNING_PEAK_DRAWDOWN = "running_peak_drawdown"
+    ROLLING_SAMPLE_STANDARD_DEVIATION_N_MINUS_1 = (
+        "rolling_sample_standard_deviation_n_minus_1"
+    )
+    ROLLING_SAMPLE_STANDARD_DEVIATION_N_MINUS_1_SQUARE_ROOT_ANNUALIZATION = (
+        "rolling_sample_standard_deviation_n_minus_1_square_root_annualization"
+    )
 
 
 class PortOrdering(StrEnum):
@@ -79,6 +90,7 @@ class PortFrequency(StrEnum):
 
     NOT_APPLICABLE = "not_applicable"
     INHERITED = "inherited"
+    MONTHLY = "monthly"
     ANNUAL = "annual"
 
 

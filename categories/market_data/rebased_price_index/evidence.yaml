@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "component_id": "dq.market_data.rebased_price_index",
+  "validated_subject_hash": "bb1be3266a371fd3ae2c3995cdd2b85d9b3955ffdc034d8f1ad9c7ae537ad1b7",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "description": "Four prices normalized to the second observation at 100.",
+      "inputs": {
+        "prices": [
+          80.0,
+          100.0,
+          60.0,
+          120.0
+        ],
+        "price_kind": "adjusted",
+        "base_index": 1,
+        "base_value": 100.0
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/index_values",
+            "op": "approx",
+            "value": [
+              80.0,
+              100.0,
+              60.0,
+              120.0
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/base_index",
+            "op": "equal",
+            "value": 1
+          },
+          {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 4
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "Positive rescaling of every source price leaves the index unchanged, and the base equals B."
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "The complete visualization and indexed lineage align with every output value."
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "description": "One price can be normalized to its explicit base value.",
+      "inputs": {
+        "prices": [
+          42.0
+        ],
+        "price_kind": "adjusted",
+        "base_index": 0,
+        "base_value": 1.0
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/index_values",
+            "op": "equal",
+            "value": [
+              1.0
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_002",
+      "description": "An index outside the supplied path is blocking.",
+      "inputs": {
+        "prices": [
+          42.0
+        ],
+        "price_kind": "adjusted",
+        "base_index": 1,
+        "base_value": 100.0
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "base_index_out_of_range"
+        ]
+      }
+    }
+  ],
+  "cross_checks": [],
+  "agent_cases": []
+}

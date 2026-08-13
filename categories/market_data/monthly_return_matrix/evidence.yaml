@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "component_id": "dq.market_data.monthly_return_matrix",
+  "validated_subject_hash": "1bc4ba282c520fb329caff64209ee60769d1e8d8a5d9c5241be61fa0cf294f3a",
+  "known_answers": [
+    {
+      "id": "ka_001",
+      "description": "Three monthly returns crossing a calendar-year boundary.",
+      "inputs": {
+        "prices": [
+          100.0,
+          80.0,
+          88.0,
+          79.2
+        ],
+        "months": [
+          "2022-11",
+          "2022-12",
+          "2023-01",
+          "2023-02"
+        ],
+        "price_kind": "adjusted",
+        "observation_kind": "completed_month_end"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/monthly_returns",
+            "op": "approx",
+            "value": [
+              -0.2,
+              0.1,
+              -0.1
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/return_months",
+            "op": "equal",
+            "value": [
+              "2022-12",
+              "2023-01",
+              "2023-02"
+            ]
+          },
+          {
+            "path": "/gap_check",
+            "op": "equal",
+            "value": "verified_consecutive_months"
+          },
+          {
+            "path": "/derivations",
+            "op": "length_equal",
+            "value": 3
+          }
+        ]
+      },
+      "provenance": {
+        "kind": "author_derivation",
+        "produced_by": "Maksymilian Tylek",
+        "citation": "Hand calculation documented in README.md under Worked example."
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "inv_001",
+      "test_id": "test_evidence_inv_001",
+      "description": "Compounding all simple monthly returns reproduces the final-to-initial price ratio."
+    },
+    {
+      "id": "inv_002",
+      "test_id": "test_evidence_inv_002",
+      "description": "The heatmap preserves every interval-end month, return, unit, and display convention."
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "bc_001",
+      "description": "Two consecutive month-end prices produce one monthly return.",
+      "inputs": {
+        "prices": [
+          100.0,
+          110.0
+        ],
+        "months": [
+          "2023-01",
+          "2023-02"
+        ],
+        "price_kind": "adjusted",
+        "observation_kind": "completed_month_end"
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/monthly_returns",
+            "op": "approx",
+            "value": [
+              0.1
+            ],
+            "rtol": 1e-12,
+            "atol": 1e-12
+          },
+          {
+            "path": "/return_months",
+            "op": "equal",
+            "value": [
+              "2023-02"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_002",
+      "description": "A missing calendar month is blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          110.0
+        ],
+        "months": [
+          "2023-01",
+          "2023-03"
+        ],
+        "price_kind": "adjusted",
+        "observation_kind": "completed_month_end"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_consecutive_months"
+        ]
+      }
+    },
+    {
+      "id": "bc_003",
+      "description": "A partial-month observation assertion is refused.",
+      "inputs": {
+        "prices": [
+          100.0,
+          110.0
+        ],
+        "months": [
+          "2023-01",
+          "2023-02"
+        ],
+        "price_kind": "adjusted",
+        "observation_kind": "partial_month"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "unsupported_observation_kind"
+        ]
+      }
+    }
+  ],
+  "cross_checks": [],
+  "agent_cases": []
+}

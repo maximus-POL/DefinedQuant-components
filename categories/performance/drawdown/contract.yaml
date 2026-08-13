@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "id": "dq.performance.drawdown",
+  "slug": "drawdown",
+  "title": "Drawdown",
+  "category": "performance",
+  "group": "drawdown_analysis",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {"profile": "time_series", "version": 1},
+  "callable": "defined_quant.performance.drawdown.component:drawdown",
+  "summary": "Measures every observation below its running peak and selects one deterministic maximum-drawdown episode.",
+  "discovery": {
+    "aliases": [
+      "crash depth",
+      "drawdown chart",
+      "maximum drawdown",
+      "peak to trough loss",
+      "underwater chart"
+    ],
+    "intents": [
+      "calculate_maximum_drawdown",
+      "measure_crash_and_recovery",
+      "show_underwater_path"
+    ],
+    "input_concepts": ["ordered_price_series", "price_adjustment_kind"],
+    "output_concepts": [
+      "datapoint_lineage",
+      "drawdown_episode",
+      "maximum_drawdown",
+      "underwater_series"
+    ]
+  },
+  "authors": [{"name": "Maksymilian Tylek", "github": "makstylek"}],
+  "tags": ["crash", "drawdown", "path", "performance", "recovery", "risk"],
+  "assumptions": [
+    "All observations refer to one instrument in a consistent price unit.",
+    "The caller's price adjustment label accurately describes the supplied series."
+  ],
+  "limitations": [
+    "Drawdown is path-dependent and changes with the supplied start date and sampling frequency.",
+    "The component reports observation indexes, not elapsed calendar or trading-day duration.",
+    "It does not infer missing sessions, market calendars, currency conversion, or total-return treatment.",
+    "Only the earliest deepest trough is summarized when several troughs tie.",
+    "Finite positive values whose price-to-peak ratio underflows to zero are rejected."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "risk",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-08-13",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "episode_selection_change",
+    "recovery_convention_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller wants the depth and shape of losses from running highs.",
+      "The caller wants the selected peak, trough, and first recovery observation.",
+      "Ordered positive prices and their adjustment kind are available."
+    ],
+    "do_not_use_when": [
+      "The request is for periodic return volatility, value at risk, or an elapsed-time duration.",
+      "The price path needs sorting, resampling, currency conversion, or corporate-action repair.",
+      "The sampling window and frequency are not appropriate for the crash being studied."
+    ],
+    "unsupported_scope": [
+      "Return forecasting, probability of loss, value at risk, and risk attribution.",
+      "Calendar-day or trading-day duration, exchange calendars, and gap inference.",
+      "Data sourcing, cleaning, sorting, resampling, alignment, and corporate-action repair."
+    ],
+    "required_questions": [
+      {
+        "id": "price_kind",
+        "ask": "Are the supplied prices adjusted or unadjusted?",
+        "why": "Corporate actions can create artificial peaks and crashes.",
+        "resolves_to": "price_kind",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "window",
+        "ask": "Does the supplied start date precede the peak relevant to the crash?",
+        "why": "Drawdown is path-dependent and cannot see a peak before the supplied series."
+      },
+      {
+        "id": "timestamps",
+        "ask": "Are strictly increasing timestamps available?",
+        "why": "Without timestamps, chronology is preserved but not verified."
+      },
+      {
+        "id": "sampling",
+        "ask": "Is the observation frequency fine enough for the intended peak and trough?",
+        "why": "Coarser sampling can hide intraperiod extremes."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "non_finite_prices",
+        "severity": "blocking",
+        "when": {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_prices: Every price must be finite."
+      },
+      {
+        "id": "non_positive_prices",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "prices", "measure": "count"}, "op": "gt", "right": {"value": 0}},
+          {"left": {"field": "prices", "measure": "all_finite"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "prices", "measure": "min"}, "op": "le", "right": {"value": 0}}
+        ]},
+        "message": "non_positive_prices: Prices must be strictly positive."
+      },
+      {
+        "id": "timestamp_length_mismatch",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "count"}, "op": "ne", "right": {"field": "prices", "measure": "count"}}
+        ]},
+        "message": "timestamp_length_mismatch: Timestamps and prices must align one-to-one."
+      },
+      {
+        "id": "duplicate_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}}
+        ]},
+        "message": "duplicate_timestamps: Duplicate timestamps are not accepted."
+      },
+      {
+        "id": "non_increasing_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
+          {"left": {"field": "timestamps", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": false}}
+        ]},
+        "message": "non_increasing_timestamps: Timestamps must be strictly increasing; observations are never silently sorted."
+      },
+      {
+        "id": "frequency_without_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "declared_frequency"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}}
+        ]},
+        "message": "frequency_without_timestamps: A declared frequency requires aligned timestamps."
+      },
+      {
+        "id": "ordering_unverified",
+        "severity": "warning",
+        "when": {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}},
+        "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
+      },
+      {
+        "id": "unadjusted_price_interpretation",
+        "severity": "warning",
+        "when": {"left": {"field": "price_kind"}, "op": "eq", "right": {"value": "unadjusted"}},
+        "message": "unadjusted_price_interpretation: Corporate-action breaks can appear as drawdowns in unadjusted prices."
+      }
+    ],
+    "interpretation": "Report the full decimal underwater series, maximum drawdown as a non-positive decimal, selected peak/trough/recovery indexes and timestamps, deterministic tie conventions, price kind, ordering and gap status, indexed lineage, visualization, warnings, disclosures, and provenance. Do not infer elapsed-time duration, probability, total-return treatment, or losses outside the supplied path."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "Dₜ = Pₜ / max(P₀, …, Pₜ) − 1; MDD = minₜ Dₜ",
+    "intent": "Show crash depth, underwater path, and recovery relative to running highs.",
+    "output": "A complete decimal drawdown series, maximum drawdown episode, recovery state, indexed lineage, interpretation metadata, provenance, and underwater line visualization.",
+    "section_order": ["intuition", "formula", "worked_example", "visualization", "common_mistakes", "limitations"],
+    "visible_optional_facets": ["visualizations"],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}
