@@ -6,6 +6,7 @@ from defined_quant.types import (
     AxisSpec,
     ChartKind,
     ChartSeries,
+    NumberFormat,
     Unit,
     VisualizationSpec,
 )
@@ -45,3 +46,89 @@ def test_visualization_schema_has_no_point_count_ceiling() -> None:
 
     assert "maxItems" not in series_schema
     assert "maxItems" not in visualization_schema
+
+
+def test_heatmap_renders_calendar_grid_deterministically() -> None:
+    spec = VisualizationSpec(
+        id="monthly_returns",
+        kind=ChartKind.HEATMAP,
+        title="Monthly returns",
+        alt_text="Calendar heatmap of monthly simple returns.",
+        categories=("2022-11", "2022-12", "2023-01"),
+        series=(
+            ChartSeries(
+                key="monthly_returns",
+                label="Monthly returns",
+                values=(-0.15, 0.02, 0.11),
+            ),
+        ),
+        x_axis=AxisSpec(label="Calendar month"),
+        y_axis=AxisSpec(
+            label="Simple return",
+            unit=Unit.DECIMAL,
+            number_format=NumberFormat.PERCENT,
+        ),
+    )
+
+    svg = render_svg(spec)
+
+    assert svg.count("<rect ") == 1 + 24 + 9
+    assert "2022" in svg
+    assert "2023" in svg
+    assert "-15%" in svg
+    assert svg == render_svg(spec)
+
+
+def test_heatmap_legend_handles_large_finite_scale() -> None:
+    spec = VisualizationSpec(
+        id="extreme_heatmap",
+        kind=ChartKind.HEATMAP,
+        title="Extreme finite heatmap",
+        alt_text="Calendar heatmap containing one large finite value.",
+        categories=("2023-01",),
+        series=(
+            ChartSeries(
+                key="values",
+                label="Values",
+                values=(1e308,),
+            ),
+        ),
+        x_axis=AxisSpec(label="Calendar month"),
+        y_axis=AxisSpec(label="Value", unit=Unit.DECIMAL),
+    )
+
+    svg = render_svg(spec)
+
+    assert "#B91C1C" in svg
+    assert "#F9FAFB" in svg
+    assert "#047857" in svg
+    assert "nan" not in svg.lower()
+    assert "inf" not in svg.lower()
+
+
+def test_heatmap_rejects_non_calendar_or_unsorted_categories() -> None:
+    with pytest.raises(ValueError, match="YYYY-MM"):
+        VisualizationSpec(
+            id="invalid_heatmap",
+            kind=ChartKind.HEATMAP,
+            title="Invalid heatmap",
+            alt_text="An invalid heatmap.",
+            categories=("January",),
+            series=(ChartSeries(key="values", label="Values", values=(0.1,)),),
+            x_axis=AxisSpec(label="Calendar month"),
+            y_axis=AxisSpec(label="Return", unit=Unit.DECIMAL),
+        )
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        VisualizationSpec(
+            id="unsorted_heatmap",
+            kind=ChartKind.HEATMAP,
+            title="Unsorted heatmap",
+            alt_text="An unsorted heatmap.",
+            categories=("2023-02", "2023-01"),
+            series=(
+                ChartSeries(key="values", label="Values", values=(0.1, -0.1)),
+            ),
+            x_axis=AxisSpec(label="Calendar month"),
+            y_axis=AxisSpec(label="Return", unit=Unit.DECIMAL),
+        )

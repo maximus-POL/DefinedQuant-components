@@ -112,7 +112,7 @@ class AnalysisPlan(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[1] = 1
-    protocol_version: Literal["0.2.0", "0.3.0"] = "0.3.0"
+    protocol_version: Literal["0.2.0", "0.3.0", "0.4.0"] = "0.4.0"
     plan_id: SafeId
     revision: int = Field(ge=1)
     parent_plan_hash: str | None = Field(default=None, pattern=_SHA256_PATTERN)

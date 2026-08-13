@@ -182,7 +182,7 @@ The adapter is a host convenience layer, not another source of truth. It cannot 
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
 
-`defined_quant_protocol` 0.3.0 provides the closed operation, semantic-port, and
+`defined_quant_protocol` 0.4.0 provides the closed operation, semantic-port, and
 managed-authorization records. An
 `OperationRequest` binds an exact component ID, version, and `subject_hash` to a candidate input
 object, explicit caller provenance, and a bounded artifact request. Catalog roots and output
@@ -226,7 +226,7 @@ assertion, not a provider or Defined Quant attestation.
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
 `dq.market_data.simple_return` version `0.3.3`, subject
-`acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed`, with explicit opt-in to its
+`ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a

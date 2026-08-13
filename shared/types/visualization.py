@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .units import Unit
 
 _SAFE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_YEAR_MONTH = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
 
 
 class ChartKind(StrEnum):
@@ -19,6 +20,7 @@ class ChartKind(StrEnum):
 
     LINE = "line"
     BAR = "bar"
+    HEATMAP = "heatmap"
 
 
 class NumberFormat(StrEnum):
@@ -116,6 +118,15 @@ class VisualizationSpec(BaseModel):
         keys = [series.key for series in self.series]
         if len(set(keys)) != len(keys):
             raise ValueError("chart series keys must be unique")
+        if self.kind is ChartKind.HEATMAP:
+            if len(self.series) != 1:
+                raise ValueError("heatmaps require exactly one series")
+            if any(_YEAR_MONTH.fullmatch(value) is None for value in self.categories):
+                raise ValueError("heatmap categories must use YYYY-MM calendar-month labels")
+            if len(set(self.categories)) != category_count:
+                raise ValueError("heatmap categories must be unique")
+            if tuple(sorted(self.categories)) != self.categories:
+                raise ValueError("heatmap categories must be strictly increasing")
         return self
 
 

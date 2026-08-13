@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import statistics
 from collections.abc import Mapping, Sequence, Sized
 from numbers import Real
@@ -16,6 +17,8 @@ from defined_quant.types import (
     Violation,
 )
 
+_CALENDAR_MONTH = re.compile(r"[0-9]{4}-(?:0[1-9]|1[0-2])", re.ASCII)
+
 MEASURES = frozenset(
     {
         "identity",
@@ -24,7 +27,9 @@ MEASURES = frozenset(
         "min",
         "max",
         "all_finite",
+        "all_valid_calendar_month_labels",
         "has_duplicates",
+        "is_consecutive_calendar_months",
         "is_strictly_increasing",
     }
 )
@@ -125,12 +130,42 @@ def _measure_all_finite(value: Any, *, component_id: str | None) -> bool:
     return all(math.isfinite(item) for item in numbers)
 
 
+def _measure_all_valid_calendar_month_labels(
+    value: Any,
+    *,
+    component_id: str | None,
+) -> bool:
+    values = _sequence(value, "all_valid_calendar_month_labels", component_id=component_id)
+    return all(
+        isinstance(item, str) and _CALENDAR_MONTH.fullmatch(item) is not None
+        for item in values
+    )
+
+
 def _measure_has_duplicates(value: Any, *, component_id: str | None) -> bool:
     values = _sequence(value, "has_duplicates", component_id=component_id)
     for index, item in enumerate(values):
         if any(item == prior for prior in values[:index]):
             return True
     return False
+
+
+def _measure_is_consecutive_calendar_months(
+    value: Any,
+    *,
+    component_id: str | None,
+) -> bool:
+    values = _sequence(value, "is_consecutive_calendar_months", component_id=component_id)
+    if not _measure_all_valid_calendar_month_labels(value, component_id=component_id):
+        return False
+    ordinals = tuple(
+        int(item[:4]) * 12 + int(item[5:]) - 1
+        for item in values
+        if isinstance(item, str)
+    )
+    return all(
+        right == left + 1 for left, right in zip(ordinals, ordinals[1:], strict=False)
+    )
 
 
 def _measure_is_strictly_increasing(value: Any, *, component_id: str | None) -> bool:
@@ -151,7 +186,9 @@ _MEASURE_DISPATCH = {
     "min": _measure_min,
     "max": _measure_max,
     "all_finite": _measure_all_finite,
+    "all_valid_calendar_month_labels": _measure_all_valid_calendar_month_labels,
     "has_duplicates": _measure_has_duplicates,
+    "is_consecutive_calendar_months": _measure_is_consecutive_calendar_months,
     "is_strictly_increasing": _measure_is_strictly_increasing,
 }
 

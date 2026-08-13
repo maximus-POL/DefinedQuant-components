@@ -27,10 +27,10 @@ mint plan approval, source-verification, or `ResearchBundle` claims.
 warnings in separate fields. Every comparison in a contract warning rule must depend on component
 input state; constant output context belongs in `disclosures`.
 
-Protocol 0.3.0 adds semantic ports while retaining the separate authorization-only path introduced
-in 0.2.0. The packaged `simple_return_csv_v1`
+Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
+separate authorization-only path introduced in 0.2.0. The packaged `simple_return_csv_v1`
 profile allowlists exactly `dq.market_data.simple_return` version `0.3.3`, subject
-`acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed`. It requires explicit draft
+`ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
 receipt; a human may then create a manual-only approval, and all plan, policy, component, dataset,
 receipt, and approval roots are revalidated before future execution.

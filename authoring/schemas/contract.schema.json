@@ -238,7 +238,9 @@
                 "min",
                 "max",
                 "all_finite",
+                "all_valid_calendar_month_labels",
                 "has_duplicates",
+                "is_consecutive_calendar_months",
                 "is_strictly_increasing"
               ]
             }

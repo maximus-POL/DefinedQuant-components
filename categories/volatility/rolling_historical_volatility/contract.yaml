@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "id": "dq.volatility.rolling_historical_volatility",
+  "slug": "rolling_historical_volatility",
+  "title": "Rolling Historical Volatility",
+  "category": "volatility",
+  "group": "realized_risk",
+  "version": "0.1.0",
+  "lifecycle": "draft",
+  "template": {"profile": "time_series", "version": 1},
+  "callable": "defined_quant.volatility.rolling_historical_volatility.component:rolling_historical_volatility",
+  "summary": "Calculates sample volatility for every complete window of log returns and annualizes it with an explicit factor.",
+  "discovery": {
+    "aliases": [
+      "moving historical volatility",
+      "rolling annualized volatility",
+      "rolling realized volatility",
+      "rolling standard deviation",
+      "time varying historical volatility"
+    ],
+    "intents": [
+      "calculate_rolling_volatility",
+      "identify_turbulent_periods",
+      "show_volatility_regimes"
+    ],
+    "input_concepts": [
+      "annualization_factor",
+      "log_return_series",
+      "return_convention",
+      "rolling_window_length"
+    ],
+    "output_concepts": [
+      "annualized_volatility_series",
+      "datapoint_lineage",
+      "periodic_volatility_series",
+      "rolling_volatility"
+    ]
+  },
+  "authors": [{"name": "Maksymilian Tylek", "github": "makstylek"}],
+  "tags": ["annualization", "regime", "risk", "rolling", "volatility"],
+  "assumptions": [
+    "Supplied observations are comparable decimal log returns from one periodic series.",
+    "Each rolling window uses sample standard deviation with an n − 1 denominator.",
+    "Square-root-of-time scaling is appropriate for the explicit annualization factor."
+  ],
+  "limitations": [
+    "The component accepts log returns only and does not convert simple returns.",
+    "Window length and annualization factor are never inferred from labels or timestamps.",
+    "The estimate is backward-looking and is not a volatility forecast or confidence interval.",
+    "Overlapping windows create serially related estimates and can smooth regime changes.",
+    "Market-calendar gaps and the consistency of the declared frequency are not assessed."
+  ],
+  "depends_on": [],
+  "references": [],
+  "owner": "makstylek",
+  "materiality": "risk",
+  "supported_python": [">=3.11", "<3.14"],
+  "last_material_review": "2026-08-13",
+  "next_review_trigger": [
+    "implementation_change",
+    "scope_expansion",
+    "return_convention_change",
+    "annualization_policy_change",
+    "window_alignment_change"
+  ],
+  "incident_status": "none",
+  "incident_url": null,
+  "guidance": {
+    "use_when": [
+      "The caller wants to see when historical trading became more or less turbulent.",
+      "The caller supplies log returns, an explicit window length, and an explicit annualization factor.",
+      "Each result should be aligned to the final observation of its complete rolling window."
+    ],
+    "do_not_use_when": [
+      "Returns are simple, unknown, mixed, or need conversion.",
+      "Window length or annualization factor would have to be inferred.",
+      "The request is for forecast, implied, downside, or model-based volatility."
+    ],
+    "unsupported_scope": [
+      "Return conversion, data sourcing, cleaning, sorting, resampling, and gap repair.",
+      "Forecasting, GARCH-family models, implied volatility, downside deviation, and confidence intervals.",
+      "Automatic window selection, annualization inference, and market-calendar validation."
+    ],
+    "required_questions": [
+      {
+        "id": "window_length",
+        "ask": "How many return observations should each complete rolling window contain?",
+        "why": "Window length materially changes smoothness and regime timing.",
+        "resolves_to": "window_length",
+        "default": null
+      },
+      {
+        "id": "annualization_factor",
+        "ask": "What explicit number of observation periods per year should be used?",
+        "why": "The annualized series changes with this factor and it is never inferred.",
+        "resolves_to": "annualization_factor",
+        "default": null
+      },
+      {
+        "id": "return_kind",
+        "ask": "Are the observations log periodic returns?",
+        "why": "This component accepts the log-return convention only.",
+        "resolves_to": "return_kind",
+        "default": null
+      }
+    ],
+    "advisory_questions": [
+      {
+        "id": "sampling_consistency",
+        "ask": "Are returns consistently sampled without unresolved gaps?",
+        "why": "The component does not validate a market calendar or the factor-to-frequency match."
+      },
+      {
+        "id": "overlap",
+        "ask": "Is overlap-induced smoothing acceptable?",
+        "why": "Adjacent windows share most observations when the step is one."
+      }
+    ],
+    "allowed_defaults": [],
+    "constraints": [
+      {
+        "id": "insufficient_returns",
+        "severity": "blocking",
+        "when": {"left": {"field": "returns", "measure": "count"}, "op": "lt", "right": {"value": 2}},
+        "message": "insufficient_returns: At least two log returns are required."
+      },
+      {
+        "id": "non_finite_returns",
+        "severity": "blocking",
+        "when": {"left": {"field": "returns", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_returns: Every return must be finite."
+      },
+      {
+        "id": "window_too_short",
+        "severity": "blocking",
+        "when": {"left": {"field": "window_length"}, "op": "lt", "right": {"value": 2}},
+        "message": "window_too_short: Window length must be at least two."
+      },
+      {
+        "id": "window_exceeds_returns",
+        "severity": "blocking",
+        "when": {"left": {"field": "returns", "measure": "count"}, "op": "lt", "right": {"field": "window_length"}},
+        "message": "window_exceeds_returns: At least one complete rolling window is required."
+      },
+      {
+        "id": "non_finite_annualization_factor",
+        "severity": "blocking",
+        "when": {"left": {"field": "annualization_factor", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},
+        "message": "non_finite_annualization_factor: The annualization factor must be finite."
+      },
+      {
+        "id": "non_positive_annualization_factor",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "annualization_factor", "measure": "all_finite"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "annualization_factor"}, "op": "le", "right": {"value": 0}}
+        ]},
+        "message": "non_positive_annualization_factor: The annualization factor must be greater than zero."
+      },
+      {
+        "id": "unsupported_return_kind",
+        "severity": "blocking",
+        "when": {"left": {"field": "return_kind"}, "op": "ne", "right": {"value": "log"}},
+        "message": "unsupported_return_kind: Rolling historical volatility accepts log returns only."
+      },
+      {
+        "id": "timestamp_length_mismatch",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "count"}, "op": "ne", "right": {"field": "returns", "measure": "count"}}
+        ]},
+        "message": "timestamp_length_mismatch: Timestamps and returns must align one-to-one."
+      },
+      {
+        "id": "duplicate_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}}
+        ]},
+        "message": "duplicate_timestamps: Duplicate timestamps are not accepted."
+      },
+      {
+        "id": "non_increasing_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "timestamps"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
+          {"left": {"field": "timestamps", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": false}}
+        ]},
+        "message": "non_increasing_timestamps: Timestamps must be strictly increasing; observations are never silently sorted."
+      },
+      {
+        "id": "frequency_without_timestamps",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "declared_frequency"}, "op": "ne", "right": {"value": null}},
+          {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}}
+        ]},
+        "message": "frequency_without_timestamps: A declared frequency requires aligned timestamps."
+      },
+      {
+        "id": "ordering_unverified",
+        "severity": "warning",
+        "when": {"left": {"field": "timestamps"}, "op": "eq", "right": {"value": null}},
+        "message": "ordering_unverified: No timestamps were supplied, so chronology could not be verified."
+      },
+      {
+        "id": "small_window",
+        "severity": "warning",
+        "when": {"all": [
+          {"left": {"field": "window_length"}, "op": "ge", "right": {"value": 2}},
+          {"left": {"field": "window_length"}, "op": "lt", "right": {"value": 30}}
+        ]},
+        "message": "small_window: Fewer than 30 returns per window can produce an unstable descriptive estimate."
+      }
+    ],
+    "interpretation": "Report complete periodic and explicitly annualized volatility series, window length, factor, log-return and n − 1 conventions, window-end alignment, indexed lineage, ordering and gap status, visualization, disclosures, warnings, and provenance. Describe backward-looking turbulence only; do not imply forecasting, independent adjacent estimates, inferred frequency, or statistical uncertainty."
+  },
+  "display": {
+    "profile": "time_series",
+    "formula": "σ̂ₜ(w) = stdevₙ₋₁(rₜ₋w₊₁, …, rₜ); σ̂annual,ₜ(w) = σ̂ₜ(w) × sqrt(A)",
+    "intent": "Show when backward-looking return variability became more or less turbulent.",
+    "output": "Complete periodic and annualized volatility series for every rolling window, explicit conventions, indexed lineage, interpretation state, provenance, and line visualization.",
+    "section_order": ["intuition", "formula", "worked_example", "visualization", "common_mistakes", "limitations"],
+    "visible_optional_facets": ["visualizations"],
+    "example_emphasis": "worked_example",
+    "layout_density": "comfortable"
+  }
+}

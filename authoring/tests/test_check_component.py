@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from authoring.check_component import (
     _validate_output_model,
     _validate_semantic_port_metadata,
 )
+from shared.validation import MEASURES
 
 
 class ExampleInputs(BaseModel):
@@ -44,6 +46,16 @@ class ValidOutput(ComponentOutput):
 
 class InvalidOutput(BaseModel):
     value: float
+
+
+def test_constraint_schema_measure_vocabulary_matches_evaluator() -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "schemas" / "contract.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_measures = schema["$defs"]["operand"]["oneOf"][1]["properties"]["measure"][
+        "enum"
+    ]
+
+    assert set(schema_measures) == MEASURES
 
 
 def _port_metadata(

@@ -73,18 +73,22 @@ jobs:
           )
           from defined_quant_protocol import PROTOCOL_VERSION, require_compatible_ports
 
-          assert PROTOCOL_VERSION == "0.3.0"
+          assert PROTOCOL_VERSION == "0.4.0"
           assert [item.component_id for item in iter_components()] == [
               "dq.market_data.log_return",
+              "dq.market_data.monthly_return_matrix",
+              "dq.market_data.rebased_price_index",
               "dq.market_data.simple_return",
+              "dq.performance.drawdown",
               "dq.volatility.historical_volatility",
+              "dq.volatility.rolling_historical_volatility",
           ]
           policy = load_execution_policy("simple_return_csv_v1")
           ref = policy.components[0].component
           assert (ref.id, ref.version, ref.subject_hash) == (
               "dq.market_data.simple_return",
               "0.3.3",
-              "acc2fb957804361f47b150f982ccf4062de52573ba7e59785a0e6f016b4676ed",
+              "ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433",
           )
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1
