@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.volatility.historical_volatility",
-  "validated_subject_hash": "67763b9b860f2151c6cdcbba67ed8610b8a8f7d9034d8f2c0a44e60cd2329e53",
+  "validated_subject_hash": "5df62c7117d86c6d1484ea3dc0a4b8d77cea629d1c1cae3dc56ff857c85e29cc",
   "known_answers": [
     {
       "id": "ka_001",

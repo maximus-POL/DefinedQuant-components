@@ -447,7 +447,7 @@ def _render_heatmap_svg(spec: VisualizationSpec) -> str:
     legend_x = left
     legend_steps = 9
     for step in range(legend_steps):
-        value = -scale + (2.0 * scale * step / (legend_steps - 1))
+        value = scale * (2.0 * step / (legend_steps - 1) - 1.0)
         x = legend_x + step * legend_width / legend_steps
         parts.append(
             f'<rect x="{x:.2f}" y="{legend_y:.2f}" '

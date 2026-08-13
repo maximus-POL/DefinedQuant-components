@@ -132,19 +132,40 @@
         "message": "month_length_mismatch: Month labels and prices must align one-to-one."
       },
       {
+        "id": "invalid_month_labels",
+        "severity": "blocking",
+        "when": {"left": {"field": "months", "measure": "all_valid_calendar_month_labels"}, "op": "eq", "right": {"value": false}},
+        "message": "invalid_month_labels: Every month label must use the YYYY-MM format."
+      },
+      {
         "id": "duplicate_months",
         "severity": "blocking",
-        "when": {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}},
+        "when": {"all": [
+          {"left": {"field": "months", "measure": "all_valid_calendar_month_labels"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": true}}
+        ]},
         "message": "duplicate_months: Duplicate month labels are not accepted."
       },
       {
         "id": "non_increasing_months",
         "severity": "blocking",
         "when": {"all": [
+          {"left": {"field": "months", "measure": "all_valid_calendar_month_labels"}, "op": "eq", "right": {"value": true}},
           {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
           {"left": {"field": "months", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": false}}
         ]},
         "message": "non_increasing_months: Month labels must be strictly increasing; observations are never silently sorted."
+      },
+      {
+        "id": "non_consecutive_months",
+        "severity": "blocking",
+        "when": {"all": [
+          {"left": {"field": "months", "measure": "all_valid_calendar_month_labels"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "months", "measure": "has_duplicates"}, "op": "eq", "right": {"value": false}},
+          {"left": {"field": "months", "measure": "is_strictly_increasing"}, "op": "eq", "right": {"value": true}},
+          {"left": {"field": "months", "measure": "is_consecutive_calendar_months"}, "op": "eq", "right": {"value": false}}
+        ]},
+        "message": "non_consecutive_months: Completed month-end labels must be consecutive without missing months."
       },
       {
         "id": "unsupported_observation_kind",

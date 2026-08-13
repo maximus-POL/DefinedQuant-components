@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.rebased_price_index",
-  "validated_subject_hash": "bb1be3266a371fd3ae2c3995cdd2b85d9b3955ffdc034d8f1ad9c7ae537ad1b7",
+  "validated_subject_hash": "e9a0ac70480c43122af82ba2608d6c41a086d55bac58839908a6ae99d674ecba",
   "known_answers": [
     {
       "id": "ka_001",
@@ -104,6 +104,82 @@
         "code": "domain_error",
         "violation_ids": [
           "base_index_out_of_range"
+        ]
+      }
+    },
+    {
+      "id": "bc_003",
+      "description": "A representable result survives an overflowing intermediate price ratio.",
+      "inputs": {
+        "prices": [
+          1e-308,
+          1e+308
+        ],
+        "price_kind": "adjusted",
+        "base_index": 0,
+        "base_value": 1e-308
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/index_values",
+            "op": "approx",
+            "value": [
+              1e-308,
+              1e+308
+            ],
+            "rtol": 1e-12,
+            "atol": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bc_004",
+      "description": "A truly unrepresentable rebased value remains blocking.",
+      "inputs": {
+        "prices": [
+          1e-308,
+          1e+308
+        ],
+        "price_kind": "adjusted",
+        "base_index": 0,
+        "base_value": 1e+308
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "non_finite_result"
+        ]
+      }
+    },
+    {
+      "id": "bc_005",
+      "description": "A representable result survives a subnormal intermediate price ratio without material rounding loss.",
+      "inputs": {
+        "prices": [
+          1e+308,
+          7e-16
+        ],
+        "price_kind": "adjusted",
+        "base_index": 0,
+        "base_value": 1e+308
+      },
+      "expect": {
+        "outcome": "success",
+        "assertions": [
+          {
+            "path": "/index_values",
+            "op": "approx",
+            "value": [
+              1e+308,
+              7e-16
+            ],
+            "rtol": 1e-12,
+            "atol": 0.0
+          }
         ]
       }
     }

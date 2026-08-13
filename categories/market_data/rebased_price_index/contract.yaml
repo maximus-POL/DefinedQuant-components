@@ -137,6 +137,12 @@
         "message": "negative_base_index: Base index must be zero or greater."
       },
       {
+        "id": "base_index_out_of_range",
+        "severity": "blocking",
+        "when": {"left": {"field": "base_index"}, "op": "ge", "right": {"field": "prices", "measure": "count"}},
+        "message": "base_index_out_of_range: The base index must identify an observation in prices."
+      },
+      {
         "id": "non_finite_base_value",
         "severity": "blocking",
         "when": {"left": {"field": "base_value", "measure": "all_finite"}, "op": "eq", "right": {"value": false}},

@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
-from defined_quant import render_svg, subject_hash
+from defined_quant import preflight, render_svg, subject_hash
 from defined_quant.market_data.rebased_price_index.component import (
+    COMPONENT_ID,
     FORMULA,
     Inputs,
     rebased_price_index,
@@ -88,6 +89,57 @@ def test_out_of_range_base_is_blocking() -> None:
             (100.0,), price_kind="adjusted", base_index=1, base_value=100.0
         )
     assert caught.value.details["violations"][0]["rule"] == "base_index_out_of_range"
+
+
+def test_out_of_range_base_is_declared_in_contract_preflight() -> None:
+    with pytest.raises(DomainError) as caught:
+        preflight(
+            COMPONENT_ID,
+            prices=(100.0,),
+            price_kind="adjusted",
+            base_index=1,
+            base_value=100.0,
+            timestamps=None,
+            declared_frequency=None,
+        )
+
+    assert caught.value.details["violations"][0]["rule"] == "base_index_out_of_range"
+
+
+@pytest.mark.parametrize(
+    ("prices", "base_value", "expected"),
+    [
+        ((1e-308, 1e308), 1e-308, (1e-308, 1e308)),
+        ((1e308, 1e-308), 1e308, (1e308, 1e-308)),
+        ((1e308, 7e-16), 1e308, (1e308, 7e-16)),
+    ],
+)
+def test_rebasing_recovers_representable_extreme_values(
+    prices: tuple[float, float],
+    base_value: float,
+    expected: tuple[float, float],
+) -> None:
+    result = rebased_price_index(
+        prices,
+        price_kind="adjusted",
+        base_index=0,
+        base_value=base_value,
+    )
+
+    assert result.index_values == pytest.approx(expected, rel=1e-12, abs=0.0)
+    assert render_svg(result.visualizations[0])
+
+
+def test_rebasing_still_blocks_a_truly_unrepresentable_result() -> None:
+    with pytest.raises(DomainError) as caught:
+        rebased_price_index(
+            (1e-308, 1e308),
+            price_kind="adjusted",
+            base_index=0,
+            base_value=1e308,
+        )
+
+    assert caught.value.details["violations"][0]["rule"] == "non_finite_result"
 
 
 def test_models_reject_coercion_and_are_frozen() -> None:

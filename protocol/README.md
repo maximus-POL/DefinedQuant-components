@@ -1,6 +1,6 @@
 # Defined Quant protocols
 
-`defined_quant_protocol` 0.3.0 provides closed, typed interchange formats for generic component
+`defined_quant_protocol` 0.4.0 provides closed, typed interchange formats for generic component
 operations, semantic component ports, and atomic managed authorization. It is versioned
 independently from the component catalog and ships in the same Python distribution for now. The
 package depends only on Pydantic and the Python standard library; it does not import component
@@ -17,14 +17,14 @@ current runner requires a new output directory and does not support mutable over
 Publication uses the host's atomic no-replace rename primitive on Linux, macOS, and Windows; a
 host without that primitive receives a typed failure instead of a weaker overwrite fallback.
 
-The direct `OperationRequest` path remains explicitly unmanaged in protocol 0.3.0. Its provenance
+The direct `OperationRequest` path remains explicitly unmanaged in protocol 0.4.0. Its provenance
 status is either `unverified` or `caller_confirmed`; it cannot claim that values are source-bound.
 An operation request does not become managed merely because the package now also defines managed
 authorization records.
 
-New operation manifests default to protocol 0.3.0. The unchanged unmanaged manifest shape still
-parses protocol 0.1.0 and 0.2.0 records, so adding semantic ports does not invalidate existing
-operation bundles.
+New operation manifests default to protocol 0.4.0. The unchanged unmanaged manifest shape still
+parses protocol 0.1.0, 0.2.0, and 0.3.0 records, so extending the semantic-port vocabulary does
+not invalidate existing operation bundles.
 
 Every path stored in an `OperationManifest` is a relative POSIX bundle-member path using portable
 safe-ASCII names. Each segment contains only letters, digits, underscores, and hyphens, with dots
@@ -73,10 +73,12 @@ and refusal cases, is executable in `authoring/tests/test_agent_protocol.py`.
 
 ## Semantic component ports
 
-Protocol 0.3.0 defines the closed `x-defined-quant-port` JSON Schema extension carried by selected
-Pydantic input and output fields. A `SemanticPort` declares direction, concept, unit, shape,
-cardinality, convention, ordering, frequency, and provenance requirement. No partial payload,
-sibling ad-hoc metadata key, or invented vocabulary value is accepted.
+Protocol 0.3.0 introduced the closed `x-defined-quant-port` JSON Schema extension carried by
+selected Pydantic input and output fields. Protocol 0.4.0 extends its closed concept, convention,
+and frequency vocabulary for rebased indices, drawdowns, rolling volatility, and monthly series.
+A `SemanticPort` declares direction, concept, unit, shape, cardinality, convention, ordering,
+frequency, and provenance requirement. No partial payload, sibling ad-hoc metadata key, or
+invented vocabulary value is accepted.
 
 `compare_semantic_ports()` compares an output field with an input field across all eight semantic
 dimensions and returns typed differences; `require_compatible_ports()` fails closed on any
@@ -96,14 +98,14 @@ subject hash and is not a substitute for port compatibility.
 ## Atomic managed authorization
 
 Protocol 0.2.0 introduced the authorization-only foundation for one immutable, one-step
-`AnalysisPlan`. New plans use protocol 0.3.0 while protocol 0.2.0 plans remain readable.
+`AnalysisPlan`. New plans use protocol 0.4.0 while protocol 0.2.0 and 0.3.0 plans remain readable.
 The packaged `simple_return_csv_v1` execution policy currently permits exactly this draft subject,
 with explicit draft opt-in:
 
 ```text
 dq.market_data.simple_return
 version:      0.3.3
-subject_hash: 001555606035230e8a1c41615cda16c4b8852f857b018fc5a7ee44110e708181
+subject_hash: ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433
 ```
 
 The catalog-aware validator checks that exact allowlist binding, required questions, the canonical

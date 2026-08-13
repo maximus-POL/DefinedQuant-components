@@ -79,6 +79,33 @@ def test_heatmap_renders_calendar_grid_deterministically() -> None:
     assert svg == render_svg(spec)
 
 
+def test_heatmap_legend_handles_large_finite_scale() -> None:
+    spec = VisualizationSpec(
+        id="extreme_heatmap",
+        kind=ChartKind.HEATMAP,
+        title="Extreme finite heatmap",
+        alt_text="Calendar heatmap containing one large finite value.",
+        categories=("2023-01",),
+        series=(
+            ChartSeries(
+                key="values",
+                label="Values",
+                values=(1e308,),
+            ),
+        ),
+        x_axis=AxisSpec(label="Calendar month"),
+        y_axis=AxisSpec(label="Value", unit=Unit.DECIMAL),
+    )
+
+    svg = render_svg(spec)
+
+    assert "#B91C1C" in svg
+    assert "#F9FAFB" in svg
+    assert "#047857" in svg
+    assert "nan" not in svg.lower()
+    assert "inf" not in svg.lower()
+
+
 def test_heatmap_rejects_non_calendar_or_unsorted_categories() -> None:
     with pytest.raises(ValueError, match="YYYY-MM"):
         VisualizationSpec(

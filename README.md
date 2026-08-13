@@ -101,10 +101,10 @@ manifest is an internally reconciled record, not a signed or independent executi
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
-Protocol 0.3.0 adds closed semantic ports while retaining the atomic managed-authorization
-foundation introduced in 0.2.0. Its packaged
+Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
+atomic managed-authorization foundation introduced in 0.2.0. Its packaged
 `simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.3` at
-subject `001555606035230e8a1c41615cda16c4b8852f857b018fc5a7ee44110e708181`, with explicit opt-in to
+subject `ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.

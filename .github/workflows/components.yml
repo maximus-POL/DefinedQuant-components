@@ -73,7 +73,7 @@ jobs:
           )
           from defined_quant_protocol import PROTOCOL_VERSION, require_compatible_ports
 
-          assert PROTOCOL_VERSION == "0.3.0"
+          assert PROTOCOL_VERSION == "0.4.0"
           assert [item.component_id for item in iter_components()] == [
               "dq.market_data.log_return",
               "dq.market_data.monthly_return_matrix",
@@ -88,7 +88,7 @@ jobs:
           assert (ref.id, ref.version, ref.subject_hash) == (
               "dq.market_data.simple_return",
               "0.3.3",
-              "001555606035230e8a1c41615cda16c4b8852f857b018fc5a7ee44110e708181",
+              "ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433",
           )
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1

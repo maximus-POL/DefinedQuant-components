@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.monthly_return_matrix",
-  "validated_subject_hash": "1bc4ba282c520fb329caff64209ee60769d1e8d8a5d9c5241be61fa0cf294f3a",
+  "validated_subject_hash": "e135b695f58cb7f99a55da0476026c9792697c9cf9edee3679c8913d67f7009e",
   "known_answers": [
     {
       "id": "ka_001",
@@ -157,6 +157,29 @@
         "code": "domain_error",
         "violation_ids": [
           "unsupported_observation_kind"
+        ]
+      }
+    },
+    {
+      "id": "bc_004",
+      "description": "A malformed calendar-month label is blocking.",
+      "inputs": {
+        "prices": [
+          100.0,
+          110.0
+        ],
+        "months": [
+          "2023-00",
+          "2023-01"
+        ],
+        "price_kind": "adjusted",
+        "observation_kind": "completed_month_end"
+      },
+      "expect": {
+        "outcome": "error",
+        "code": "domain_error",
+        "violation_ids": [
+          "invalid_month_labels"
         ]
       }
     }

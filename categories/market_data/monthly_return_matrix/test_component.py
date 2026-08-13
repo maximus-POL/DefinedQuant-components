@@ -7,8 +7,9 @@ import math
 from pathlib import Path
 
 import pytest
-from defined_quant import render_svg, subject_hash
+from defined_quant import preflight, render_svg, subject_hash
 from defined_quant.market_data.monthly_return_matrix.component import (
+    COMPONENT_ID,
     FORMULA,
     Inputs,
     monthly_return_matrix,
@@ -75,6 +76,42 @@ def test_non_consecutive_months_are_blocking() -> None:
             observation_kind="completed_month_end",
         )
     assert caught.value.details["violations"][0]["rule"] == "non_consecutive_months"
+
+
+@pytest.mark.parametrize(
+    ("months", "expected_rule"),
+    [
+        (("2023-00", "2023-01"), "invalid_month_labels"),
+        (("2023-01", "2023-03"), "non_consecutive_months"),
+    ],
+)
+def test_month_contract_blocks_unexecutable_labels_in_preflight(
+    months: tuple[str, str],
+    expected_rule: str,
+) -> None:
+    with pytest.raises(DomainError) as caught:
+        preflight(
+            COMPONENT_ID,
+            prices=(100.0, 110.0),
+            months=months,
+            price_kind="adjusted",
+            observation_kind="completed_month_end",
+        )
+
+    assert caught.value.details["violations"][0]["rule"] == expected_rule
+
+
+def test_month_contract_accepts_consecutive_year_boundary() -> None:
+    assert (
+        preflight(
+            COMPONENT_ID,
+            prices=(100.0, 110.0),
+            months=("2023-12", "2024-01"),
+            price_kind="adjusted",
+            observation_kind="completed_month_end",
+        )
+        == ()
+    )
 
 
 def test_result_provenance_and_svg_are_deterministic() -> None:

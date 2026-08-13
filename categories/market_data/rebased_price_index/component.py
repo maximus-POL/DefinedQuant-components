@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+import sys
 from datetime import datetime
+from fractions import Fraction
 from typing import Literal
 
 from defined_quant import preflight, subject_hash
@@ -167,6 +169,25 @@ def _blocking_error(rule: str, message: str) -> DomainError:
     )
 
 
+def _rebased_value(base_value: float, price: float, base_price: float) -> float:
+    ratio = price / base_price
+    value = base_value * ratio
+    if (
+        math.isfinite(value)
+        and ratio >= sys.float_info.min
+        and value >= sys.float_info.min
+    ):
+        return value
+    try:
+        return float(
+            Fraction.from_float(base_value)
+            * Fraction.from_float(price)
+            / Fraction.from_float(base_price)
+        )
+    except OverflowError:
+        return math.inf
+
+
 def _visualization(
     *,
     inputs: Inputs,
@@ -247,7 +268,7 @@ def rebased_price_index(
         value = (
             inputs.base_value
             if index == inputs.base_index
-            else inputs.base_value * (price / base_price)
+            else _rebased_value(inputs.base_value, price, base_price)
         )
         if not math.isfinite(value) or value <= 0.0:
             raise _blocking_error(
