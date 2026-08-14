@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.monthly_return_matrix",
-  "validated_subject_hash": "526d71de157bc780fd0869f0f73091371bb4b05c8b6668dc95b4470147287870",
+  "validated_subject_hash": "8f847ec74e59553a2163982c54034dfe75155c1f30f6868fca6ddcc1856a4dba",
   "known_answers": [
     {
       "id": "ka_001",

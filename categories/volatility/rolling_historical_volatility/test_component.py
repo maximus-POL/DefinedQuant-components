@@ -96,6 +96,20 @@ def test_result_provenance_and_svg_are_deterministic() -> None:
     assert render_svg(first.visualizations[0]) == render_svg(second.visualizations[0])
 
 
+def test_serialized_output_rejects_a_non_volatility_unit() -> None:
+    result = rolling_historical_volatility(
+        (0.01, -0.01),
+        window_length=2,
+        annualization_factor=12.0,
+        return_kind="log",
+    )
+    payload = json.loads(result.model_dump_json())
+    payload["unit"] = "decimal"
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("field", "derivation_index"),
     [
@@ -135,6 +149,71 @@ def test_serialized_output_rejects_non_finite_volatility_values(
     )
     payload = result.model_dump(mode="json")
     payload[field][0] = value
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_annualization_underflow() -> None:
+    result = rolling_historical_volatility(
+        (-0.01, 0.01),
+        window_length=2,
+        annualization_factor=1.0,
+        return_kind="log",
+    )
+    payload = json.loads(result.model_dump_json())
+    payload["periodic_volatility"][0] = 5e-324
+    payload["annualized_volatility"][0] = 0.0
+    payload["annualization_factor"] = 5e-324
+    payload["derivations"][0]["value"] = 5e-324
+    payload["derivations"][1]["value"] = 0.0
+
+    with pytest.raises(ValidationError, match="must use square-root scaling"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_misaligned_volatility_timestamps() -> None:
+    result = rolling_historical_volatility(
+        (0.01, -0.01, 0.03),
+        window_length=2,
+        annualization_factor=12.0,
+        return_kind="log",
+        timestamps=(
+            "2026-01-01T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+            "2026-01-03T00:00:00Z",
+        ),
+    )
+    payload = json.loads(result.model_dump_json())
+    payload["volatility_timestamps"].pop()
+
+    with pytest.raises(
+        ValidationError,
+        match="volatility timestamps must align with both volatility series",
+    ):
+        Output.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("timestamps", "ordering_status"),
+    [
+        (None, "verified"),
+        (["2026-01-02T00:00:00Z"], "unverified"),
+    ],
+)
+def test_serialized_output_rejects_inconsistent_timestamp_ordering_status(
+    timestamps: list[str] | None,
+    ordering_status: str,
+) -> None:
+    result = rolling_historical_volatility(
+        (0.01, -0.01),
+        window_length=2,
+        annualization_factor=12.0,
+        return_kind="log",
+    )
+    payload = json.loads(result.model_dump_json())
+    payload["volatility_timestamps"] = timestamps
+    payload["ordering_status"] = ordering_status
 
     with pytest.raises(ValidationError):
         Output.model_validate(payload)

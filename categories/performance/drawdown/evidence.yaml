@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.performance.drawdown",
-  "validated_subject_hash": "506b25dcc6a86e06ef533a7f0fccbfa60eb019fdeaad0fbc9d86d20fa3e24504",
+  "validated_subject_hash": "267e2a18811130c83899528c86556f153aa1700be62ac83e02f4aec0c8fc59da",
   "known_answers": [
     {
       "id": "ka_001",

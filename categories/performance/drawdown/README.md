@@ -44,4 +44,5 @@ supplied; otherwise source-order indexes are displayed and chronology is marked 
 The component does not fetch, clean, sort, resample, align, or repair prices. It does not infer a
 market calendar or calculate elapsed calendar/trading-day duration. Adjustment policy is accepted
 from the caller. Tied episodes and the same-observation zero-drawdown recovery exception follow the
-disclosed deterministic selection rules.
+disclosed deterministic selection rules. A finite positive price path is refused when binary64
+rounding would report a mathematically non-total loss as exactly −100%.

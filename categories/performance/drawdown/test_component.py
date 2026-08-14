@@ -95,6 +95,168 @@ def test_output_rejects_peak_that_is_not_the_trough_running_peak() -> None:
         Output.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [-1.01, -1.0, 0.01, float("-inf"), float("inf"), float("nan")],
+)
+def test_serialized_output_rejects_drawdowns_outside_the_positive_price_range(
+    value: float,
+) -> None:
+    result = drawdown((100.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["drawdowns"][1] = value
+    payload["maximum_drawdown"] = value
+    payload["derivations"][1]["value"] = value
+    payload["derivations"][-1]["value"] = value
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_a_non_decimal_unit() -> None:
+    result = drawdown((100.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["unit"] = "unitless"
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_drawdown_refuses_a_positive_ratio_that_rounds_to_total_loss() -> None:
+    with pytest.raises(DomainError) as caught:
+        drawdown((1.0, 1e-20), price_kind="adjusted")
+
+    assert caught.value.details["violations"][0]["rule"] == "non_finite_result"
+
+
+@pytest.mark.parametrize(
+    "running_peak_indices",
+    [
+        [-1, 0],
+        [0, 2],
+        [0, 1],
+    ],
+)
+def test_serialized_output_rejects_invalid_running_peak_indexes(
+    running_peak_indices: list[int],
+) -> None:
+    result = drawdown((100.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["running_peak_indices"] = running_peak_indices
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_a_running_peak_that_never_established_a_peak() -> None:
+    result = drawdown((100.0, 90.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["running_peak_indices"][2] = 1
+    payload["derivations"][2]["inputs"][1]["index"] = 1
+    payload["derivations"][2]["expression"] = "prices[2] / prices[1] - 1"
+
+    with pytest.raises(ValidationError, match="observations that established a peak"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_recovery_index_outside_the_series() -> None:
+    result = drawdown((100.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["recovery_index"] = len(result.drawdowns)
+    payload["recovered"] = True
+
+    with pytest.raises(
+        ValidationError,
+        match="recovery index must identify a drawdown observation",
+    ):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_requires_the_first_zero_drawdown_as_recovery() -> None:
+    result = drawdown((100.0, 80.0, 100.0, 90.0, 110.0), price_kind="adjusted")
+
+    payload = json.loads(result.model_dump_json())
+    payload["recovery_index"] = 4
+    with pytest.raises(ValidationError, match="first zero drawdown after the trough"):
+        Output.model_validate(payload)
+
+    payload = json.loads(result.model_dump_json())
+    payload["recovery_index"] = None
+    payload["recovered"] = False
+    with pytest.raises(ValidationError, match="first zero drawdown after the trough"):
+        Output.model_validate(payload)
+
+    unrecovered = drawdown((100.0, 80.0, 90.0), price_kind="adjusted")
+    payload = json.loads(unrecovered.model_dump_json())
+    payload["recovery_index"] = 2
+    payload["recovered"] = True
+    with pytest.raises(ValidationError, match="first zero drawdown after the trough"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_misaligned_drawdown_timestamps() -> None:
+    result = drawdown(
+        (100.0, 80.0, 100.0),
+        price_kind="adjusted",
+        timestamps=(
+            "2026-01-01T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+            "2026-01-03T00:00:00Z",
+        ),
+    )
+    payload = json.loads(result.model_dump_json())
+    payload["drawdown_timestamps"].pop()
+
+    with pytest.raises(
+        ValidationError,
+        match="drawdown timestamps must align with drawdown values",
+    ):
+        Output.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["peak_timestamp", "trough_timestamp", "recovery_timestamp"],
+)
+def test_serialized_output_rejects_episode_timestamp_index_mismatches(
+    field: str,
+) -> None:
+    result = drawdown(
+        (100.0, 80.0, 100.0),
+        price_kind="adjusted",
+        timestamps=(
+            "2026-01-01T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+            "2026-01-03T00:00:00Z",
+        ),
+    )
+    payload = json.loads(result.model_dump_json())
+    payload[field] = "2026-01-04T00:00:00Z"
+
+    with pytest.raises(ValidationError, match=f"{field.removesuffix('_timestamp')} timestamp"):
+        Output.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("timestamps", "ordering_status"),
+    [
+        (None, "verified"),
+        (["2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"], "unverified"),
+    ],
+)
+def test_serialized_output_rejects_inconsistent_timestamp_ordering_status(
+    timestamps: list[str] | None,
+    ordering_status: str,
+) -> None:
+    result = drawdown((100.0, 80.0), price_kind="adjusted")
+    payload = json.loads(result.model_dump_json())
+    payload["drawdown_timestamps"] = timestamps
+    payload["ordering_status"] = ordering_status
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
 def test_empty_prices_are_blocked_by_contract_preflight() -> None:
     with pytest.raises(DomainError) as caught:
         preflight(

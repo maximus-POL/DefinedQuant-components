@@ -168,10 +168,19 @@ def test_output_provenance_and_subject_binding() -> None:
     result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
 
     assert result.component_id == "dq.market_data.simple_return"
-    assert result.version == "0.3.3"
+    assert result.version == "0.3.4"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.DECIMAL
+
+
+def test_serialized_output_rejects_a_non_decimal_unit() -> None:
+    result = simple_return((100.0, 101.0), price_kind=PriceKind.ADJUSTED)
+    payload = result.model_dump(mode="json")
+    payload["unit"] = "unitless"
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
 
 
 def test_constant_context_is_disclosed_without_warning() -> None:
@@ -209,6 +218,58 @@ def test_simple_return_rejects_incomplete_or_reindexed_lineage() -> None:
     payload = result.model_dump(mode="python")
     payload["derivations"][0]["inputs"][0]["index"] = 2
     with pytest.raises(ValidationError, match="two source prices"):
+        Output.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "invalid_return",
+    [-1.0, -1.5, math.nan, math.inf, -math.inf],
+)
+def test_serialized_output_rejects_impossible_simple_returns(
+    invalid_return: float,
+) -> None:
+    result = simple_return((100.0, 105.0), price_kind=PriceKind.ADJUSTED)
+    payload = result.model_dump(mode="json")
+    payload["returns"][0] = invalid_return
+    payload["derivations"][0]["value"] = invalid_return
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_requires_coherent_return_timestamps() -> None:
+    result = simple_return(
+        (100.0, 105.0, 102.9),
+        price_kind=PriceKind.ADJUSTED,
+        timestamps=(_timestamp(24), _timestamp(27), _timestamp(28)),
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["return_timestamps"] = payload["return_timestamps"][:-1]
+    with pytest.raises(ValidationError, match="must align with returns"):
+        Output.model_validate(payload)
+
+    payload = result.model_dump(mode="json")
+    payload["ordering_status"] = "unverified"
+    with pytest.raises(ValidationError, match="must have verified ordering"):
+        Output.model_validate(payload)
+
+    payload = result.model_dump(mode="json")
+    payload["return_timestamps"] = tuple(reversed(payload["return_timestamps"]))
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        Output.model_validate(payload)
+
+    payload = simple_return(
+        (100.0, 105.0),
+        price_kind=PriceKind.ADJUSTED,
+    ).model_dump(mode="json")
+    payload["ordering_status"] = "verified"
+    with pytest.raises(ValidationError, match="only when timestamps are present"):
+        Output.model_validate(payload)
+
+    payload["ordering_status"] = "unverified"
+    payload["declared_frequency"] = "daily"
+    with pytest.raises(ValidationError, match="declared frequency requires return timestamps"):
         Output.model_validate(payload)
 
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.market_data.rebased_price_index",
-  "validated_subject_hash": "42a207c315fca9f7f384782a8369d3311eabd5dc8e3f64f044f7501acb5650ad",
+  "validated_subject_hash": "4c7a15d53b12a9c721e42be50a7cb24b5805f4a4907fc000d30937ff4fd822cc",
   "known_answers": [
     {
       "id": "ka_001",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
@@ -37,7 +37,7 @@ from defined_quant_protocol import (
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictStr, model_validator
 
 COMPONENT_ID = "dq.market_data.monthly_return_matrix"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = "r_m = (P_m − P_{m−1}) / P_{m−1}"
 _YEAR_MONTH = re.compile(r"^(?P<year>[0-9]{4})-(?P<month>0[1-9]|1[0-2])$")
 _DISCLOSURES = (
@@ -89,7 +89,10 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Monthly simple returns plus a calendar heatmap specification."""
 
-    monthly_returns: tuple[float, ...] = Field(
+    unit: Literal[Unit.DECIMAL]
+    monthly_returns: tuple[
+        Annotated[float, Field(gt=-1.0, allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(
@@ -105,7 +108,9 @@ class Output(ComponentOutput):
         ),
     )
     return_kind: Literal[ReturnKind.SIMPLE] = ReturnKind.SIMPLE
-    return_months: tuple[str, ...] = Field(..., min_length=1)
+    return_months: tuple[
+        Annotated[str, Field(pattern=_YEAR_MONTH.pattern)], ...
+    ] = Field(..., min_length=1)
     price_kind: PriceKind
     observation_kind: Literal["completed_month_end"] = "completed_month_end"
     gap_check: Literal["verified_consecutive_months"] = "verified_consecutive_months"
@@ -115,6 +120,19 @@ class Output(ComponentOutput):
     def validate_complete_monthly_lineage(self) -> Output:
         if len(self.return_months) != len(self.monthly_returns):
             raise ValueError("return months must align with monthly returns")
+        matches = tuple(_YEAR_MONTH.fullmatch(month) for month in self.return_months)
+        if any(match is None for match in matches):
+            raise ValueError("return months must use canonical YYYY-MM labels")
+        ordinals = tuple(
+            int(match.group("year")) * 12 + int(match.group("month")) - 1
+            for match in matches
+            if match is not None
+        )
+        if any(
+            right != left + 1
+            for left, right in zip(ordinals, ordinals[1:], strict=False)
+        ):
+            raise ValueError("return months must be consecutive and strictly increasing")
         if len(self.derivations) != len(self.monthly_returns):
             raise ValueError("every monthly return must have one derivation")
         for index, derivation in enumerate(self.derivations):

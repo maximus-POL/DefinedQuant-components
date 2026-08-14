@@ -5,7 +5,7 @@
   "title": "Log Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",
