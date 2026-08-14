@@ -5,7 +5,7 @@
   "title": "Monthly Return Matrix",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "lifecycle": "draft",
   "template": {"profile": "time_series", "version": 1},
   "callable": "defined_quant.market_data.monthly_return_matrix.component:monthly_return_matrix",

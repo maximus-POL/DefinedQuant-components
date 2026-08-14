@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
@@ -37,7 +37,7 @@ from defined_quant_protocol import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.performance.drawdown"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = "Dₜ = Pₜ / max(P₀, …, Pₜ) − 1; MDD = minₜ Dₜ"
 _DISCLOSURES = (
     "running_peak_convention: Equal highs replace the running-peak index with the latest high.",
@@ -90,7 +90,10 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Full underwater series and one deterministic maximum-drawdown episode."""
 
-    drawdowns: tuple[float, ...] = Field(
+    unit: Literal[Unit.DECIMAL]
+    drawdowns: tuple[
+        Annotated[float, Field(gt=-1.0, le=0.0, allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(
@@ -107,7 +110,7 @@ class Output(ComponentOutput):
     )
     maximum_drawdown: float = Field(
         ...,
-        ge=-1.0,
+        gt=-1.0,
         le=0.0,
         allow_inf_nan=False,
         json_schema_extra=semantic_port_metadata(
@@ -142,6 +145,23 @@ class Output(ComponentOutput):
         count = len(self.drawdowns)
         if len(self.running_peak_indices) != count:
             raise ValueError("running peak indexes must align with drawdowns")
+        previous_peak_index = -1
+        for index, running_peak_index in enumerate(self.running_peak_indices):
+            if not 0 <= running_peak_index <= index:
+                raise ValueError(
+                    "each running peak index must identify the current or an earlier observation"
+                )
+            if running_peak_index < previous_peak_index:
+                raise ValueError("running peak indexes must never move backward")
+            if (running_peak_index == index) != (self.drawdowns[index] == 0.0):
+                raise ValueError(
+                    "zero drawdowns must identify the current observation as the running peak"
+                )
+            if self.running_peak_indices[running_peak_index] != running_peak_index:
+                raise ValueError(
+                    "running peak indexes must reference observations that established a peak"
+                )
+            previous_peak_index = running_peak_index
         if not (0 <= self.peak_index <= self.trough_index < count):
             raise ValueError("peak and trough indexes must form an ordered episode")
         if self.peak_index != self.running_peak_indices[self.trough_index]:
@@ -150,12 +170,73 @@ class Output(ComponentOutput):
             )
         if self.recovered != (self.recovery_index is not None):
             raise ValueError("recovered must agree with recovery_index")
-        if self.recovery_index is not None and self.recovery_index < self.trough_index:
-            raise ValueError("recovery cannot precede the selected trough")
+        if self.recovery_index is not None:
+            if self.recovery_index >= count:
+                raise ValueError("recovery index must identify a drawdown observation")
+            if self.maximum_drawdown < 0.0 and self.recovery_index <= self.trough_index:
+                raise ValueError("negative drawdown recovery must follow the selected trough")
+        if self.maximum_drawdown == 0.0 and self.recovery_index != self.trough_index:
+            raise ValueError(
+                "zero drawdown must recover at the shared peak and trough observation"
+            )
         if self.maximum_drawdown != self.drawdowns[self.trough_index]:
             raise ValueError("maximum drawdown must equal the selected trough value")
         if self.trough_index != self.drawdowns.index(min(self.drawdowns)):
             raise ValueError("the earliest minimum drawdown must be selected")
+        if self.maximum_drawdown < 0.0:
+            first_recovery_index = next(
+                (
+                    index
+                    for index in range(self.trough_index + 1, count)
+                    if self.drawdowns[index] == 0.0
+                ),
+                None,
+            )
+            if self.recovery_index != first_recovery_index:
+                raise ValueError(
+                    "recovery index must identify the first zero drawdown after the trough"
+                )
+        if self.drawdown_timestamps is None:
+            if self.ordering_status != "unverified":
+                raise ValueError("missing timestamps require unverified ordering")
+            if self.declared_frequency is not None:
+                raise ValueError("a declared frequency requires drawdown timestamps")
+            if any(
+                timestamp is not None
+                for timestamp in (
+                    self.peak_timestamp,
+                    self.trough_timestamp,
+                    self.recovery_timestamp,
+                )
+            ):
+                raise ValueError("episode timestamps require drawdown timestamps")
+        else:
+            if len(self.drawdown_timestamps) != count:
+                raise ValueError("drawdown timestamps must align with drawdown values")
+            if self.ordering_status != "verified":
+                raise ValueError("aligned timestamps require verified ordering")
+            if any(
+                right <= left
+                for left, right in zip(
+                    self.drawdown_timestamps,
+                    self.drawdown_timestamps[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError("drawdown timestamps must be strictly increasing")
+            if self.peak_timestamp != self.drawdown_timestamps[self.peak_index]:
+                raise ValueError("peak timestamp must match the selected peak index")
+            if self.trough_timestamp != self.drawdown_timestamps[self.trough_index]:
+                raise ValueError("trough timestamp must match the selected trough index")
+            expected_recovery_timestamp = (
+                None
+                if self.recovery_index is None
+                else self.drawdown_timestamps[self.recovery_index]
+            )
+            if self.recovery_timestamp != expected_recovery_timestamp:
+                raise ValueError(
+                    "recovery timestamp must match the selected recovery index"
+                )
         if len(self.derivations) != count + 1:
             raise ValueError("every drawdown and maximum drawdown need derivations")
 
@@ -237,6 +318,10 @@ def _calculate_path(
                     "A positive price-to-peak ratio rounded to zero."
                 )
             drawdown = ratio - 1.0
+            if drawdown == -1.0:
+                raise _blocking_error(
+                    "A positive price-to-peak ratio rounded to total loss."
+                )
             if not math.isfinite(drawdown):
                 raise _blocking_error("A price-to-peak ratio was unrepresentable.")
         drawdowns.append(drawdown)

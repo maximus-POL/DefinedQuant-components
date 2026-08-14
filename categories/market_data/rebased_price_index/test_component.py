@@ -175,6 +175,99 @@ def test_serialized_output_rejects_a_value_that_does_not_match_its_base() -> Non
         Output.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    "invalid_value",
+    [
+        pytest.param(0.0, id="zero"),
+        pytest.param(-1.0, id="negative"),
+        pytest.param(float("inf"), id="infinity"),
+        pytest.param(float("nan"), id="nan"),
+    ],
+)
+def test_serialized_output_rejects_nonpositive_or_nonfinite_index_values(
+    invalid_value: float,
+) -> None:
+    result = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+    )
+    payload = result.model_dump(mode="json")
+    payload["index_values"][1] = invalid_value
+    payload["derivations"][1]["value"] = invalid_value
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_a_non_unitless_unit() -> None:
+    result = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+    )
+    payload = result.model_dump(mode="json")
+    payload["unit"] = "decimal"
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_misaligned_or_nonincreasing_timestamps() -> None:
+    result = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+        timestamps=("2023-01-01T00:00:00Z", "2023-01-02T00:00:00Z"),
+        declared_frequency="daily",
+    )
+    payload = result.model_dump(mode="json")
+    payload["index_timestamps"] = payload["index_timestamps"][:1]
+    with pytest.raises(ValidationError, match="index timestamps must align"):
+        Output.model_validate(payload)
+
+    payload = result.model_dump(mode="json")
+    payload["index_timestamps"] = list(reversed(payload["index_timestamps"]))
+    with pytest.raises(ValidationError, match="index timestamps must be strictly increasing"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_timestamp_interpretation_mismatches() -> None:
+    without_timestamps = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+    ).model_dump(mode="json")
+    without_timestamps["ordering_status"] = "verified"
+    with pytest.raises(ValidationError, match="must be unverified without timestamps"):
+        Output.model_validate(without_timestamps)
+
+    without_timestamps = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+    ).model_dump(mode="json")
+    without_timestamps["declared_frequency"] = "daily"
+    with pytest.raises(ValidationError, match="declared frequency requires index timestamps"):
+        Output.model_validate(without_timestamps)
+
+    with_timestamps = rebased_price_index(
+        (100.0, 80.0),
+        price_kind="adjusted",
+        base_index=0,
+        base_value=100.0,
+        timestamps=("2023-01-01T00:00:00Z", "2023-01-02T00:00:00Z"),
+    ).model_dump(mode="json")
+    with_timestamps["ordering_status"] = "unverified"
+    with pytest.raises(ValidationError, match="must be verified when timestamps are present"):
+        Output.model_validate(with_timestamps)
+
+
 def test_models_reject_coercion_and_are_frozen() -> None:
     inputs = Inputs(
         prices=(100.0,),

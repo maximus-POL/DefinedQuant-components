@@ -234,13 +234,26 @@ def test_output_provenance_and_subject_binding() -> None:
     )
 
     assert result.component_id == "dq.volatility.historical_volatility"
-    assert result.version == "0.1.1"
+    assert result.version == "0.1.2"
     assert result.subject_hash == subject_hash(result.component_id)
     assert len(result.subject_hash) == 64
     assert result.unit is Unit.VOLATILITY
     assert result.return_kind is ReturnKind.LOG
     assert result.sample_size == 2
     assert result.degrees_of_freedom_adjustment == 1
+
+
+def test_serialized_output_rejects_a_non_volatility_unit() -> None:
+    result = historical_volatility(
+        (-0.01, 0.01),
+        annualization_factor=252.0,
+        return_kind=ReturnKind.LOG,
+    )
+    payload = result.model_dump(mode="json")
+    payload["unit"] = "decimal"
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
 
 
 @pytest.mark.parametrize("sample_size", [2, 29])
@@ -466,6 +479,23 @@ def test_output_rejects_incomplete_or_reindexed_lineage() -> None:
     payload = result.model_dump(mode="python")
     payload["annualized_volatility"] = 1.0
     payload["derivations"][1]["value"] = 1.0
+    with pytest.raises(ValidationError, match="must equal periodic volatility"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_annualization_underflow() -> None:
+    result = historical_volatility(
+        (-0.01, 0.01),
+        annualization_factor=1.0,
+        return_kind=ReturnKind.LOG,
+    )
+    payload = result.model_dump(mode="json")
+    payload["periodic_volatility"] = 5e-324
+    payload["annualized_volatility"] = 0.0
+    payload["annualization_factor"] = 5e-324
+    payload["derivations"][0]["value"] = 5e-324
+    payload["derivations"][1]["value"] = 0.0
+
     with pytest.raises(ValidationError, match="must equal periodic volatility"):
         Output.model_validate(payload)
 

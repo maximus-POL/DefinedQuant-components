@@ -45,7 +45,7 @@ from pydantic import (
 )
 
 COMPONENT_ID = "dq.volatility.rolling_historical_volatility"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = (
     "σ̂ₜ(w) = stdevₙ₋₁(rₜ₋w₊₁, …, rₜ); "
     "σ̂annual,ₜ(w) = σ̂ₜ(w) × sqrt(A)"
@@ -113,6 +113,7 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Rolling sample volatility aligned to each complete window end."""
 
+    unit: Literal[Unit.VOLATILITY]
     periodic_volatility: tuple[
         Annotated[float, Field(ge=0.0, allow_inf_nan=False)], ...
     ] = Field(
@@ -165,6 +166,27 @@ class Output(ComponentOutput):
             raise ValueError("periodic and annualized series must align")
         if len(self.derivations) != count * 2:
             raise ValueError("every rolling window requires two derivations")
+        if self.volatility_timestamps is None:
+            if self.ordering_status != "unverified":
+                raise ValueError("missing timestamps require unverified ordering")
+            if self.declared_frequency is not None:
+                raise ValueError("a declared frequency requires volatility timestamps")
+        else:
+            if len(self.volatility_timestamps) != count:
+                raise ValueError(
+                    "volatility timestamps must align with both volatility series"
+                )
+            if self.ordering_status != "verified":
+                raise ValueError("aligned timestamps require verified ordering")
+            if any(
+                right <= left
+                for left, right in zip(
+                    self.volatility_timestamps,
+                    self.volatility_timestamps[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError("volatility timestamps must be strictly increasing")
         for output_index in range(count):
             start = output_index
             stop = output_index + self.window_length
@@ -195,7 +217,10 @@ class Output(ComponentOutput):
             expected = self.periodic_volatility[output_index] * math.sqrt(
                 self.annualization_factor
             )
-            if expected != self.annualized_volatility[output_index]:
+            if (
+                self.periodic_volatility[output_index] > 0.0
+                and expected == 0.0
+            ) or expected != self.annualized_volatility[output_index]:
                 raise ValueError("annualized values must use square-root scaling")
         return self
 

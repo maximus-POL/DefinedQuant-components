@@ -6,7 +6,7 @@ import math
 import sys
 from datetime import datetime
 from fractions import Fraction
-from typing import Literal
+from typing import Annotated, Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
@@ -47,7 +47,7 @@ from pydantic import (
 )
 
 COMPONENT_ID = "dq.market_data.rebased_price_index"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = "Iₜ = B × (Pₜ / P_b)"
 _DISCLOSURES = (
     "base_explicit: The base observation and base value were supplied explicitly; no base "
@@ -99,7 +99,10 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """A unitless price index preserving the complete supplied path."""
 
-    index_values: tuple[float, ...] = Field(
+    unit: Literal[Unit.UNITLESS]
+    index_values: tuple[
+        Annotated[float, Field(gt=0.0, allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(
@@ -125,6 +128,25 @@ class Output(ComponentOutput):
 
     @model_validator(mode="after")
     def validate_complete_lineage(self) -> Output:
+        if self.index_timestamps is None:
+            if self.ordering_status != "unverified":
+                raise ValueError("ordering status must be unverified without timestamps")
+            if self.declared_frequency is not None:
+                raise ValueError("declared frequency requires index timestamps")
+        else:
+            if len(self.index_timestamps) != len(self.index_values):
+                raise ValueError("index timestamps must align with index values")
+            if any(
+                right <= left
+                for left, right in zip(
+                    self.index_timestamps,
+                    self.index_timestamps[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError("index timestamps must be strictly increasing")
+            if self.ordering_status != "verified":
+                raise ValueError("ordering status must be verified when timestamps are present")
         if self.base_index >= len(self.index_values):
             raise ValueError("base index must identify an index value")
         if self.index_values[self.base_index] != self.base_value:

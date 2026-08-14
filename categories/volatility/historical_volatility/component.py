@@ -30,7 +30,7 @@ from defined_quant_protocol import (
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.volatility.historical_volatility"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = (
     "a = r₀; cᵢ = rᵢ − a; dᵢ = cᵢ if every cᵢ is finite, otherwise dᵢ = rᵢ; "
     "s = maxᵢ |dᵢ|; if s = 0, σ̂ = 0; otherwise μ = fsum(dᵢ / s) / n, h₀ = 0, "
@@ -119,6 +119,7 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Periodic and explicitly annualized historical volatility."""
 
+    unit: Literal[Unit.VOLATILITY]
     periodic_volatility: float = Field(
         ...,
         ge=0.0,
@@ -194,6 +195,7 @@ class Output(ComponentOutput):
         )
         if (
             not math.isfinite(expected_annualized)
+            or (self.periodic_volatility > 0.0 and expected_annualized == 0.0)
             or self.annualized_volatility != expected_annualized
         ):
             raise ValueError(

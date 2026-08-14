@@ -5,7 +5,7 @@
   "title": "Simple Return",
   "category": "market_data",
   "group": "return_transformations",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "lifecycle": "draft",
   "template": {
     "profile": "time_series",

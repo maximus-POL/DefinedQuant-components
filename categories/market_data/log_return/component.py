@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import sys
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
@@ -39,7 +39,7 @@ from defined_quant_protocol import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.market_data.log_return"
-COMPONENT_VERSION = "0.1.1"
+COMPONENT_VERSION = "0.1.2"
 FORMULA = (
     "rₜ = log1p((Pₜ − Pₜ₋₁) / Pₜ₋₁) if Pₜ ≥ Pₜ₋₁ / 2 and Pₜ₋₁ ≥ Pₜ / 2; "
     "otherwise q = Pₜ / Pₜ₋₁ and rₜ = log(q) if 2⁻¹⁰²² ≤ q < ∞, else "
@@ -106,7 +106,10 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Log periodic returns plus explicit alignment and interpretation state."""
 
-    returns: tuple[float, ...] = Field(
+    unit: Literal[Unit.DECIMAL]
+    returns: tuple[
+        Annotated[float, Field(allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(
@@ -144,6 +147,25 @@ class Output(ComponentOutput):
 
     @model_validator(mode="after")
     def validate_complete_return_lineage(self) -> Output:
+        if self.return_timestamps is None:
+            if self.ordering_status != "unverified":
+                raise ValueError("ordering can be verified only when timestamps are present")
+            if self.declared_frequency is not None:
+                raise ValueError("a declared frequency requires return timestamps")
+        else:
+            if len(self.return_timestamps) != len(self.returns):
+                raise ValueError("return timestamps must align with returns")
+            if self.ordering_status != "verified":
+                raise ValueError("timestamped returns must have verified ordering")
+            if any(
+                current <= previous
+                for previous, current in zip(
+                    self.return_timestamps,
+                    self.return_timestamps[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError("return timestamps must be strictly increasing")
         if len(self.derivations) != len(self.returns):
             raise ValueError("every return must have exactly one derivation")
         for index, derivation in enumerate(self.derivations):
