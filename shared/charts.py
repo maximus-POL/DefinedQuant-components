@@ -7,6 +7,7 @@ import json
 import math
 import textwrap
 from datetime import datetime
+from decimal import Decimal
 from html import escape
 from pathlib import Path
 
@@ -61,7 +62,10 @@ def visualization_hash(spec: VisualizationSpec) -> str:
 
 def _format_number(value: float, number_format: NumberFormat) -> str:
     if number_format is NumberFormat.PERCENT:
-        return f"{value * 100:.4g}%"
+        scaled = value * 100.0
+        if math.isfinite(scaled):
+            return f"{scaled:.4g}%"
+        return f"{Decimal.from_float(value).scaleb(2):.4g}%"
     if number_format is NumberFormat.INTEGER:
         return f"{value:.0f}"
     return f"{value:.6g}"
@@ -429,7 +433,8 @@ def _render_heatmap_svg(spec: VisualizationSpec) -> str:
             )
             if value is not None and show_values:
                 label = escape(_format_number(value, spec.y_axis.number_format))
-                text_color = "#FFFFFF" if abs(value) / max(scale, 1e-12) > 0.62 else "#111827"
+                intensity = 0.0 if scale == 0.0 else abs(value) / scale
+                text_color = "#FFFFFF" if intensity > 0.62 else "#111827"
                 parts.append(
                     f'<text x="{x + cell_width / 2:.2f}" '
                     f'y="{y + cell_height / 2 + 3.5:.2f}" text-anchor="middle" '

@@ -50,6 +50,7 @@ def test_visualization_schema_has_no_point_count_ceiling() -> None:
 
 def test_heatmap_renders_calendar_grid_deterministically() -> None:
     spec = VisualizationSpec(
+        schema_version=1,
         id="monthly_returns",
         kind=ChartKind.HEATMAP,
         title="Monthly returns",
@@ -81,6 +82,7 @@ def test_heatmap_renders_calendar_grid_deterministically() -> None:
 
 def test_heatmap_legend_handles_large_finite_scale() -> None:
     spec = VisualizationSpec(
+        schema_version=1,
         id="extreme_heatmap",
         kind=ChartKind.HEATMAP,
         title="Extreme finite heatmap",
@@ -106,9 +108,96 @@ def test_heatmap_legend_handles_large_finite_scale() -> None:
     assert "inf" not in svg.lower()
 
 
+def test_heatmap_percentage_labels_do_not_overflow() -> None:
+    spec = VisualizationSpec(
+        schema_version=1,
+        id="extreme_percentage_heatmap",
+        kind=ChartKind.HEATMAP,
+        title="Extreme percentage heatmap",
+        alt_text="Calendar heatmap containing one large finite percentage.",
+        categories=("2023-01",),
+        series=(
+            ChartSeries(
+                key="values",
+                label="Values",
+                values=(1e307,),
+            ),
+        ),
+        x_axis=AxisSpec(label="Calendar month"),
+        y_axis=AxisSpec(
+            label="Return",
+            unit=Unit.DECIMAL,
+            number_format=NumberFormat.PERCENT,
+        ),
+    )
+
+    svg = render_svg(spec)
+
+    assert "1.000e+309%" in svg
+    assert "inf" not in svg.lower()
+    assert "nan" not in svg.lower()
+
+
+def test_heatmap_uses_actual_nonzero_scale_for_cell_contrast() -> None:
+    spec = VisualizationSpec(
+        schema_version=1,
+        id="tiny_heatmap",
+        kind=ChartKind.HEATMAP,
+        title="Tiny heatmap",
+        alt_text="Calendar heatmap containing one small finite value.",
+        categories=("2023-01",),
+        series=(
+            ChartSeries(
+                key="values",
+                label="Values",
+                values=(1e-13,),
+            ),
+        ),
+        x_axis=AxisSpec(label="Calendar month"),
+        y_axis=AxisSpec(
+            label="Return",
+            unit=Unit.DECIMAL,
+            number_format=NumberFormat.PERCENT,
+        ),
+    )
+
+    svg = render_svg(spec)
+    cell_labels = [line for line in svg.splitlines() if ">1e-11%</text>" in line]
+
+    assert cell_labels
+    assert any('fill="#FFFFFF"' in line for line in cell_labels)
+
+
+def test_chart_kind_requires_its_visualization_schema_version() -> None:
+    line = _spec(ChartKind.LINE, point_count=2)
+    assert line.schema_version == 0
+
+    line_payload = line.model_dump(mode="python")
+    line_payload["schema_version"] = 1
+    with pytest.raises(ValueError, match="line and bar charts require.*version 0"):
+        VisualizationSpec.model_validate(line_payload)
+
+    with pytest.raises(ValueError, match="heatmaps require.*version 1"):
+        VisualizationSpec(
+            id="unversioned_heatmap",
+            kind=ChartKind.HEATMAP,
+            title="Unversioned heatmap",
+            alt_text="Calendar heatmap with the legacy default schema version.",
+            categories=("2023-01",),
+            series=(ChartSeries(key="values", label="Values", values=(0.1,)),),
+            x_axis=AxisSpec(label="Calendar month"),
+            y_axis=AxisSpec(label="Return", unit=Unit.DECIMAL),
+        )
+
+    schema = VisualizationSpec.model_json_schema()["properties"]["schema_version"]
+    assert schema["enum"] == [0, 1]
+    assert schema["default"] == 0
+
+
 def test_heatmap_rejects_non_calendar_or_unsorted_categories() -> None:
     with pytest.raises(ValueError, match="YYYY-MM"):
         VisualizationSpec(
+            schema_version=1,
             id="invalid_heatmap",
             kind=ChartKind.HEATMAP,
             title="Invalid heatmap",
@@ -121,6 +210,7 @@ def test_heatmap_rejects_non_calendar_or_unsorted_categories() -> None:
 
     with pytest.raises(ValueError, match="strictly increasing"):
         VisualizationSpec(
+            schema_version=1,
             id="unsorted_heatmap",
             kind=ChartKind.HEATMAP,
             title="Unsorted heatmap",

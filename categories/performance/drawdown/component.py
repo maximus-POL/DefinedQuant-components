@@ -37,13 +37,14 @@ from defined_quant_protocol import (
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictFloat, model_validator
 
 COMPONENT_ID = "dq.performance.drawdown"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = "Dₜ = Pₜ / max(P₀, …, Pₜ) − 1; MDD = minₜ Dₜ"
 _DISCLOSURES = (
     "running_peak_convention: Equal highs replace the running-peak index with the latest high.",
     "episode_tie_convention: The earliest maximum-drawdown trough is selected.",
-    "recovery_convention: Recovery is the first later observation at or above the selected "
-    "peak value.",
+    "recovery_convention: For a negative selected drawdown, recovery is the first later "
+    "observation at or above the selected peak value; when maximum drawdown is zero, the "
+    "shared peak/trough observation is treated as recovered immediately.",
     "gap_check_not_assessed: Calendar-aware gaps and elapsed-time duration were not assessed.",
 )
 
@@ -143,6 +144,10 @@ class Output(ComponentOutput):
             raise ValueError("running peak indexes must align with drawdowns")
         if not (0 <= self.peak_index <= self.trough_index < count):
             raise ValueError("peak and trough indexes must form an ordered episode")
+        if self.peak_index != self.running_peak_indices[self.trough_index]:
+            raise ValueError(
+                "selected peak index must equal the running peak at the selected trough"
+            )
         if self.recovered != (self.recovery_index is not None):
             raise ValueError("recovered must agree with recovery_index")
         if self.recovery_index is not None and self.recovery_index < self.trough_index:
@@ -358,7 +363,8 @@ def drawdown(
     )
     transformations = (
         f"Computed the underwater path and selected episode as {FORMULA}.",
-        "Updated running peaks on equal highs and selected the earliest deepest trough.",
+        "Updated running peaks on equal highs, selected the earliest deepest trough, and "
+        "treated a zero-drawdown selected observation as immediately recovered.",
     )
     timestamp = inputs.timestamps
     visualization = _visualization(

@@ -88,7 +88,7 @@ jobs:
           assert (ref.id, ref.version, ref.subject_hash) == (
               "dq.market_data.simple_return",
               "0.3.3",
-              "ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433",
+              "63a2e74034b45f567fda32b263dc61441f16c9cfd5107f88b41505d16de39cab",
           )
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1
@@ -117,7 +117,7 @@ jobs:
         run: |
           uv run python authoring/export_catalog.py \
             --commit-sha "${GITHUB_SHA}" \
-            --release-version "0.1.1" \
+            --release-version "0.1.2" \
             --release-label "Experimental Technical Preview"
 
       - name: Upload exact-SHA public artifacts

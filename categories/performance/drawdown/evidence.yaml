@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "component_id": "dq.performance.drawdown",
-  "validated_subject_hash": "4395124abacba36f33fa58cfa5947fee1c071f27bcc034922d3adc48c2d86462",
+  "validated_subject_hash": "506b25dcc6a86e06ef533a7f0fccbfa60eb019fdeaad0fbc9d86d20fa3e24504",
   "known_answers": [
     {
       "id": "ka_001",
@@ -90,7 +90,7 @@
   "boundary_cases": [
     {
       "id": "bc_001",
-      "description": "A single observation has zero drawdown and is its own recovered episode.",
+      "description": "A single observation has zero drawdown and is the selected peak, trough, and same-observation recovery.",
       "inputs": {
         "prices": [
           42.0
@@ -113,9 +113,24 @@
             "value": 0.0
           },
           {
+            "path": "/peak_index",
+            "op": "equal",
+            "value": 0
+          },
+          {
+            "path": "/trough_index",
+            "op": "equal",
+            "value": 0
+          },
+          {
             "path": "/recovery_index",
             "op": "equal",
             "value": 0
+          },
+          {
+            "path": "/recovered",
+            "op": "equal",
+            "value": true
           }
         ]
       }

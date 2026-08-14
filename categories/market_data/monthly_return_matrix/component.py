@@ -37,7 +37,7 @@ from defined_quant_protocol import (
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictStr, model_validator
 
 COMPONENT_ID = "dq.market_data.monthly_return_matrix"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = "r_m = (P_m − P_{m−1}) / P_{m−1}"
 _YEAR_MONTH = re.compile(r"^(?P<year>[0-9]{4})-(?P<month>0[1-9]|1[0-2])$")
 _DISCLOSURES = (
@@ -179,6 +179,7 @@ def _visualization(
 ) -> VisualizationSpec:
     year_count = len({month[:4] for month in months})
     return VisualizationSpec(
+        schema_version=1,
         id="monthly_return_heatmap",
         kind=ChartKind.HEATMAP,
         title="Monthly simple-return heatmap",

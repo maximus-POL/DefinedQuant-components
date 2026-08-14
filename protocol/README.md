@@ -105,7 +105,7 @@ with explicit draft opt-in:
 ```text
 dq.market_data.simple_return
 version:      0.3.3
-subject_hash: ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433
+subject_hash: 63a2e74034b45f567fda32b263dc61441f16c9cfd5107f88b41505d16de39cab
 ```
 
 The catalog-aware validator checks that exact allowlist binding, required questions, the canonical

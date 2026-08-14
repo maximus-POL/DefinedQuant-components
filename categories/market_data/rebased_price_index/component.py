@@ -47,7 +47,7 @@ from pydantic import (
 )
 
 COMPONENT_ID = "dq.market_data.rebased_price_index"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = "Iₜ = B × (Pₜ / P_b)"
 _DISCLOSURES = (
     "base_explicit: The base observation and base value were supplied explicitly; no base "
@@ -125,6 +125,10 @@ class Output(ComponentOutput):
 
     @model_validator(mode="after")
     def validate_complete_lineage(self) -> Output:
+        if self.base_index >= len(self.index_values):
+            raise ValueError("base index must identify an index value")
+        if self.index_values[self.base_index] != self.base_value:
+            raise ValueError("the index value at base_index must equal base_value")
         if len(self.derivations) != len(self.index_values):
             raise ValueError("every index value must have exactly one derivation")
         for index, derivation in enumerate(self.derivations):
