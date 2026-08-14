@@ -17,15 +17,20 @@ visible separately; passing repository checks does not upgrade a component's fin
 ## Find a component
 
 Start in [`categories/`](categories/). Categories are ordinary folders with a `README.md` that
-explains their scope. The catalog includes Simple Return, Log Return, and Historical Volatility:
+explains their scope. The catalog currently includes seven components:
 
 ```text
 categories/
 ├── market_data/
 │   ├── log_return/
+│   ├── monthly_return_matrix/
+│   ├── rebased_price_index/
 │   └── simple_return/
+├── performance/
+│   └── drawdown/
 └── volatility/
-    └── historical_volatility/
+    ├── historical_volatility/
+    └── rolling_historical_volatility/
 ```
 
 There is no generated folder maze and no profile-specific template tree. A component always has
@@ -104,7 +109,7 @@ It does not prove that caller-supplied data is true, authorize an analysis, crea
 Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
 atomic managed-authorization foundation introduced in 0.2.0. Its packaged
 `simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.3` at
-subject `ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433`, with explicit opt-in to
+subject `63a2e74034b45f567fda32b263dc61441f16c9cfd5107f88b41505d16de39cab`, with explicit opt-in to
 its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
 manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
 approval hashes. The approval model has no automatic or policy-approval mode.

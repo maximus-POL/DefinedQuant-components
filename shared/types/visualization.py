@@ -74,7 +74,7 @@ class VisualizationSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[0] = 0
+    schema_version: Literal[0, 1] = 0
     id: str = Field(min_length=1, max_length=64)
     kind: ChartKind
     title: str = Field(min_length=1, max_length=160)
@@ -119,6 +119,8 @@ class VisualizationSpec(BaseModel):
         if len(set(keys)) != len(keys):
             raise ValueError("chart series keys must be unique")
         if self.kind is ChartKind.HEATMAP:
+            if self.schema_version != 1:
+                raise ValueError("heatmaps require visualization schema version 1")
             if len(self.series) != 1:
                 raise ValueError("heatmaps require exactly one series")
             if any(_YEAR_MONTH.fullmatch(value) is None for value in self.categories):
@@ -127,6 +129,8 @@ class VisualizationSpec(BaseModel):
                 raise ValueError("heatmap categories must be unique")
             if tuple(sorted(self.categories)) != self.categories:
                 raise ValueError("heatmap categories must be strictly increasing")
+        elif self.schema_version != 0:
+            raise ValueError("line and bar charts require visualization schema version 0")
         return self
 
 

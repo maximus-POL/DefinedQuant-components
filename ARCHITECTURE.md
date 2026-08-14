@@ -226,7 +226,7 @@ assertion, not a provider or Defined Quant attestation.
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only
 `dq.market_data.simple_return` version `0.3.3`, subject
-`ef6c835a10839a23f45cce9b9e58ca18560484f190fc9bd6293fcf39ba89c433`, with explicit opt-in to its
+`63a2e74034b45f567fda32b263dc61441f16c9cfd5107f88b41505d16de39cab`, with explicit opt-in to its
 draft lifecycle and non-empty timestamps. The catalog-aware validator checks the exact installed
 subject, the component's required questions and Pydantic input model, declarative constraints, and
 the outer policy requirements without calling the calculation. A successful evaluation emits a
@@ -275,7 +275,7 @@ source code.
 
 ## 10. Current claim boundary
 
-All three current components have lifecycle `draft`, author-asserted evidence, and no independent
+All seven current components have lifecycle `draft`, author-asserted evidence, and no independent
 domain review. The typed operation protocol improves reproducibility and interface verification
 without changing those facts.
 

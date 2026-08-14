@@ -5,7 +5,7 @@
   "title": "Rolling Historical Volatility",
   "category": "volatility",
   "group": "realized_risk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "lifecycle": "draft",
   "template": {"profile": "time_series", "version": 1},
   "callable": "defined_quant.volatility.rolling_historical_volatility.component:rolling_historical_volatility",

@@ -12,6 +12,7 @@ from defined_quant.types import NumberFormat, ReturnKind, Unit
 from defined_quant.volatility.rolling_historical_volatility.component import (
     FORMULA,
     Inputs,
+    Output,
     rolling_historical_volatility,
 )
 from pydantic import ValidationError
@@ -93,6 +94,50 @@ def test_result_provenance_and_svg_are_deterministic() -> None:
     assert first.subject_hash == subject_hash(first.component_id)
     assert first.model_dump_json() == second.model_dump_json()
     assert render_svg(first.visualizations[0]) == render_svg(second.visualizations[0])
+
+
+@pytest.mark.parametrize(
+    ("field", "derivation_index"),
+    [
+        ("periodic_volatility", 0),
+        ("annualized_volatility", 1),
+    ],
+)
+def test_serialized_output_rejects_negative_volatility_values(
+    field: str,
+    derivation_index: int,
+) -> None:
+    result = rolling_historical_volatility(
+        (0.01, -0.01),
+        window_length=2,
+        annualization_factor=4.0,
+        return_kind="log",
+    )
+    payload = result.model_dump(mode="json")
+    payload[field][0] = -payload[field][0]
+    payload["derivations"][derivation_index]["value"] = payload[field][0]
+
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        Output.model_validate(payload)
+
+
+@pytest.mark.parametrize("value", [math.inf, -math.inf, math.nan])
+@pytest.mark.parametrize("field", ["periodic_volatility", "annualized_volatility"])
+def test_serialized_output_rejects_non_finite_volatility_values(
+    field: str,
+    value: float,
+) -> None:
+    result = rolling_historical_volatility(
+        (0.01, -0.01),
+        window_length=2,
+        annualization_factor=4.0,
+        return_kind="log",
+    )
+    payload = result.model_dump(mode="json")
+    payload[field][0] = value
+
+    with pytest.raises(ValidationError):
+        Output.model_validate(payload)
 
 
 def test_input_model_is_strict_and_frozen() -> None:

@@ -11,6 +11,7 @@ from defined_quant.market_data.rebased_price_index.component import (
     COMPONENT_ID,
     FORMULA,
     Inputs,
+    Output,
     rebased_price_index,
 )
 from defined_quant.types import DomainError, NumberFormat, PriceKind, Unit
@@ -140,6 +141,38 @@ def test_rebasing_still_blocks_a_truly_unrepresentable_result() -> None:
         )
 
     assert caught.value.details["violations"][0]["rule"] == "non_finite_result"
+
+
+def test_serialized_output_rejects_a_base_index_outside_the_index_series() -> None:
+    result = rebased_price_index(
+        (80.0, 100.0),
+        price_kind="adjusted",
+        base_index=1,
+        base_value=100.0,
+    )
+    payload = result.model_dump(mode="json")
+    payload["base_index"] = len(result.index_values)
+
+    with pytest.raises(ValidationError, match="base index must identify an index value"):
+        Output.model_validate(payload)
+
+
+def test_serialized_output_rejects_a_value_that_does_not_match_its_base() -> None:
+    result = rebased_price_index(
+        (80.0, 100.0),
+        price_kind="adjusted",
+        base_index=1,
+        base_value=100.0,
+    )
+    payload = result.model_dump(mode="json")
+    payload["index_values"][result.base_index] = 200.0
+    payload["derivations"][result.base_index]["value"] = 200.0
+
+    with pytest.raises(
+        ValidationError,
+        match="the index value at base_index must equal base_value",
+    ):
+        Output.model_validate(payload)
 
 
 def test_models_reject_coercion_and_are_frozen() -> None:

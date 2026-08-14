@@ -58,6 +58,7 @@ def test_evidence_inv_002() -> None:
     )
     chart = result.visualizations[0]
 
+    assert chart.schema_version == 1
     assert chart.kind is ChartKind.HEATMAP
     assert chart.categories == result.return_months
     assert chart.series[0].values == result.monthly_returns

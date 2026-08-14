@@ -6,9 +6,15 @@ import json
 from pathlib import Path
 
 import pytest
-from defined_quant import render_svg, subject_hash
-from defined_quant.performance.drawdown.component import FORMULA, Inputs, drawdown
-from defined_quant.types import NumberFormat, PriceKind, Unit
+from defined_quant import preflight, render_svg, subject_hash
+from defined_quant.performance.drawdown.component import (
+    COMPONENT_ID,
+    FORMULA,
+    Inputs,
+    Output,
+    drawdown,
+)
+from defined_quant.types import DomainError, InputRef, NumberFormat, PriceKind, Unit
 from pydantic import ValidationError
 
 
@@ -42,7 +48,12 @@ def test_evidence_inv_002() -> None:
 
     assert result.drawdowns == (0.0, 0.0, 0.0, 0.0)
     assert result.maximum_drawdown == 0.0
-    assert result.trough_index == 0
+    assert (
+        result.peak_index,
+        result.trough_index,
+        result.recovery_index,
+        result.recovered,
+    ) == (0, 0, 0, True)
 
 
 def test_evidence_inv_003() -> None:
@@ -60,6 +71,43 @@ def test_latest_equal_high_becomes_running_peak() -> None:
 
     assert result.running_peak_indices == (0, 1, 2, 2)
     assert result.peak_index == 2
+
+
+def test_output_rejects_peak_that_is_not_the_trough_running_peak() -> None:
+    result = drawdown((100.0, 120.0, 84.0, 120.0), price_kind="adjusted")
+    invalid_maximum = result.derivations[-1].model_copy(
+        update={
+            "inputs": (
+                InputRef(field="prices", index=result.trough_index),
+                InputRef(field="prices", index=0),
+            ),
+            "expression": f"prices[{result.trough_index}] / prices[0] - 1",
+        }
+    )
+    payload = result.model_dump(mode="python")
+    payload["peak_index"] = 0
+    payload["derivations"] = result.derivations[:-1] + (invalid_maximum,)
+
+    with pytest.raises(
+        ValidationError,
+        match="selected peak index must equal the running peak at the selected trough",
+    ):
+        Output.model_validate(payload)
+
+
+def test_empty_prices_are_blocked_by_contract_preflight() -> None:
+    with pytest.raises(DomainError) as caught:
+        preflight(
+            COMPONENT_ID,
+            prices=(),
+            price_kind="adjusted",
+            timestamps=None,
+            declared_frequency=None,
+        )
+
+    assert [
+        violation["rule"] for violation in caught.value.details["violations"]
+    ] == ["empty_prices"]
 
 
 def test_result_provenance_and_svg_are_deterministic() -> None:

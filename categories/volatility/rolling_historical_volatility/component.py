@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from defined_quant import preflight, subject_hash
 from defined_quant.types import (
@@ -45,7 +45,7 @@ from pydantic import (
 )
 
 COMPONENT_ID = "dq.volatility.rolling_historical_volatility"
-COMPONENT_VERSION = "0.1.0"
+COMPONENT_VERSION = "0.1.1"
 FORMULA = (
     "σ̂ₜ(w) = stdevₙ₋₁(rₜ₋w₊₁, …, rₜ); "
     "σ̂annual,ₜ(w) = σ̂ₜ(w) × sqrt(A)"
@@ -113,7 +113,9 @@ class Inputs(BaseModel):
 class Output(ComponentOutput):
     """Rolling sample volatility aligned to each complete window end."""
 
-    periodic_volatility: tuple[float, ...] = Field(
+    periodic_volatility: tuple[
+        Annotated[float, Field(ge=0.0, allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(
@@ -128,7 +130,9 @@ class Output(ComponentOutput):
             provenance_requirement=PortProvenanceRequirement.COMPONENT_BOUND,
         ),
     )
-    annualized_volatility: tuple[float, ...] = Field(
+    annualized_volatility: tuple[
+        Annotated[float, Field(ge=0.0, allow_inf_nan=False)], ...
+    ] = Field(
         ...,
         min_length=1,
         json_schema_extra=semantic_port_metadata(

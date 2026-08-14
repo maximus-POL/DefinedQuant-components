@@ -15,8 +15,10 @@ one-period volatility.
 
 The component executes `Dₜ = Pₜ / max(P₀, …, Pₜ) − 1; MDD = minₜ Dₜ`. Equal highs replace the
 running-peak index with the latest equal high. If multiple observations share the deepest
-drawdown, the earliest trough is selected; recovery is the first later observation at or above
-that episode's peak value.
+drawdown, the earliest trough is selected. For a negative episode, recovery is the first later
+observation at or above that episode's peak value. When maximum drawdown is zero, the selected
+peak and trough are the same earliest observation, and that observation is reported as recovered
+immediately rather than requiring a later observation.
 
 ## Worked example
 
@@ -41,4 +43,5 @@ supplied; otherwise source-order indexes are displayed and chronology is marked 
 
 The component does not fetch, clean, sort, resample, align, or repair prices. It does not infer a
 market calendar or calculate elapsed calendar/trading-day duration. Adjustment policy is accepted
-from the caller. Tied episodes follow the disclosed deterministic selection rule.
+from the caller. Tied episodes and the same-observation zero-drawdown recovery exception follow the
+disclosed deterministic selection rules.

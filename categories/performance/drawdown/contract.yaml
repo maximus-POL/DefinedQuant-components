@@ -5,7 +5,7 @@
   "title": "Drawdown",
   "category": "performance",
   "group": "drawdown_analysis",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "lifecycle": "draft",
   "template": {"profile": "time_series", "version": 1},
   "callable": "defined_quant.performance.drawdown.component:drawdown",
@@ -42,6 +42,7 @@
     "The component reports observation indexes, not elapsed calendar or trading-day duration.",
     "It does not infer missing sessions, market calendars, currency conversion, or total-return treatment.",
     "Only the earliest deepest trough is summarized when several troughs tie.",
+    "When maximum drawdown is zero, the selected peak, trough, and recovery are the same earliest observation; the first-later recovery rule applies only to negative episodes.",
     "Finite positive values whose price-to-peak ratio underflows to zero are rejected."
   ],
   "depends_on": [],
@@ -102,6 +103,12 @@
     ],
     "allowed_defaults": [],
     "constraints": [
+      {
+        "id": "empty_prices",
+        "severity": "blocking",
+        "when": {"left": {"field": "prices", "measure": "count"}, "op": "eq", "right": {"value": 0}},
+        "message": "empty_prices: At least one price is required."
+      },
       {
         "id": "non_finite_prices",
         "severity": "blocking",
@@ -168,7 +175,7 @@
         "message": "unadjusted_price_interpretation: Corporate-action breaks can appear as drawdowns in unadjusted prices."
       }
     ],
-    "interpretation": "Report the full decimal underwater series, maximum drawdown as a non-positive decimal, selected peak/trough/recovery indexes and timestamps, deterministic tie conventions, price kind, ordering and gap status, indexed lineage, visualization, warnings, disclosures, and provenance. Do not infer elapsed-time duration, probability, total-return treatment, or losses outside the supplied path."
+    "interpretation": "Report the full decimal underwater series, maximum drawdown as a non-positive decimal, selected peak/trough/recovery indexes and timestamps, deterministic tie conventions, price kind, ordering and gap status, indexed lineage, visualization, warnings, disclosures, and provenance. For a negative episode, recovery is the first later observation at or above its peak; when maximum drawdown is zero, the shared peak/trough observation is reported as recovered immediately. Do not infer elapsed-time duration, probability, total-return treatment, or losses outside the supplied path."
   },
   "display": {
     "profile": "time_series",
