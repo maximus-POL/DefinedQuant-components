@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from defined_quant.data_records import cas_json_bytes, pretty_json_bytes
+from defined_quant.data_records import (
+    DatasetRegistrationRequest,
+    cas_json_bytes,
+    pretty_json_bytes,
+)
 from defined_quant.host_failures import (
     HostFailureException,
     TrustLabel,
@@ -18,7 +22,13 @@ from defined_quant.host_failures import (
 )
 from defined_quant.operation_runtime import execute_operation as execute_phase1_operation
 from defined_quant.service import DefinedQuantService
-from defined_quant_protocol import FileDigest, OperationRequest, OperationSuccess
+from defined_quant_protocol import (
+    CallerProvenance,
+    ComponentRef,
+    FileDigest,
+    OperationRequest,
+    OperationSuccess,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 EVALUATIONS = ROOT / "docs" / "local_mcp" / "evaluation_cases.v1.json"
@@ -147,6 +157,45 @@ def test_service_session_is_lazy_and_dataset_preview_cursor_is_limit_independent
     session_directory = service.session_cas.directory
     service.close()
     assert not session_directory.exists()
+    service.close()
+
+
+def test_model_and_mapping_service_entry_points_return_identical_references(
+    tmp_path: Path,
+) -> None:
+    service = DefinedQuantService(session_state_root=tmp_path / "state")
+    dataset_payload = _daily_request(count=2)
+    typed_dataset = DatasetRegistrationRequest.model_validate(dataset_payload)
+
+    mapping_dataset = service.register_dataset(dataset_payload)
+    model_dataset = service.register_dataset(typed_dataset)
+
+    assert model_dataset["dataset_ref"] == mapping_dataset["dataset_ref"]
+
+    component_payload = _evaluation_component()
+    typed_component = ComponentRef.model_validate(component_payload)
+    provenance_payload = {
+        "source_kind": "synthetic",
+        "interpretation_method": "caller_structured",
+        "label": "Model-or-mapping service parity.",
+    }
+    typed_provenance = CallerProvenance.model_validate(provenance_payload)
+    literals = {"prices": [100.0, 101.0], "price_kind": "adjusted"}
+
+    mapping_operation = service.execute_recorded_operation(
+        component_payload,
+        output_dir=tmp_path / "mapping-operation",
+        literals=literals,
+        provenance=provenance_payload,
+    )
+    model_operation = service.execute_recorded_operation(
+        typed_component,
+        output_dir=tmp_path / "model-operation",
+        literals=literals,
+        provenance=typed_provenance,
+    )
+
+    assert model_operation["operation_ref"] == mapping_operation["operation_ref"]
     service.close()
 
 

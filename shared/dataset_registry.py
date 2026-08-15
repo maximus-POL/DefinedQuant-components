@@ -629,7 +629,7 @@ def normalize_dataset(
         _preflight_request_limits(request)
     try:
         request_value = (
-            request.model_dump(mode="json")
+            request.model_dump(mode="json", exclude_none=True)
             if isinstance(request, DatasetRegistrationRequest)
             else request
         )

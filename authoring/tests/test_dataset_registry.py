@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from defined_quant.data_records import DatasetRegistrationRequest
 from defined_quant.dataset_registry import (
     MAX_DECODED_CELL_BYTES,
     ConfiguredFileRoots,
@@ -100,6 +101,27 @@ def test_normalizer_reproduces_linked_fixed_dataset_vector_without_mcp() -> None
     assert normalized.record.digest == record_vector["expected_sha256"]
     assert normalized.record.reference == record_vector["expected_reference"]
     assert not any(name == "mcp" or name.startswith("mcp.") for name in sys.modules)
+
+
+def test_typed_and_mapping_registration_requests_normalize_identically() -> None:
+    payload = _request(
+        {
+            "kind": "inline_rows",
+            "rows": [{"timestamp": "2024-01-02T00:00:00Z", "price": 100}],
+        }
+    )
+    typed = DatasetRegistrationRequest.model_validate(payload)
+
+    mapping_result = normalize_dataset(payload)
+    typed_result = normalize_dataset(typed)
+
+    assert typed_result.payload.canonical_projection() == (
+        mapping_result.payload.canonical_projection()
+    )
+    assert typed_result.record.canonical_projection() == (
+        mapping_result.record.canonical_projection()
+    )
+    assert typed_result.record.reference == mapping_result.record.reference
 
 
 def test_external_preprocessing_default_is_visible_and_hash_significant() -> None:
