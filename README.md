@@ -106,6 +106,9 @@ manifest is an internally reconciled record, not a signed or independent executi
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
+**Supported MCP alpha platforms:** macOS and Linux. Windows support is a separate future
+workstream and is not part of the alpha.
+
 Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
 atomic managed-authorization foundation introduced in 0.2.0. Its packaged
 `simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.4` at

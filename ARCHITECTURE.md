@@ -313,11 +313,15 @@ All seven current components have lifecycle `draft`, author-asserted evidence, a
 domain review. The typed operation protocol improves reproducibility and interface verification
 without changing those facts.
 
-The optional local MCP alpha is not implemented. Its frozen transport, host, reference, and
-security design is recorded in [`docs/LOCAL_MCP_ALPHA_DESIGN.md`](docs/LOCAL_MCP_ALPHA_DESIGN.md).
+The optional local MCP alpha transport is not yet implemented. Its frozen transport, host,
+reference, and security design is recorded in
+[`docs/LOCAL_MCP_ALPHA_DESIGN.md`](docs/LOCAL_MCP_ALPHA_DESIGN.md).
 It gives the existing operation record, manifest, and declared members the calculation-receipt
 role without adding a second record model; portable reproduction remains the deferred
 `ResearchBundle` capability.
+
+**Supported MCP alpha platforms:** macOS and Linux. Windows support requires a separate future
+security and operations boundary and is not part of the alpha.
 
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return

@@ -1229,9 +1229,10 @@ caller-supplied path.
 
 ### 7.3 Worker boundary
 
-Every selected inspection or execution starts in a separate process group on POSIX or Job Object
-on Windows, with unrelated file descriptors/handles closed and a private working/staging
-directory. The controller sends one strict typed request and receives one control response.
+On the supported alpha platforms, every selected inspection or execution starts in a separate
+POSIX process group, with unrelated file descriptors closed and a private working/staging
+directory. A Windows Job Object boundary belongs to the separate future Windows workstream. The
+controller sends one strict typed request and receives one control response.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
 Worker admission uses a non-blocking semaphore at the configured concurrency value; there is no
@@ -1241,10 +1242,10 @@ staging directory is created.
 The controller creates the environment from an allowlist instead of copying the parent. It sets a
 private `TMPDIR`/`TEMP`/`TMP`, `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`,
 `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `PYTHONHASHSEED=0`, `NO_COLOR=1`, and `TZ=UTC`.
-Only platform-required `SYSTEMROOT`, `WINDIR`, and `COMSPEC`, plus a restricted executable search
-path assembled by the launcher, may be inherited. Home directories, proxy settings, cloud and
-provider credentials, API keys, tokens, cookies, user-site settings, and unrelated variables are
-absent.
+No platform environment is copied wholesale. A future Windows implementation may additionally
+allow only required `SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after its boundary is implemented
+and tested. Home directories, proxy settings, cloud and provider credentials, API keys, tokens,
+cookies, user-site settings, and unrelated variables are absent.
 
 The launcher enforces the 512 MiB worker memory ceiling with a tested OS mechanism and an
 independent controller-side usage monitor; exceeding the memory or captured-stream ceiling kills
@@ -1360,8 +1361,10 @@ exactly `mcp==2.0.0` in the separate MCP package and commits its platform-comple
 does not declare `mcp-types` separately.
 An SDK upgrade is a dedicated dependency change that updates pin and lock together, reviews the
 full platform-marked dependency/licence/hash diff, and reruns official-client tool, resource,
-failure, annotation, cancellation, and cleanup tests on macOS, Linux, and Windows across Python
-3.11–3.13. Automatic major upgrades are forbidden. PR0 adds no SDK dependency or lock.
+failure, annotation, cancellation, and cleanup tests on macOS and Linux across Python 3.11–3.13.
+Windows support is a separate future workstream requiring tested reparse-point, owner-only ACL,
+handle-containment, locking, and cleanup boundaries before it can enter the client test matrix.
+Automatic major upgrades are forbidden. PR0 adds no SDK dependency or lock.
 Supported-line decisions also follow the official
 [security policy](https://github.com/modelcontextprotocol/python-sdk/security).
 
@@ -1382,6 +1385,8 @@ not commit 10,000 component directories.
 
 ## 10. Implementation order and non-goals
 
+**Supported MCP alpha platforms:** macOS and Linux. Windows is not an alpha release target.
+
 Implementation order is fixed so transport work cannot create a second runtime:
 
 1. **Phase 1 — shared runtime extraction and CLI parity.** Add `operation_runtime` and
@@ -1400,7 +1405,8 @@ Implementation order is fixed so transport work cannot create a second runtime:
    protocol changes in section 3, then permit one exact compatible operation source. No managed
    plan execution.
 6. **Phase 5 — packaging and user documentation.** Build and test exact compatible core and MCP
-   wheels together; document local installation, STDIO registration, privacy, trust, and rollback.
+   wheels together for macOS and Linux. Document local installation, STDIO registration, privacy,
+   trust, platform scope, and rollback. Windows remains a separate future workstream.
 
 Receipt ownership follows that order: Phase 1 creates and reconciles the existing manifest and
 members, Phase 3 publishes their `OperationRecordV1` and `dqop:v1` reference, and Phase 4 exposes
