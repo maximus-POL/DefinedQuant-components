@@ -11,6 +11,8 @@ from typing import Any
 import jsonschema  # type: ignore[import-untyped]
 import pytest
 from defined_quant.market_data.simple_return.component import Inputs, Output
+from defined_quant.operation_runtime import OperationRuntimeError, validate_component_input
+from defined_quant_protocol import OperationErrorCode
 from pydantic import BaseModel, Field
 
 from authoring import evidence_runtime
@@ -99,6 +101,25 @@ def test_authored_expectation_is_the_assertion_that_executes() -> None:
         execute_numerical_case(COMPONENT_DIR, record)
 
 
+def test_numerical_evidence_calls_the_shared_execution_seam_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = load_evidence(EVIDENCE_PATH)
+    record = _record(evidence, "boundary_cases", "bc_001")
+    execute_component = evidence_runtime.execute_component
+    calls = 0
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return execute_component(*args, **kwargs)
+
+    monkeypatch.setattr(evidence_runtime, "execute_component", counted)
+    execute_numerical_case(COMPONENT_DIR, record)
+
+    assert calls == 1
+
+
 def test_schema_rejects_ad_hoc_expected_dialects() -> None:
     evidence = load_evidence(EVIDENCE_PATH)
     record = _record(evidence, "boundary_cases", "bc_016_large_visualization")
@@ -135,16 +156,16 @@ def test_schema_accepts_only_closed_input_validation_issues() -> None:
 def test_input_validation_expectation_compares_exact_structured_issues(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        evidence_runtime,
-        "component_models",
-        lambda _component_dir: (InputValidationInputs, InputValidationOutput),
-    )
-    monkeypatch.setattr(
-        evidence_runtime,
-        "load_component",
-        lambda _component_dir: pytest.fail("invalid inputs must not execute the component"),
-    )
+    def validate_only(selected: Any, component: Any, raw_input: Any) -> None:
+        validate_component_input(
+            selected,
+            InputValidationInputs,
+            raw_input,
+            component=component,
+        )
+        pytest.fail("invalid inputs must not execute the component")
+
+    monkeypatch.setattr(evidence_runtime, "execute_component", validate_only)
     record: dict[str, Any] = {
         "inputs": {"values": []},
         "expect": {
@@ -165,10 +186,9 @@ def test_input_validation_expectation_fails_when_inputs_are_valid(
 ) -> None:
     monkeypatch.setattr(
         evidence_runtime,
-        "component_models",
-        lambda _component_dir: (InputValidationInputs, InputValidationOutput),
+        "execute_component",
+        lambda _record, _component, _raw_input: object(),
     )
-    monkeypatch.setattr(evidence_runtime, "load_component", lambda _component_dir: object())
 
     with pytest.raises(AssertionError, match="Inputs were valid"):
         execute_numerical_case(
@@ -178,6 +198,45 @@ def test_input_validation_expectation_fails_when_inputs_are_valid(
                 "expect": {
                     "outcome": "input_validation_error",
                     "issues": [{"path": "/values", "type": "too_short"}],
+                },
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    "runtime_code",
+    [
+        OperationErrorCode.OUTPUT_VALIDATION_FAILED,
+        OperationErrorCode.COMPONENT_CONTRACT_ERROR,
+    ],
+)
+def test_integrity_runtime_failures_cannot_satisfy_authored_error_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime_code: OperationErrorCode,
+) -> None:
+    def fail_integrity(_record: Any, component: Any, _raw_input: Any) -> None:
+        raise OperationRuntimeError(
+            runtime_code,
+            "Synthetic integrity failure.",
+            component=component,
+            details={
+                "component_error": {
+                    "code": "domain_error",
+                    "details": {"violations": []},
+                }
+            },
+        )
+
+    monkeypatch.setattr(evidence_runtime, "execute_component", fail_integrity)
+    with pytest.raises(AssertionError, match="non-evidence code"):
+        execute_numerical_case(
+            COMPONENT_DIR,
+            {
+                "inputs": {"prices": [100.0, 0.0], "price_kind": "adjusted"},
+                "expect": {
+                    "outcome": "error",
+                    "code": "domain_error",
+                    "violation_ids": [],
                 },
             },
         )

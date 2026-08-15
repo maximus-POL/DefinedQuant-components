@@ -1,0 +1,1080 @@
+{
+  "schema_version": 1,
+  "fixture_id": "local_mcp_alpha_evaluation_cases_v1",
+  "case_count": 5,
+  "determinism": {
+    "network_access": false,
+    "wall_clock_access": false,
+    "external_data": false,
+    "executable_fixture_code": false,
+    "default_search_limit": 5,
+    "maximum_search_response_bytes": 65536,
+    "maximum_tool_result_bytes": 262144
+  },
+  "template_resolution": {
+    "step_argument_source": {
+      "exactly_one_of": [
+        "arguments",
+        "arguments_fixture_pointer",
+        "arguments_template"
+      ],
+      "arguments": "Use the closed JSON object exactly as written.",
+      "arguments_fixture_pointer": "Resolve the pointer according to arguments_fixture_pointer, then use the referenced closed JSON object exactly as written.",
+      "arguments_template": "Resolve every substitution according to step_output_substitution, then use the resulting closed JSON object exactly as written."
+    },
+    "arguments_fixture_pointer": {
+      "syntax": "RFC 6901 JSON Pointer",
+      "base": "The root of the current case object, not the file root.",
+      "target": "A JSON object that is the complete request argument object for that step's tool.",
+      "failure_behavior": "A missing pointer, non-object target, or target that fails the frozen tool schema makes the evaluation fixture invalid."
+    },
+    "step_output_substitution": {
+      "grammar": "${step.N.data.FIELD}",
+      "regular_expression": "^\\$\\{step\\.[1-9][0-9]*\\.data\\.[a-z][a-z0-9_]*\\}$",
+      "N": "The positive base-10 step number of a successful earlier tool call in the same case.",
+      "FIELD": "A direct field name in that step's Success.data object.",
+      "replacement": "Only a complete string matching the grammar is replaced, and it is replaced by the referenced JSON value without string coercion; embedded interpolation is forbidden.",
+      "failure_behavior": "A forward reference, unsuccessful source step, absent field, non-matching placeholder-like string, or resolved request that fails the frozen tool schema makes the evaluation fixture invalid."
+    },
+    "terminal_expectation_scope": {
+      "response": "The response from the highest-numbered expected_tool_sequence step.",
+      "host_expectation": "Top-level expected_failure_or_clarification.host_outcome and host_code apply only to the terminal response.",
+      "trust_expectation": "Top-level trust and trust_notice_equals_expected apply only to the terminal response.",
+      "agent_behavior": "Any expected agent clarification or refusal occurs after, and is asserted separately from, the terminal host response."
+    }
+  },
+  "cases": [
+    {
+      "id": "daily_multi_stock_simple_returns",
+      "user_objective": "Calculate adjusted daily simple returns for two synthetic stocks without moving either full price series through compact operation responses.",
+      "fixture": {
+        "kind": "inline_adjusted_daily_price_series",
+        "component": {
+          "id": "dq.market_data.simple_return",
+          "version": "0.3.4",
+          "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+        },
+        "series": [
+          {
+            "fixture_id": "synthetic_stock_alpha",
+            "register_request": {
+              "source": {
+                "kind": "inline_rows",
+                "rows": [
+                  {
+                    "timestamp": "2024-01-02T00:00:00Z",
+                    "price": 100.0
+                  },
+                  {
+                    "timestamp": "2024-01-03T00:00:00Z",
+                    "price": 110.0
+                  },
+                  {
+                    "timestamp": "2024-01-04T00:00:00Z",
+                    "price": 121.0
+                  },
+                  {
+                    "timestamp": "2024-01-05T00:00:00Z",
+                    "price": 108.9
+                  }
+                ]
+              },
+              "columns": [
+                {
+                  "source_name": "timestamp",
+                  "field_id": "timestamp",
+                  "data_type": "timestamp",
+                  "role": "timestamp"
+                },
+                {
+                  "source_name": "price",
+                  "field_id": "price",
+                  "data_type": "number",
+                  "role": "value"
+                }
+              ],
+              "semantics": {
+                "instrument": {
+                  "namespace": "defined_quant_synthetic",
+                  "symbol": "SYNTH_ALPHA"
+                },
+                "frequency": "daily",
+                "timezone": "UTC",
+                "ordering": "preserve_source_order",
+                "price_kind": "adjusted"
+              },
+              "provenance": {
+                "source_kind": "synthetic",
+                "interpretation_method": "caller_structured",
+                "verification_status": "unverified",
+                "label": "Synthetic adjusted daily prices for SYNTH_ALPHA.",
+                "references": [],
+                "assumptions": []
+              },
+              "external_preprocessing": {
+                "status": "none_declared"
+              }
+            }
+          },
+          {
+            "fixture_id": "synthetic_stock_beta",
+            "register_request": {
+              "source": {
+                "kind": "inline_rows",
+                "rows": [
+                  {
+                    "timestamp": "2024-01-02T00:00:00Z",
+                    "price": 200.0
+                  },
+                  {
+                    "timestamp": "2024-01-03T00:00:00Z",
+                    "price": 190.0
+                  },
+                  {
+                    "timestamp": "2024-01-04T00:00:00Z",
+                    "price": 199.5
+                  },
+                  {
+                    "timestamp": "2024-01-05T00:00:00Z",
+                    "price": 219.45
+                  }
+                ]
+              },
+              "columns": [
+                {
+                  "source_name": "timestamp",
+                  "field_id": "timestamp",
+                  "data_type": "timestamp",
+                  "role": "timestamp"
+                },
+                {
+                  "source_name": "price",
+                  "field_id": "price",
+                  "data_type": "number",
+                  "role": "value"
+                }
+              ],
+              "semantics": {
+                "instrument": {
+                  "namespace": "defined_quant_synthetic",
+                  "symbol": "SYNTH_BETA"
+                },
+                "frequency": "daily",
+                "timezone": "UTC",
+                "ordering": "preserve_source_order",
+                "price_kind": "adjusted"
+              },
+              "provenance": {
+                "source_kind": "synthetic",
+                "interpretation_method": "caller_structured",
+                "verification_status": "unverified",
+                "label": "Synthetic adjusted daily prices for SYNTH_BETA.",
+                "references": [],
+                "assumptions": []
+              },
+              "external_preprocessing": {
+                "status": "none_declared"
+              }
+            }
+          }
+        ]
+      },
+      "expected_tool_sequence": [
+        {
+          "step": 1,
+          "tool": "search_components",
+          "arguments": {
+            "query": "calculate adjusted daily simple returns from prices",
+            "limit": 5
+          }
+        },
+        {
+          "step": 2,
+          "tool": "inspect_component",
+          "arguments": {
+            "component_id": "dq.market_data.simple_return"
+          }
+        },
+        {
+          "step": 3,
+          "tool": "register_dataset",
+          "arguments_fixture_pointer": "/fixture/series/0/register_request"
+        },
+        {
+          "step": 4,
+          "tool": "register_dataset",
+          "arguments_fixture_pointer": "/fixture/series/1/register_request"
+        },
+        {
+          "step": 5,
+          "tool": "execute_component",
+          "arguments_template": {
+            "component": {
+              "id": "dq.market_data.simple_return",
+              "version": "0.3.4",
+              "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+            },
+            "sources": [
+              {
+                "kind": "dataset",
+                "ref": "${step.3.data.dataset_ref}",
+                "mappings": [
+                  {
+                    "source_field": "price",
+                    "input_field": "prices"
+                  },
+                  {
+                    "source_field": "timestamp",
+                    "input_field": "timestamps"
+                  }
+                ]
+              }
+            ],
+            "literals": {
+              "price_kind": "adjusted",
+              "declared_frequency": "daily"
+            }
+          }
+        },
+        {
+          "step": 6,
+          "tool": "execute_component",
+          "arguments_template": {
+            "component": {
+              "id": "dq.market_data.simple_return",
+              "version": "0.3.4",
+              "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+            },
+            "sources": [
+              {
+                "kind": "dataset",
+                "ref": "${step.4.data.dataset_ref}",
+                "mappings": [
+                  {
+                    "source_field": "price",
+                    "input_field": "prices"
+                  },
+                  {
+                    "source_field": "timestamp",
+                    "input_field": "timestamps"
+                  }
+                ]
+              }
+            ],
+            "literals": {
+              "price_kind": "adjusted",
+              "declared_frequency": "daily"
+            }
+          }
+        },
+        {
+          "step": 7,
+          "tool": "get_operation",
+          "arguments_template": {
+            "operation_ref": "${step.5.data.operation_ref}",
+            "view": "result_field",
+            "field": "returns",
+            "limit": 3
+          }
+        },
+        {
+          "step": 8,
+          "tool": "get_operation",
+          "arguments_template": {
+            "operation_ref": "${step.6.data.operation_ref}",
+            "view": "result_field",
+            "field": "returns",
+            "limit": 3
+          }
+        }
+      ],
+      "expected_bounded_outputs": {
+        "maximum_search_candidates": 5,
+        "registered_dataset_count": 2,
+        "operation_count": 2,
+        "dataset_reference_format": "dqds:v1:<sha256>",
+        "operation_reference_format": "dqop:v1:<sha256>",
+        "external_preprocessing_statuses": [
+          "none_declared",
+          "none_declared"
+        ],
+        "normalization_events_by_dataset": [
+          [],
+          []
+        ],
+        "compact_execute_source_context": {
+          "external_preprocessing_statuses": [
+            "none_declared",
+            "none_declared"
+          ],
+          "normalization_event_counts": [
+            0,
+            0
+          ],
+          "normalization_event_application_counts": [
+            0,
+            0
+          ]
+        },
+        "compact_execute_response_contains_full_price_series": false,
+        "result_page_size": 3,
+        "expected_returns": {
+          "synthetic_stock_alpha": [
+            0.1,
+            0.1,
+            -0.1
+          ],
+          "synthetic_stock_beta": [
+            -0.05,
+            0.05,
+            0.1
+          ]
+        },
+        "absolute_numeric_tolerance": 1e-15,
+        "maximum_tool_result_bytes": 262144
+      },
+      "expected_failure_or_clarification": {
+        "kind": "none",
+        "host_outcome": "ok",
+        "host_code": null
+      },
+      "trust": {
+        "label": "unmanaged_execution",
+        "statement": "Unsigned host-reconciled record for an unmanaged local operation; digests bind its request, selected subject, result, and declared artifact bytes. Data authenticity, financial approval, correctness, and independent execution are not attested."
+      },
+      "future_runner_assertions": [
+        {
+          "assertion": "case_tool_sequence_equals_expected"
+        },
+        {
+          "assertion": "component_identity_equals_fixture"
+        },
+        {
+          "assertion": "resolved_tool_arguments_satisfy_frozen_schemas"
+        },
+        {
+          "assertion": "component_imports_during_search_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "dataset_references_are_distinct_and_session_scoped"
+        },
+        {
+          "assertion": "operation_references_match_declared_format"
+        },
+        {
+          "assertion": "dataset_external_preprocessing_statuses_equal_expected"
+        },
+        {
+          "assertion": "dataset_normalization_events_equal_expected"
+        },
+        {
+          "assertion": "compact_execute_source_context_equals_expected"
+        },
+        {
+          "assertion": "result_field_values_close_to_expected",
+          "absolute_tolerance": 1e-15
+        },
+        {
+          "assertion": "compact_execute_responses_omit_full_input_series"
+        },
+        {
+          "assertion": "trust_notice_equals_expected"
+        }
+      ]
+    },
+    {
+      "id": "ambiguous_return_convention_and_annualization",
+      "user_objective": "Calculate annualized historical volatility from the supplied periodic returns without specifying their return convention or periods-per-year factor.",
+      "fixture": {
+        "kind": "inline_ambiguous_periodic_returns",
+        "candidate_component": {
+          "id": "dq.volatility.historical_volatility",
+          "version": "0.1.2",
+          "subject_hash": "da78eccf0b4491e1e7e03564d46b7002b40659f6e692c2a5b2e032fbfe5007e8"
+        },
+        "returns": [
+          0.01,
+          -0.02,
+          0.015,
+          0.005
+        ],
+        "return_kind": null,
+        "annualization_factor": null
+      },
+      "expected_tool_sequence": [
+        {
+          "step": 1,
+          "tool": "search_components",
+          "arguments": {
+            "query": "calculate annualized historical volatility from periodic returns",
+            "limit": 5
+          }
+        },
+        {
+          "step": 2,
+          "tool": "inspect_component",
+          "arguments": {
+            "component_id": "dq.volatility.historical_volatility"
+          }
+        }
+      ],
+      "expected_bounded_outputs": {
+        "maximum_search_candidates": 5,
+        "inspected_component_count": 1,
+        "registered_dataset_count": 0,
+        "operation_count": 0,
+        "tool_outcomes": [
+          {
+            "step": 1,
+            "host_outcome": "ok",
+            "host_code": null
+          },
+          {
+            "step": 2,
+            "host_outcome": "ok",
+            "host_code": null
+          }
+        ],
+        "missing_fields": [
+          "return_kind",
+          "annualization_factor"
+        ],
+        "maximum_tool_result_bytes": 262144
+      },
+      "expected_failure_or_clarification": {
+        "kind": "clarification",
+        "host_outcome": "ok",
+        "host_code": null,
+        "agent_behavior": "Ask for both answer-changing conventions and refuse to call execute_component while either remains unresolved.",
+        "agent_message": "Specify whether the supplied values are simple or log returns and provide the periods-per-year annualization factor. I will not guess either convention or execute while either remains unresolved."
+      },
+      "trust": {
+        "label": "installed_subject_inspected",
+        "statement": "Installed component identity and schema were inspected; no calculation was executed."
+      },
+      "future_runner_assertions": [
+        {
+          "assertion": "case_tool_sequence_equals_expected"
+        },
+        {
+          "assertion": "successful_tool_steps_equal",
+          "expected": [
+            1,
+            2
+          ]
+        },
+        {
+          "assertion": "host_outcome_and_code_equal_expected"
+        },
+        {
+          "assertion": "agent_behavior_and_message_equal_expected"
+        },
+        {
+          "assertion": "missing_fields_equal_expected_in_order"
+        },
+        {
+          "assertion": "no_default_inserted",
+          "fields": [
+            "return_kind",
+            "annualization_factor"
+          ]
+        },
+        {
+          "assertion": "execute_component_call_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "operation_reference_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "trust_notice_equals_expected"
+        }
+      ]
+    },
+    {
+      "id": "boundary_only_discovery_zero_eligible_hits",
+      "user_objective": "Find a component that predicts future equity prices from historical observations.",
+      "fixture": {
+        "kind": "synthetic_contract_only_catalog",
+        "query": "predict future equity prices",
+        "records": [
+          {
+            "component_id": "dq.synthetic.historical_observation_summary",
+            "category": "synthetic",
+            "slug": "historical_observation_summary",
+            "version": "1.0.0",
+            "callable_path": "synthetic_components.historical_observation_summary:never_import",
+            "path": "synthetic_catalog/synthetic/historical_observation_summary/contract.yaml",
+            "metadata": {
+              "schema_version": 1,
+              "id": "dq.synthetic.historical_observation_summary",
+              "slug": "historical_observation_summary",
+              "title": "Historical Observation Summary",
+              "category": "synthetic",
+              "group": "evaluation",
+              "version": "1.0.0",
+              "lifecycle": "draft",
+              "template": {
+                "profile": "statistic",
+                "version": 1
+              },
+              "callable": "synthetic_components.historical_observation_summary:never_import",
+              "summary": "Summarizes supplied historical observations without projection.",
+              "tags": [
+                "evaluation",
+                "synthetic"
+              ],
+              "discovery": {
+                "aliases": [
+                  "summarize observed values"
+                ],
+                "intents": [
+                  "summarize_historical_observations"
+                ],
+                "input_concepts": [
+                  "historical_observations"
+                ],
+                "output_concepts": [
+                  "observation_summary"
+                ]
+              },
+              "guidance": {
+                "use_when": [
+                  "Summarize already observed numeric values."
+                ],
+                "do_not_use_when": [
+                  "predict future equity prices"
+                ],
+                "unsupported_scope": []
+              },
+              "limitations": [
+                "Uses supplied historical observations only."
+              ]
+            }
+          },
+          {
+            "component_id": "dq.synthetic.realized_observation_change",
+            "category": "synthetic",
+            "slug": "realized_observation_change",
+            "version": "1.0.0",
+            "callable_path": "synthetic_components.realized_observation_change:never_import",
+            "path": "synthetic_catalog/synthetic/realized_observation_change/contract.yaml",
+            "metadata": {
+              "schema_version": 1,
+              "id": "dq.synthetic.realized_observation_change",
+              "slug": "realized_observation_change",
+              "title": "Realized Observation Change",
+              "category": "synthetic",
+              "group": "evaluation",
+              "version": "1.0.0",
+              "lifecycle": "draft",
+              "template": {
+                "profile": "time_series",
+                "version": 1
+              },
+              "callable": "synthetic_components.realized_observation_change:never_import",
+              "summary": "Measures changes already present in supplied observations.",
+              "tags": [
+                "evaluation",
+                "synthetic"
+              ],
+              "discovery": {
+                "aliases": [
+                  "measure realized observation change"
+                ],
+                "intents": [
+                  "calculate_realized_observation_change"
+                ],
+                "input_concepts": [
+                  "ordered_observations"
+                ],
+                "output_concepts": [
+                  "realized_change_series"
+                ]
+              },
+              "guidance": {
+                "use_when": [
+                  "Measure change between supplied observations."
+                ],
+                "do_not_use_when": [],
+                "unsupported_scope": [
+                  "predict future equity prices"
+                ]
+              },
+              "limitations": [
+                "Does not extrapolate beyond supplied observations."
+              ]
+            }
+          },
+          {
+            "component_id": "dq.synthetic.unrelated_statistic",
+            "category": "synthetic",
+            "slug": "unrelated_statistic",
+            "version": "1.0.0",
+            "callable_path": "synthetic_components.unrelated_statistic:never_import",
+            "path": "synthetic_catalog/synthetic/unrelated_statistic/contract.yaml",
+            "metadata": {
+              "schema_version": 1,
+              "id": "dq.synthetic.unrelated_statistic",
+              "slug": "unrelated_statistic",
+              "title": "Unrelated Statistic",
+              "category": "synthetic",
+              "group": "evaluation",
+              "version": "1.0.0",
+              "lifecycle": "draft",
+              "template": {
+                "profile": "statistic",
+                "version": 1
+              },
+              "callable": "synthetic_components.unrelated_statistic:never_import",
+              "summary": "Computes a deterministic statistic for a synthetic sample.",
+              "tags": [
+                "evaluation",
+                "synthetic"
+              ],
+              "discovery": {
+                "aliases": [
+                  "summarize a synthetic sample"
+                ],
+                "intents": [
+                  "summarize_synthetic_sample"
+                ],
+                "input_concepts": [
+                  "synthetic_sample"
+                ],
+                "output_concepts": [
+                  "sample_statistic"
+                ]
+              },
+              "guidance": {
+                "use_when": [
+                  "A deterministic synthetic sample summary is needed."
+                ],
+                "do_not_use_when": [],
+                "unsupported_scope": []
+              },
+              "limitations": [
+                "Synthetic evaluation use only."
+              ]
+            }
+          }
+        ]
+      },
+      "expected_tool_sequence": [
+        {
+          "step": 1,
+          "tool": "search_components",
+          "arguments": {
+            "query": "predict future equity prices",
+            "limit": 5
+          }
+        }
+      ],
+      "expected_bounded_outputs": {
+        "maximum_search_candidates": 5,
+        "total_matches": 0,
+        "hits": [],
+        "truncated": false,
+        "boundary_only_match_count": 2,
+        "component_import_count": 0,
+        "maximum_search_response_bytes": 65536
+      },
+      "expected_failure_or_clarification": {
+        "kind": "clarification",
+        "host_outcome": "ok",
+        "host_code": null,
+        "agent_behavior": "No eligible component matched the objective. Boundary-only matches must not be recommended; clarify or change the objective."
+      },
+      "trust": {
+        "label": "contract_metadata_only",
+        "statement": "Contract-only catalog metadata; no component was imported or executed."
+      },
+      "future_runner_assertions": [
+        {
+          "assertion": "case_tool_sequence_equals_expected"
+        },
+        {
+          "assertion": "total_matches_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "hits_equal",
+          "expected": []
+        },
+        {
+          "assertion": "truncated_equal",
+          "expected": false
+        },
+        {
+          "assertion": "boundary_only_match_ids_equal",
+          "expected": [
+            "dq.synthetic.historical_observation_summary",
+            "dq.synthetic.realized_observation_change"
+          ]
+        },
+        {
+          "assertion": "component_import_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "inspect_component_call_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "trust_notice_equals_expected"
+        }
+      ]
+    },
+    {
+      "id": "simple_returns_to_rolling_volatility_incompatible_ports",
+      "user_objective": "Feed Simple Return output field returns directly into Rolling Historical Volatility input field returns.",
+      "fixture": {
+        "kind": "semantic_port_pair",
+        "producer": {
+          "component": {
+            "id": "dq.market_data.simple_return",
+            "version": "0.3.4",
+            "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+          },
+          "field": "returns",
+          "port": {
+            "direction": "output",
+            "concept": "periodic_return_series",
+            "unit": "decimal",
+            "shape": "ordered_series",
+            "cardinality": "one_or_more",
+            "convention": "simple_periodic_return",
+            "ordering": "preserve_source_order",
+            "frequency": "inherited",
+            "provenance_requirement": "component_bound"
+          }
+        },
+        "consumer": {
+          "component": {
+            "id": "dq.volatility.rolling_historical_volatility",
+            "version": "0.1.2",
+            "subject_hash": "21d04f3c64b8f3cf80466d65edcf31c03b774389a1fd4a99e217bb8936572a82"
+          },
+          "field": "returns",
+          "port": {
+            "direction": "input",
+            "concept": "periodic_return_series",
+            "unit": "decimal",
+            "shape": "ordered_series",
+            "cardinality": "one_or_more",
+            "convention": "log_periodic_return",
+            "ordering": "preserve_source_order",
+            "frequency": "inherited",
+            "provenance_requirement": "not_required"
+          }
+        }
+      },
+      "expected_tool_sequence": [
+        {
+          "step": 1,
+          "tool": "search_components",
+          "arguments": {
+            "query": "compose simple returns with rolling historical volatility",
+            "limit": 5
+          }
+        },
+        {
+          "step": 2,
+          "tool": "inspect_component",
+          "arguments": {
+            "component_id": "dq.market_data.simple_return"
+          }
+        },
+        {
+          "step": 3,
+          "tool": "inspect_component",
+          "arguments": {
+            "component_id": "dq.volatility.rolling_historical_volatility"
+          }
+        },
+        {
+          "step": 4,
+          "tool": "compare_ports",
+          "arguments": {
+            "producer": {
+              "component": {
+                "id": "dq.market_data.simple_return",
+                "version": "0.3.4",
+                "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+              },
+              "field": "returns"
+            },
+            "consumer": {
+              "component": {
+                "id": "dq.volatility.rolling_historical_volatility",
+                "version": "0.1.2",
+                "subject_hash": "21d04f3c64b8f3cf80466d65edcf31c03b774389a1fd4a99e217bb8936572a82"
+              },
+              "field": "returns"
+            }
+          }
+        }
+      ],
+      "expected_bounded_outputs": {
+        "maximum_search_candidates": 5,
+        "compatible": false,
+        "difference_count": 1,
+        "differences": [
+          {
+            "dimension": "convention",
+            "producer_value": "simple_periodic_return",
+            "consumer_value": "log_periodic_return"
+          }
+        ],
+        "operation_count": 0,
+        "maximum_tool_result_bytes": 262144
+      },
+      "expected_failure_or_clarification": {
+        "kind": "refusal",
+        "host_outcome": "refused",
+        "host_code": "incompatible_ports",
+        "host_message": "The selected output and input semantic ports are not compatible.",
+        "retry_allowed": false
+      },
+      "trust": {
+        "label": "structural_compatibility_only",
+        "statement": "Semantic-port compatibility is structural only; it neither transfers data nor authorizes execution."
+      },
+      "future_runner_assertions": [
+        {
+          "assertion": "case_tool_sequence_equals_expected"
+        },
+        {
+          "assertion": "inspected_component_identities_equal_fixture"
+        },
+        {
+          "assertion": "compatibility_equal",
+          "expected": false
+        },
+        {
+          "assertion": "port_differences_equal_expected"
+        },
+        {
+          "assertion": "host_outcome_code_and_message_equal_expected"
+        },
+        {
+          "assertion": "execute_component_call_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "operation_reference_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "trust_notice_equals_expected"
+        }
+      ]
+    },
+    {
+      "id": "generated_10000_component_discovery",
+      "user_objective": "Find the best components for the exact synthetic objective bounded zephyr transform in a 10,000-component catalog.",
+      "fixture": {
+        "kind": "declarative_generated_contract_catalog",
+        "generator": {
+          "schema_version": 1,
+          "record_count": 10000,
+          "materialized_records_committed": false,
+          "index_range": {
+            "start_inclusive": 0,
+            "stop_exclusive": 10000,
+            "step": 1
+          },
+          "expansion": {
+            "index_iteration": "Visit each integer in index_range in ascending numeric order.",
+            "string_scope": "Replace every token occurrence in every string value of record_template; object member order and array order remain as written.",
+            "tokens": {
+              "{index_5_digits}": {
+                "source": "index",
+                "encoding": "unsigned_base_10",
+                "width": 5,
+                "pad_character": "0",
+                "overflow_behavior": "fixture_invalid"
+              },
+              "{index_modulo_100_2_digits}": {
+                "source": "index",
+                "operation": "modulo",
+                "operand": 100,
+                "encoding": "unsigned_base_10",
+                "width": 2,
+                "pad_character": "0",
+                "overflow_behavior": "fixture_invalid"
+              }
+            },
+            "token_order": [
+              "{index_5_digits}",
+              "{index_modulo_100_2_digits}"
+            ],
+            "unresolved_token_behavior": "fixture_invalid"
+          },
+          "record_template": {
+            "component_id": "dq.benchmark.component_{index_5_digits}",
+            "category": "benchmark",
+            "slug": "component_{index_5_digits}",
+            "version": "1.0.0",
+            "callable_path": "synthetic_components.component_{index_5_digits}:never_import",
+            "path": "synthetic_catalog/benchmark/component_{index_5_digits}/contract.yaml",
+            "metadata": {
+              "schema_version": 1,
+              "id": "dq.benchmark.component_{index_5_digits}",
+              "slug": "component_{index_5_digits}",
+              "title": "Synthetic Benchmark Component {index_5_digits}",
+              "category": "benchmark",
+              "group": "generated_discovery",
+              "version": "1.0.0",
+              "lifecycle": "draft",
+              "template": {
+                "profile": "statistic",
+                "version": 1
+              },
+              "callable": "synthetic_components.component_{index_5_digits}:never_import",
+              "summary": "Deterministic generated contract metadata for discovery evaluation.",
+              "tags": [
+                "benchmark",
+                "synthetic"
+              ],
+              "discovery": {
+                "aliases": [
+                  "synthetic catalog record {index_5_digits}"
+                ],
+                "intents": [
+                  "benchmark_intent_{index_modulo_100_2_digits}"
+                ],
+                "input_concepts": [
+                  "synthetic_input"
+                ],
+                "output_concepts": [
+                  "synthetic_output"
+                ]
+              },
+              "guidance": {
+                "use_when": [
+                  "A deterministic generated catalog record is needed for discovery evaluation."
+                ],
+                "do_not_use_when": [
+                  "The request concerns a real financial decision."
+                ],
+                "unsupported_scope": [
+                  "Runtime calculation and financial interpretation."
+                ]
+              },
+              "limitations": [
+                "Synthetic discovery evaluation only."
+              ]
+            }
+          },
+          "overrides": {
+            "application_order": "After token expansion and before either catalog ordering is applied.",
+            "rules": [
+              {
+                "when_index_in": [
+                  7,
+                  42,
+                  314,
+                  2718,
+                  4096,
+                  5000,
+                  7777,
+                  9001,
+                  9999
+                ],
+                "operation": "append_once",
+                "target_pointer": "/metadata/discovery/aliases",
+                "value": "bounded zephyr transform"
+              }
+            ]
+          },
+          "catalog_orders_to_evaluate": [
+            "ascending_index",
+            "descending_index"
+          ]
+        },
+        "query": "bounded zephyr transform"
+      },
+      "expected_tool_sequence": [
+        {
+          "step": 1,
+          "tool": "search_components",
+          "arguments": {
+            "query": "bounded zephyr transform",
+            "limit": 5
+          }
+        }
+      ],
+      "expected_bounded_outputs": {
+        "generated_record_count": 10000,
+        "committed_generated_record_count": 0,
+        "maximum_search_candidates": 5,
+        "total_matches": 9,
+        "hits": [
+          "dq.benchmark.component_00007",
+          "dq.benchmark.component_00042",
+          "dq.benchmark.component_00314",
+          "dq.benchmark.component_02718",
+          "dq.benchmark.component_04096"
+        ],
+        "hits_projection": "SearchData.hits[].component_id",
+        "truncated": true,
+        "component_import_count": 0,
+        "maximum_search_response_bytes": 65536
+      },
+      "expected_failure_or_clarification": {
+        "kind": "none",
+        "host_outcome": "ok",
+        "host_code": null
+      },
+      "trust": {
+        "label": "contract_metadata_only",
+        "statement": "Contract-only catalog metadata; no component was imported or executed."
+      },
+      "future_runner_assertions": [
+        {
+          "assertion": "case_tool_sequence_equals_expected"
+        },
+        {
+          "assertion": "generated_record_count_equal",
+          "expected": 10000
+        },
+        {
+          "assertion": "committed_generated_record_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "generator_expansion_is_exact_for_every_index"
+        },
+        {
+          "assertion": "total_matches_equal",
+          "expected": 9
+        },
+        {
+          "assertion": "hits_count_at_most",
+          "expected": 5
+        },
+        {
+          "assertion": "hit_component_ids_equal_expected_for_every_catalog_order"
+        },
+        {
+          "assertion": "truncated_equal",
+          "expected": true
+        },
+        {
+          "assertion": "component_import_count_equal",
+          "expected": 0
+        },
+        {
+          "assertion": "search_response_bytes_at_most",
+          "expected": 65536
+        },
+        {
+          "assertion": "trust_notice_equals_expected"
+        }
+      ]
+    }
+  ]
+}

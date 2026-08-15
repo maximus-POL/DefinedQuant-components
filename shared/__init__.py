@@ -32,6 +32,7 @@ from defined_quant.catalog import (  # noqa: E402
 )
 from defined_quant.charts import render_svg, save_svg, visualization_hash  # noqa: E402
 from defined_quant.discovery import (  # noqa: E402
+    ContractIndex,
     DiscoveryFilters,
     FacetValue,
     FieldMatch,
@@ -55,6 +56,7 @@ __version__ = "0.1.3"
 
 __all__ = [
     "__version__",
+    "ContractIndex",
     "DiscoveryFilters",
     "FacetValue",
     "FieldMatch",

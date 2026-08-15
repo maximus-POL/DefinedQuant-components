@@ -10,6 +10,17 @@ Small, reusable foundations used by every component:
   deterministic ranking, positive-versus-boundary match explanations, exact facets, and bounded
   results for both developer tools and agent adapters.
 - `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG.
+- `operation_runtime.py` owns the one catalog-wide validation, invocation, byte construction,
+  bundle reconciliation, and atomic unmanaged-publication path used by CLI and evidence.
+  `execute_resolved_operation()` is its supported pre-resolved seam for consumers such as the
+  legacy CLI that have already called `prepare_output_directory()` and `resolve_component()`;
+  unresolved host requests should use `DefinedQuantService.execute_operation()` instead.
+- `data_records.py`, `dataset_registry.py`, `operation_records.py`, `record_views.py`, and
+  `session_cas.py` implement the closed V1 content roots, structural normalization, manifest
+  reconciliation, bounded paging, and owner-private session storage without a transport SDK.
+- `host_failures.py` is the transport-neutral closed failure and trust vocabulary.
+- `service.py` composes canonical execution, one immutable process-lifetime discovery snapshot,
+  and a lazily opened ephemeral data/record session without importing a transport SDK.
 - `agent.py` is a compatibility-only re-export of the canonical `defined_quant_protocol` models.
 - `managed_profiles/` contains closed, packaged execution allowlists rather than component-ID
   branches in production code.
@@ -36,9 +47,11 @@ receipt; a human may then create a manual-only approval, and all plan, policy, c
 receipt, and approval roots are revalidated before future execution.
 
 Resolution timestamps are operational and excluded from the semantic plan hash. Dataset
-timestamps and resolved answers are semantic and hash-bound. Frozen models do not recursively
-freeze nested JSON, so any nested mutation requires validation again. This path performs no
-calculation and verifies no source. Component derivations can bind output indices to input indices,
+timestamps and resolved answers are semantic and hash-bound. Protocol authorization models do not
+recursively freeze every nested JSON value, so any nested mutation there requires validation
+again. Phase-3 content-addressed records and host envelopes recursively freeze their hash-bound
+JSON. This path performs no calculation and verifies no source. Component derivations can bind
+output indices to input indices,
 but their nullable citation IDs are not source evidence. Semantic ports prove field-level
 compatibility for the Log Return to Historical Volatility boundary and refuse Simple Return's
 different convention. They do not execute or authorize a chain. Managed multi-step composition,

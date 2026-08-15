@@ -41,9 +41,10 @@ the same five visible files.
 ```text
 components/
 ├── categories/             browseable financial topics and components
-├── shared/                 reusable types, validation, catalog loading, and charts
+├── shared/                 types, discovery, execution, records, and host services
 ├── protocol/               closed typed records installed as defined_quant_protocol
 ├── authoring/              one template, two schemas, and explicit Python tools
+├── docs/                   durable technical designs and machine-readable fixtures
 ├── .agents/                optional repository-wide agent integration
 ├── .github/                contribution and CI configuration
 ├── pyproject.toml
@@ -105,6 +106,9 @@ hashes. A
 manifest is an internally reconciled record, not a signed or independent execution attestation.
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
+
+**Supported MCP alpha platforms:** macOS and Linux. Windows support is a separate future
+workstream and is not part of the alpha.
 
 Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
 atomic managed-authorization foundation introduced in 0.2.0. Its packaged

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from pydantic import ValidationError
@@ -23,14 +23,32 @@ def _json_pointer(location: tuple[int | str, ...]) -> str:
 def input_validation_issues(error: ValidationError) -> tuple[tuple[str, str], ...]:
     """Return the stable, closed evidence projection of Pydantic input errors."""
 
-    issues = (
-        (_json_pointer(tuple(issue["loc"])), str(issue["type"]))
-        for issue in error.errors(
+    return input_validation_issues_from_details(
+        error.errors(
             include_url=False,
             include_context=False,
             include_input=False,
         )
     )
+
+
+def input_validation_issues_from_details(
+    raw_issues: Sequence[Any],
+) -> tuple[tuple[str, str], ...]:
+    """Project the runtime's serialized Pydantic issues into evidence assertions."""
+
+    issues: list[tuple[str, str]] = []
+    for raw_issue in raw_issues:
+        issue = _as_mapping(raw_issue, label="runtime input validation issue")
+        location = issue.get("loc")
+        error_type = issue.get("type")
+        if (
+            not isinstance(location, list | tuple)
+            or any(not isinstance(part, int | str) for part in location)
+            or not isinstance(error_type, str)
+        ):
+            raise AssertionError("runtime input validation issue is malformed")
+        issues.append((_json_pointer(tuple(location)), error_type))
     return tuple(sorted(issues))
 
 
@@ -55,4 +73,8 @@ def expected_input_validation_issues(
     return tuple(sorted(issues))
 
 
-__all__ = ["expected_input_validation_issues", "input_validation_issues"]
+__all__ = [
+    "expected_input_validation_issues",
+    "input_validation_issues",
+    "input_validation_issues_from_details",
+]

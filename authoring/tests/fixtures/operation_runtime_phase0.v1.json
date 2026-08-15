@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "component": {
+    "id": "dq.market_data.simple_return",
+    "version": "0.3.4",
+    "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+  },
+  "typed_success": {
+    "input": {
+      "prices": [
+        100.0,
+        103.0,
+        101.0
+      ],
+      "price_kind": "adjusted",
+      "timestamps": [
+        "2026-07-20T00:00:00Z",
+        "2026-07-21T00:00:00Z",
+        "2026-07-22T00:00:00Z"
+      ]
+    },
+    "provenance": {
+      "source_kind": "synthetic",
+      "interpretation_method": "caller_structured",
+      "verification_status": "unverified",
+      "label": "Synthetic adapter regression fixture."
+    },
+    "artifacts": {
+      "kind": "svg",
+      "selection": "all"
+    },
+    "operation_hash": "95e1a712fffda6185831d984d3aa1bcbd77755f2459261a81d3adc2fff77ab32",
+    "surfaces": {
+      "input.json": {
+        "bytes": 218,
+        "sha256": "8d99e735db04a11cc47a02c88fe8a4d70789d77cb4c0d8af0e156065be381e00"
+      },
+      "result.json": {
+        "bytes": 3181,
+        "sha256": "4af478e44c32932532d2526e76b8a2b70bc3ce9ddb9f24a20aec9f027a90dc1b"
+      },
+      "01-simple-periodic-returns.svg": {
+        "bytes": 4028,
+        "sha256": "c3e6441c2147b14bea74b60ab2f4ab496527f124e015397921ae771a0f7a1b08"
+      },
+      "manifest.json": {
+        "bytes": 2193,
+        "sha256": "ebb59cd27175f04e50cc57a17113251042385d09a2cfa57a41dd5248f16a0bf5"
+      },
+      "stdout": {
+        "bytes": 2401,
+        "sha256": "85e358833d68c65915db97203daecc30a1344b19ba08853d3270a8d12371a927"
+      }
+    }
+  },
+  "legacy_success": {
+    "input": {
+      "prices": [
+        100.0,
+        103.0,
+        101.0,
+        105.0
+      ],
+      "price_kind": "adjusted",
+      "timestamps": [
+        "2026-07-20T00:00:00Z",
+        "2026-07-21T00:00:00Z",
+        "2026-07-22T00:00:00Z",
+        "2026-07-23T00:00:00Z"
+      ]
+    },
+    "operation_hash": "0549d3f376d22725c38b67dd709c3f10951a5ecd7695dfeaaa709c24bf35bbda",
+    "surfaces": {
+      "input.json": {
+        "bytes": 257,
+        "sha256": "5dcc3cc0980b58cabcf9a698bf2598437ee9efb0d2f19227b4325a7d7ff64888"
+      },
+      "result.json": {
+        "bytes": 3722,
+        "sha256": "f5ec5d835a96b26c1a560660b296c10dd5836faa031a5375ee34f1bd8a01b47c"
+      },
+      "01-simple-periodic-returns.svg": {
+        "bytes": 4237,
+        "sha256": "11d7ca43ea0433186460231ffcbfe1597f590aa1f7476a6a1b3f7bffada90edc"
+      },
+      "manifest.json": {
+        "bytes": 2251,
+        "sha256": "829a90a7994ebc9176d0e428e20dc0c73b7b94fa21e955947069a8870af16add"
+      },
+      "stdout": {
+        "bytes": 2463,
+        "sha256": "904fd32c431b794b68ba2bc07f083039bfff8c78de3d8b223ecdda434c9c983c"
+      }
+    }
+  },
+  "failures": {
+    "malformed_json": {
+      "request_bytes_utf8": "{",
+      "stderr": {
+        "bytes": 256,
+        "sha256": "56f36dc68148e41000ae17a889238a7b80b7fde07ffaf89dfc689fa2b93daa46"
+      }
+    },
+    "duplicate_json_keys": {
+      "request_bytes_utf8": "{\"schema_version\":1,\"schema_version\":1}",
+      "stderr": {
+        "bytes": 242,
+        "sha256": "aa0a8a73f54dcbc576d60fefef38700fd77bc2d08599e47b3604cc42199cacc1"
+      }
+    },
+    "invalid_component_input": {
+      "input": {
+        "prices": [
+          100.0,
+          101.0
+        ],
+        "price_kind": "vendor_defined"
+      },
+      "code": "invalid_component_input",
+      "stderr": {
+        "bytes": 758,
+        "sha256": "4166f71d6f94f536e327af1ccf859d41ad5c25eafa6ca0559037b67eeb8d696b"
+      }
+    },
+    "ambiguous_input": {
+      "input": {
+        "prices": [
+          100.0,
+          101.0
+        ]
+      },
+      "code": "component_refused",
+      "component_code": "ambiguous_input",
+      "stderr": {
+        "bytes": 956,
+        "sha256": "adb716021147b5a2d06db545dd08cd04860d1f75190dd606dc986d2c7d8c6890"
+      }
+    },
+    "domain_refusal": {
+      "input": {
+        "prices": [
+          100.0,
+          0.0
+        ],
+        "price_kind": "adjusted"
+      },
+      "code": "component_refused",
+      "component_code": "domain_error",
+      "stderr": {
+        "bytes": 897,
+        "sha256": "3cdc69f2b77b5e4b03732a1781f51685927bafcabb0b2e86fc320c14d26b0b3e"
+      }
+    }
+  }
+}

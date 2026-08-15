@@ -28,14 +28,26 @@ components/
 │           ├── evidence.yaml
 │           └── test_component.py
 ├── shared/
-│   ├── README.md
-│   ├── types/
-│   ├── validation.py
-│   ├── catalog.py
-│   ├── charts.py
-│   ├── managed_profiles/
-│   ├── plan_validation.py
-│   └── agent.py                 compatibility imports only
+│   ├── README.md                shared-runtime guide
+│   ├── __init__.py              public exports and source-layout bridge
+│   ├── _immutable_json.py       recursively immutable JSON containers
+│   ├── agent.py                 compatibility imports only
+│   ├── catalog.py               component discovery, loading, and subject binding
+│   ├── charts.py                deterministic trusted SVG rendering
+│   ├── data_records.py          immutable V1 dataset and operation record models
+│   ├── dataset_registry.py      strict normalization and configured-root ingestion
+│   ├── discovery.py             import-free indexed contract search
+│   ├── host_failures.py         closed host failures, outcomes, and trust labels
+│   ├── managed_profiles/        packaged managed-execution allowlists
+│   ├── operation_records.py     manifest-to-operation-record reconciliation
+│   ├── operation_runtime.py     canonical validation, execution, and publication
+│   ├── plan_validation.py       managed plan validation and authorization
+│   ├── py.typed                 installed-package typing marker
+│   ├── record_views.py          bounded dataset and operation projections
+│   ├── service.py               transport-neutral host API
+│   ├── session_cas.py           owner-private session-scoped content store
+│   ├── types/                   canonical financial and presentation types
+│   └── validation.py            closed declarative constraint evaluator
 ├── protocol/
 │   ├── __init__.py
 │   ├── README.md
@@ -178,6 +190,17 @@ do-not-use and unsupported-scope fields. A boundary-only match never recommends 
 The integration must not describe or special-case an individual component in production code. A
 component's financial instructions remain in its own `contract.yaml`.
 
+`ContractIndex` takes one deep-immutable metadata snapshot, orders it by stable component ID, and
+precomputes normalized positive-term and facet postings without importing a component callable.
+It retains immutable authored field values so exact phrase scoring and boundary explanations are
+computed only for shortlisted records rather than stored as hundreds of thousands of tiny sets.
+`DefinedQuantService` owns exactly one such index for its lifetime; repeated searches and stable-ID
+discovery lookups never reopen the catalog. Constructing a new service is the explicit refresh
+boundary. The compatibility `search_components()` function builds the same index for an explicit
+in-memory catalog or one standalone catalog query. Ranking weights, explanations, exact filters,
+complete pre-limit facets, and `(-score, component_id)` ordering remain the existing public
+discovery semantics.
+
 The adapter is a host convenience layer, not another source of truth. It cannot redefine inputs,
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
@@ -192,7 +215,8 @@ publishes a fully staged directory with an atomic no-replace rename; mutable ove
 are deliberately unsupported. Linux, macOS, and Windows use their native no-clobber behavior, and
 unsupported hosts fail rather than falling back to a replace operation.
 
-The generic adapter then performs the following catalog-wide sequence:
+`defined_quant.operation_runtime` performs the following catalog-wide sequence for the thin CLI,
+numerical evidence execution, and `DefinedQuantService`:
 
 1. Validate the closed operation request.
 2. Discover the component by stable ID, freshly recompute and cache its filesystem-backed
@@ -201,8 +225,30 @@ The generic adapter then performs the following catalog-wide sequence:
 4. Invoke only the callable declared by the component catalog.
 5. Validate the return value through the canonical Pydantic `Output` model and verify its
    component identity and subject provenance.
-6. Materialize normalized input, typed result, and requested SVG artifacts.
-7. Emit a typed result whose manifest records relative POSIX member names and content hashes.
+6. Materialize normalized input, typed result, and requested SVG artifacts in a sibling staging
+   directory.
+7. Reconcile the exact staged members, canonical manifest bytes, and every declared digest.
+8. Publish once with atomic no-replace rename and emit the existing typed result.
+
+The CLI retains only strict JSON and argument handling, legacy request construction, protocol
+response serialization, and exit status. Numerical evidence uses the lower raw-mapping execution
+seam because its deliberate non-finite fixtures are not valid `OperationRequest` JSON; it does not
+maintain a second component invocation path. `DefinedQuantService` exposes Phase-1 canonical
+unmanaged execution, Phase-2 indexed discovery, and Phase-3 session-scoped data and operation
+records. The discovery snapshot is never an execution trust source: operation execution still
+resolves and verifies the selected filesystem subject freshly.
+
+Phase 3 normalizes only the frozen structural JSON/CSV cases, records every host-applied change,
+and publishes `DatasetPayloadV1`, `DatasetRecordV1`, and manifest-reconciled `OperationRecordV1`
+through owner-private, content-addressed session storage. Every read revalidates schema, hashes,
+members, cross-record dimensions, and source bindings before returning a bounded page. References
+expire with the session; corruption is quarantined and never repaired or partially returned.
+The store retains no accepted raw source bytes or caller file path. Its hashes establish immutable
+byte consistency, not source authenticity, financial correctness, or independent execution
+attestation. The alpha storage and local-file boundary is enabled only on tested POSIX hosts and
+fails startup closed elsewhere until equivalent ACL, reparse-point, handle-containment, locking,
+and cleanup behavior is implemented and tested. Worker isolation and transport methods remain
+Phase 4.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
 but adding another conforming component requires no runner edit. Pydantic models remain canonical
@@ -278,6 +324,16 @@ source code.
 All seven current components have lifecycle `draft`, author-asserted evidence, and no independent
 domain review. The typed operation protocol improves reproducibility and interface verification
 without changing those facts.
+
+The optional local MCP alpha transport is not yet implemented. Its frozen transport, host,
+reference, and security design is recorded in
+[`docs/LOCAL_MCP_ALPHA_DESIGN.md`](docs/LOCAL_MCP_ALPHA_DESIGN.md).
+It gives the existing operation record, manifest, and declared members the calculation-receipt
+role without adding a second record model; portable reproduction remains the deferred
+`ResearchBundle` capability.
+
+**Supported MCP alpha platforms:** macOS and Linux. Windows support requires a separate future
+security and operations boundary and is not part of the alpha.
 
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return

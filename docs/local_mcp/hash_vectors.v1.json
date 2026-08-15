@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "canonicalization_id": "dq-tagged-json-v1",
+  "hash_algorithm": "sha256",
+  "framing": {
+    "prefix_utf8": "defined-quant",
+    "separator_hex": "00",
+    "ordered_parts": [
+      "prefix_utf8",
+      "canonicalization_id",
+      "domain_ascii",
+      "canonical_bytes"
+    ]
+  },
+  "reference_patterns": {
+    "dataset": "^dqds:v1:[0-9a-f]{64}$",
+    "operation": "^dqop:v1:[0-9a-f]{64}$"
+  },
+  "dataset_normalization_contract": {
+    "event_codes": [
+      "json_missing_field_to_null",
+      "csv_empty_field_to_null",
+      "csv_number_parsed",
+      "csv_integer_parsed",
+      "csv_boolean_parsed",
+      "timestamp_to_canonical_utc"
+    ],
+    "event_unique_by": [
+      "code",
+      "field_id"
+    ],
+    "event_sort": [
+      "code_utf8",
+      "field_id_utf8"
+    ],
+    "maximum_events": 768,
+    "external_preprocessing_statuses": [
+      "none_declared",
+      "unknown",
+      "receipt_supplied"
+    ],
+    "default_external_preprocessing_status": "unknown"
+  },
+  "vectors": [
+    {
+      "id": "canonicalization_smoke",
+      "domain": "mcp.canonicalization.test.v1",
+      "value": {
+        "z": true,
+        "a": [
+          null,
+          1,
+          "é"
+        ]
+      },
+      "expected_canonical_utf8": "[\"object\",[[\"a\",[\"array\",[[\"null\"],[\"number\",\"3ff0000000000000\"],[\"string\",\"é\"]]]],[\"z\",[\"boolean\",true]]]]",
+      "expected_sha256": "60ecdf48711b61aba093482ae1e2b071385f8a3cefe4e4a1b9b8fde2e3d676ae",
+      "expected_reference": null
+    },
+    {
+      "id": "dataset_payload_two_rows",
+      "domain": "mcp.dataset.payload.v1",
+      "value": {
+        "schema_version": 1,
+        "serialization": "dq-table-v1",
+        "columns": [
+          {
+            "field_id": "timestamp",
+            "data_type": "timestamp"
+          },
+          {
+            "field_id": "price",
+            "data_type": "number"
+          }
+        ],
+        "rows": [
+          [
+            "2024-01-02T00:00:00Z",
+            100
+          ],
+          [
+            "2024-01-03T00:00:00Z",
+            101.5
+          ]
+        ]
+      },
+      "expected_sha256": "d017b64c5de6394caf9d5b0d578eb76ac833e97896ef04ef6539c618b52d0984",
+      "expected_reference": null
+    },
+    {
+      "id": "dataset_record_inline_two_rows",
+      "domain": "mcp.dataset.v1",
+      "value": {
+        "host_schema_version": 1,
+        "record_kind": "dataset",
+        "payload": {
+          "serialization": "dq-table-v1",
+          "sha256": "d017b64c5de6394caf9d5b0d578eb76ac833e97896ef04ef6539c618b52d0984"
+        },
+        "raw_source_sha256": "23f3407c09a07e5ff63c55cdd07a65674b5946ebf238b7b97d48b05d2711546a",
+        "source": {
+          "kind": "inline_rows",
+          "provenance": {
+            "source_kind": "synthetic",
+            "interpretation_method": "caller_structured",
+            "verification_status": "unverified",
+            "label": "cross-platform hash vector",
+            "references": [],
+            "assumptions": []
+          }
+        },
+        "external_preprocessing": {
+          "status": "none_declared"
+        },
+        "columns": [
+          {
+            "source_name": "timestamp",
+            "field_id": "timestamp",
+            "data_type": "timestamp",
+            "role": "timestamp",
+            "semantic_port": null
+          },
+          {
+            "source_name": "price",
+            "field_id": "price",
+            "data_type": "number",
+            "role": "value",
+            "semantic_port": null
+          }
+        ],
+        "semantics": {
+          "instrument": {
+            "namespace": "synthetic",
+            "symbol": "VECTOR"
+          },
+          "frequency": "daily",
+          "timezone": "UTC",
+          "ordering": "preserve_source_order",
+          "price_kind": "adjusted"
+        },
+        "row_count": 2,
+        "column_count": 2,
+        "observation_bounds": {
+          "first": "2024-01-02T00:00:00Z",
+          "last": "2024-01-03T00:00:00Z"
+        },
+        "normalization_events": [
+          {
+            "code": "timestamp_to_canonical_utc",
+            "field_id": "timestamp",
+            "count": 2
+          }
+        ],
+        "findings": [],
+        "normalizer": {
+          "name": "defined_quant_mcp_dataset_normalizer",
+          "version": "1.0.0"
+        }
+      },
+      "expected_sha256": "8e4b7f46ffd1cd49a1d0234367eb8b60d62a1fe29e11298ceb89108de227e3e1",
+      "expected_reference": "dqds:v1:8e4b7f46ffd1cd49a1d0234367eb8b60d62a1fe29e11298ceb89108de227e3e1"
+    },
+    {
+      "id": "operation_record_dataset_bound",
+      "protocol_case": "phase_4_legacy_0.4.0_compatibility",
+      "domain": "mcp.operation.v1",
+      "value": {
+        "host_schema_version": 1,
+        "record_kind": "operation",
+        "host_binding_version": 1,
+        "execution_mode": "unmanaged",
+        "protocol_version": "0.4.0",
+        "component": {
+          "id": "dq.market_data.simple_return",
+          "version": "0.3.4",
+          "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+        },
+        "operation_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "members": [
+          {
+            "kind": "normalized_input",
+            "path": "input.json",
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+            "size_bytes": 123
+          },
+          {
+            "kind": "result",
+            "path": "result.json",
+            "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+            "size_bytes": 456
+          }
+        ],
+        "runner": {
+          "name": "defined_quant_runner",
+          "version": "0.1.3"
+        },
+        "renderers": [],
+        "binding": {
+          "literals": {
+            "price_kind": "adjusted"
+          },
+          "source": {
+            "kind": "dataset",
+            "ref": "dqds:v1:8e4b7f46ffd1cd49a1d0234367eb8b60d62a1fe29e11298ceb89108de227e3e1",
+            "mappings": [
+              {
+                "source_field": "price",
+                "input_field": "prices"
+              },
+              {
+                "source_field": "timestamp",
+                "input_field": "timestamps"
+              }
+            ]
+          }
+        },
+        "compatibility": []
+      },
+      "expected_sha256": "8f749f49d3a53abe3fc85d1c00b99c00558f899ecd51ca90e940df34838f4a5a",
+      "expected_reference": "dqop:v1:8f749f49d3a53abe3fc85d1c00b99c00558f899ecd51ca90e940df34838f4a5a"
+    },
+    {
+      "id": "same_value_dataset_domain",
+      "domain": "mcp.dataset.v1",
+      "value": {
+        "schema_version": 1,
+        "sentinel": "same-value"
+      },
+      "expected_sha256": "e8b8b0b2d143eae7b9b40c488f38f5d5de8d312a7c8ea3e7c79be5432452c5ec",
+      "expected_reference": null
+    },
+    {
+      "id": "same_value_operation_domain",
+      "domain": "mcp.operation.v1",
+      "value": {
+        "schema_version": 1,
+        "sentinel": "same-value"
+      },
+      "expected_sha256": "caf592a8c05b4c62a8080d20151265ed20f43d142e6a793d05fcba8e3ec809d2",
+      "expected_reference": null
+    }
+  ],
+  "byte_sha256_vectors": [
+    {
+      "id": "inline_rows_source_two_rows",
+      "serialization": "canonical_json_bytes",
+      "value": [
+        {
+          "timestamp": "2024-01-02T01:00:00+01:00",
+          "price": 100
+        },
+        {
+          "timestamp": "2024-01-03T00:00:00.000000Z",
+          "price": 101.5
+        }
+      ],
+      "expected_sha256": "23f3407c09a07e5ff63c55cdd07a65674b5946ebf238b7b97d48b05d2711546a"
+    },
+    {
+      "id": "manifest_pretty_json_smoke",
+      "serialization": "defined-quant-pretty-json-v1",
+      "value": {
+        "schema_version": 1,
+        "execution_mode": "unmanaged"
+      },
+      "expected_utf8": "{\n  \"execution_mode\": \"unmanaged\",\n  \"schema_version\": 1\n}\n",
+      "expected_sha256": "1d31fa4f80ecf4216a663f23622dfba42eef528041ce6ab41b41a117022a144b"
+    }
+  ],
+  "domain_separation_assertions": [
+    {
+      "left_vector": "same_value_dataset_domain",
+      "right_vector": "same_value_operation_domain",
+      "canonical_bytes_equal": true,
+      "digests_must_differ": true
+    }
+  ]
+}
