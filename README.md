@@ -41,9 +41,10 @@ the same five visible files.
 ```text
 components/
 ├── categories/             browseable financial topics and components
-├── shared/                 reusable types, validation, catalog loading, and charts
+├── shared/                 types, discovery, execution, records, and host services
 ├── protocol/               closed typed records installed as defined_quant_protocol
 ├── authoring/              one template, two schemas, and explicit Python tools
+├── docs/                   durable technical designs and machine-readable fixtures
 ├── .agents/                optional repository-wide agent integration
 ├── .github/                contribution and CI configuration
 ├── pyproject.toml

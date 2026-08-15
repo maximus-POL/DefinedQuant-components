@@ -28,14 +28,26 @@ components/
 │           ├── evidence.yaml
 │           └── test_component.py
 ├── shared/
-│   ├── README.md
-│   ├── types/
-│   ├── validation.py
-│   ├── catalog.py
-│   ├── charts.py
-│   ├── managed_profiles/
-│   ├── plan_validation.py
-│   └── agent.py                 compatibility imports only
+│   ├── README.md                shared-runtime guide
+│   ├── __init__.py              public exports and source-layout bridge
+│   ├── _immutable_json.py       recursively immutable JSON containers
+│   ├── agent.py                 compatibility imports only
+│   ├── catalog.py               component discovery, loading, and subject binding
+│   ├── charts.py                deterministic trusted SVG rendering
+│   ├── data_records.py          immutable V1 dataset and operation record models
+│   ├── dataset_registry.py      strict normalization and configured-root ingestion
+│   ├── discovery.py             import-free indexed contract search
+│   ├── host_failures.py         closed host failures, outcomes, and trust labels
+│   ├── managed_profiles/        packaged managed-execution allowlists
+│   ├── operation_records.py     manifest-to-operation-record reconciliation
+│   ├── operation_runtime.py     canonical validation, execution, and publication
+│   ├── plan_validation.py       managed plan validation and authorization
+│   ├── py.typed                 installed-package typing marker
+│   ├── record_views.py          bounded dataset and operation projections
+│   ├── service.py               transport-neutral host API
+│   ├── session_cas.py           owner-private session-scoped content store
+│   ├── types/                   canonical financial and presentation types
+│   └── validation.py            closed declarative constraint evaluator
 ├── protocol/
 │   ├── __init__.py
 │   ├── README.md
