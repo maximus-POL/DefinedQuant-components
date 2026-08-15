@@ -15,6 +15,18 @@ conflate them with these repository instructions.
 | `shared/catalog.py` | Discovery, loading, and `subject_hash`; protected |
 | `shared/discovery.py` | Import-free deterministic search, ranking, explanations, and facets; protected |
 | `shared/charts.py` | Trusted renderer for typed visualization specifications; protected |
+| `shared/operation_runtime.py` | Canonical validation, execution, and publication; protected |
+| `shared/service.py` | Transport-neutral host API; protected |
+| `shared/data_records.py` | Immutable V1 dataset and operation record models; protected |
+| `shared/dataset_registry.py` | Strict normalization and configured-root ingestion; protected |
+| `shared/session_cas.py` | Owner-private session-scoped content store; protected |
+| `shared/operation_records.py` | Manifest-to-operation-record reconciliation; protected |
+| `shared/record_views.py` | Bounded dataset and operation projections; protected |
+| `shared/host_failures.py` | Closed host failures, outcomes, and trust labels; protected |
+| `shared/_immutable_json.py` | Recursively immutable JSON containers; protected |
+| `shared/plan_validation.py` | Managed plan validation and authorization; protected |
+| `shared/agent.py` | Compatibility imports only; protected |
+| `shared/__init__.py` | Public exports and source-layout bridge; protected |
 | `authoring/component-template/` | The one canonical five-file component template |
 | `authoring/schemas/` | JSON Schemas for `contract.yaml` and `evidence.yaml`; protected |
 | `authoring/*.py` | Explicit creation, checking, and catalog-export tools; protected |
@@ -22,12 +34,21 @@ conflate them with these repository instructions.
 | `protocol/` | Canonical typed operation envelopes, installed as `defined_quant_protocol` |
 | `ARCHITECTURE.md` | Structure, package projection, trust binding, and publication boundary |
 
+## Local MCP alpha
+
+- `docs/LOCAL_MCP_ALPHA_DESIGN.md` is the frozen implementation contract. Every amendment must
+  add one row to its post-freeze amendment table in the same commit.
+- `docs/local_mcp/hash_vectors.v1.json`, `host_failures.v1.json`, and
+  `evaluation_cases.v1.json` are normative test fixtures, not samples or generated schemas.
+- The MCP alpha is supported on macOS and Linux. Windows requires a separate tested platform
+  boundary before it can become an alpha target.
+
 ## Commands
 
 Run these from the `components/` folder:
 
 ```bash
-uv sync
+uv sync --locked
 uv run pytest
 uv run pytest categories/market_data/simple_return
 uv run python authoring/check_component.py
@@ -41,6 +62,8 @@ uv run ruff check protocol shared categories authoring \
   .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
 uv run --no-editable mypy shared categories authoring/*.py
 uv run --no-editable mypy -p defined_quant_protocol
+uv build
+git diff --check
 ```
 
 ## Invariants
@@ -63,8 +86,12 @@ uv run --no-editable mypy -p defined_quant_protocol
 7. A state that makes output meaningless is blocking; a merely uncertain state is a warning.
 8. No implicit default may change the answer: annualization factors, day counts, compounding,
    return kinds, and similar conventions must be supplied, visibly defaulted, or refused.
-9. The wheel must include component contracts, evidence, and README files.
-10. `pydantic` is the only runtime dependency unless an explicit decision changes that.
+9. The `defined-quant` core wheel must include component contracts, evidence, and README files.
+   Phase 4's optional `defined-quant-mcp` package is a separate distribution; this component-data
+   requirement remains a core-wheel responsibility.
+10. `pydantic` remains the only runtime dependency of the `defined-quant` core distribution. The
+    MCP SDK and its dependencies belong only to the separate optional `defined-quant-mcp`
+    distribution.
 11. Test data is synthetic and seeded. Never commit vendor or scraped market data.
 12. Preserve the honest preview copy: explicit evidence types, `Domain review: none`, the
     non-claims block, and the “Experimental Technical Preview” label.
