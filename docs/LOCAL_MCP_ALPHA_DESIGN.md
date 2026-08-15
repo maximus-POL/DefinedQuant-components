@@ -13,6 +13,26 @@ files are normative test fixtures, not generated production schemas:
 - [`local_mcp/host_failures.v1.json`](local_mcp/host_failures.v1.json)
 - [`local_mcp/evaluation_cases.v1.json`](local_mcp/evaluation_cases.v1.json)
 
+## Post-freeze amendments
+
+PR0 froze this contract in `95bcd8b` on 2026-08-15. The table records every later commit that
+amended this document through the current Phase-4 readiness work; each row is derived from that
+commit's actual diff.
+
+| Date | Commit | Phase | Section changed | What changed | Reason |
+|---|---|---|---|---|---|
+| 2026-08-15 | `727ac430` | Phase 1 | Status | Recorded that `operation_runtime` and `DefinedQuantService` had landed and removed the obsolete claim that no shared host runtime existed. | Keep the frozen contract's implementation starting point consistent with the completed Phase-1 extraction. |
+| 2026-08-15 | `5c2d1fb` | Phase 2 | Status; §10 | Recorded the immutable import-free index and replaced the 10,000-record timed acceptance case with a bounded functional case whose timings are diagnostic only. | No portable wall-clock threshold exists, so a timed gate would make deterministic discovery depend on CI hardware. |
+| 2026-08-15 | `f025b65` | Phase 3 | Status; §7.1; §7.2 | Recorded the Phase-3 records and CAS, changed cursors to bind a domain-separated SHA-256 digest of selector text, and deferred non-POSIX local-file and session-store behavior pending an equivalent tested boundary. | Match the contract to the implemented opaque-cursor and fail-closed storage security boundaries without claiming untested platform behavior. |
+| 2026-08-15 | `c7e5ca8` | Phase 3 / Phase-4 readiness | §7.3; §8; §10 | Scoped the whole MCP alpha, including its worker, SDK-client matrix, and packaging target, to macOS and Linux and made Windows a separate future workstream. | The alpha depends on tested POSIX containment, ownership, locking, cleanup, and process controls for which no Windows equivalent yet exists. |
+| 2026-08-15 | `9fcd648` | Phase-4 planning | §3; §10 | Explicitly excluded Phase 4B from Phase 4, froze the no-4B release targets, and made later protocol-0.5 composition a separately reviewed change with its required compatibility and hash tests. | Prevent optional provenance and composition work from expanding the initial transport implementation mid-phase. |
+| 2026-08-15 | `8efa80a` | Phase-4 readiness | §7.1 | Added the 10,000-record construction cap, specified but deferred the 500-candidate query cap, and recorded controller memory and timing observations without adding a deadline. | Bound long-lived controller indexing deterministically while preserving frozen search projections and avoiding machine-dependent outcomes. |
+
+Going forward, every amendment to this document must add one row here in the same commit that
+changes the contract. The row must identify the date, phase, affected section, exact change, and
+reason; SDK behavior corrections, limit tuning, and platform findings during Phase 4 are not
+exceptions.
+
 ## 1. Implementation baseline
 
 PR0 starts from `origin/main` at `417b01bc6cae045316631d17e3efb74c7f065bb6`. The relevant facts are:
