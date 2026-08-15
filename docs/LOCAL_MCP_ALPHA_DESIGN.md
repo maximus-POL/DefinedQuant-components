@@ -127,11 +127,11 @@ in the host operation record. This does not add `execute_plan`, retries, rollbac
 execution claim. PR0 changes neither `protocol/version.py`, `protocol/plan.py`, nor
 `protocol/operation.py`.
 
-Release targets after Phase 4B are `defined-quant` `0.2.0`, `defined_quant_protocol` `0.5.0`, and
-the optional `defined-quant-mcp` `0.1.0a1`. If Phase 4B is omitted, the targets are
-`defined-quant` `0.2.0`, unchanged `defined_quant_protocol` `0.4.0`, and
-`defined-quant-mcp` `0.1.0a1`; the MCP alpha remains dataset-to-one-component only and no component
-output is relabelled as another source kind.
+The frozen Phase-4 release excludes Phase 4B. Its targets are `defined-quant` `0.2.0`, unchanged
+`defined_quant_protocol` `0.4.0`, and the optional `defined-quant-mcp` `0.1.0a1`; the MCP alpha
+remains dataset-to-one-component only and no component output is relabelled as another source
+kind. A later Phase-4B release would retain the core and MCP targets while advancing
+`defined_quant_protocol` to `0.5.0` through the separately reviewed lockstep change above.
 
 ## 4. Version-1 host interface
 
@@ -1400,13 +1400,20 @@ Implementation order is fixed so transport work cannot create a second runtime:
    vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits.
 4. **Phase 4 — STDIO MCP server and worker.** Add the optional package, isolate SDK code in
    `server.py`, expose the seven tools and one resource, and add official-client and process-cleanup
-   tests.
-5. **Phase 4B — optional protocol 0.5 provenance and one-hop composition.** Make the lockstep
-   protocol changes in section 3, then permit one exact compatible operation source. No managed
-   plan execution.
+   tests. Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for
+   every operation source exactly as section 4.2 specifies.
+5. **Phase 4B — deferred protocol 0.5 provenance and one-hop composition.** Phase 4B is explicitly
+   excluded from Phase 4 and from the initial MCP alpha release. Adopting it later is its own
+   change: it must complete the lockstep version work in section 3 and add the required descriptor,
+   compatibility, default, downgrade, and hash tests before permitting one exact compatible
+   operation source. It still adds no managed plan execution.
 6. **Phase 5 — packaging and user documentation.** Build and test exact compatible core and MCP
    wheels together for macOS and Linux. Document local installation, STDIO registration, privacy,
    trust, platform scope, and rollback. Windows remains a separate future workstream.
+
+For this no-4B release, Phase 5 follows Phase 4 directly. The release targets are
+`defined-quant` `0.2.0`, `defined_quant_protocol` unchanged at `0.4.0`, and
+`defined-quant-mcp` `0.1.0a1`.
 
 Receipt ownership follows that order: Phase 1 creates and reconciles the existing manifest and
 members, Phase 3 publishes their `OperationRecordV1` and `dqop:v1` reference, and Phase 4 exposes

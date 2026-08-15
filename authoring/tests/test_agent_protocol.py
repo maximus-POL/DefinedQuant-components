@@ -10,6 +10,7 @@ from typing import Any, cast
 import pytest
 from defined_quant_protocol import (
     CANONICALIZATION_ID,
+    PROTOCOL_VERSION,
     CallerProvenance,
     ComponentRef,
     FileDigest,
@@ -39,6 +40,21 @@ COMPONENT = ComponentRef(
     version="0.1.0",
     subject_hash=SHA_A,
 )
+
+
+def test_phase_4_excludes_component_output_provenance() -> None:
+    assert PROTOCOL_VERSION == "0.4.0"
+    assert {member.value for member in SourceKind} == {
+        "user_prompt",
+        "user_attachment",
+        "external_provider",
+        "synthetic",
+    }
+    assert {member.value for member in InterpretationMethod} == {
+        "ai_interpreted",
+        "caller_structured",
+        "adapter_normalized",
+    }
 
 
 def _request(*, confirmed: bool = False) -> OperationRequest:
