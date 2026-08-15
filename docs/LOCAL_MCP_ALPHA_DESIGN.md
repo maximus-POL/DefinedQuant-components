@@ -27,6 +27,7 @@ commit's actual diff.
 | 2026-08-15 | `c7e5ca8` | Phase 3 / Phase-4 readiness | §7.3; §8; §10 | Scoped the whole MCP alpha, including its worker, SDK-client matrix, and packaging target, to macOS and Linux and made Windows a separate future workstream. | The alpha depends on tested POSIX containment, ownership, locking, cleanup, and process controls for which no Windows equivalent yet exists. |
 | 2026-08-15 | `9fcd648` | Phase-4 planning | §3; §10 | Explicitly excluded Phase 4B from Phase 4, froze the no-4B release targets, and made later protocol-0.5 composition a separately reviewed change with its required compatibility and hash tests. | Prevent optional provenance and composition work from expanding the initial transport implementation mid-phase. |
 | 2026-08-15 | `8efa80a` | Phase-4 readiness | §7.1 | Added the 10,000-record construction cap, specified but deferred the 500-candidate query cap, and recorded controller memory and timing observations without adding a deadline. | Bound long-lived controller indexing deterministically while preserving frozen search projections and avoiding machine-dependent outcomes. |
+| 2026-08-15 | this commit | Phase-4 planning | §7.1; §7.2; §7.3; §8; §10 | Restored Windows as a required alpha release target; froze the cross-platform byte-identity contract, platform-abstraction boundary, local-path policy, and native Windows filesystem, session-store, worker, STDIO, official-client, CI, and packaging acceptance gates. | Platform breadth and deterministic outputs are product requirements; the current fail-closed Windows behavior is unfinished implementation rather than a reason to narrow the alpha. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1216,6 +1217,24 @@ pre-validation boundary.
 Initialization and list payloads are serialized and checked before the server advertises
 readiness; exceeding their static frame ceiling fails startup with no partial STDIO session.
 
+Every byte ceiling is measured over the same explicitly encoded or raw byte sequence on Windows,
+macOS, and Linux. STDIO byte counts include the received LF and occur before text decoding; no
+platform newline translation, locale encoding, console code page, or filesystem encoding may alter
+a counted or hashed value. For the same request, fixed catalog, fixed session secret where a cursor
+is present, and identical source bytes, all three platforms must produce byte-identical canonical
+dataset payloads, dataset records, operation records, normalized inputs, normalized results,
+manifests, rendered artifacts, CAS records, hashes, digests, references, cursors, failure codes,
+failure messages and details, trust wording, response envelopes, resource projections, and CLI
+STDOUT/STDERR. In particular, every vector in `hash_vectors.v1.json` and every surface in
+`operation_runtime_phase0.v1.json` must reproduce exactly on all three platforms.
+
+Platform mechanisms may differ only behind one transport-neutral host abstraction. POSIX modes and
+Windows DACLs, `openat` containment and Windows handle containment, `flock` and `LockFileEx`, native
+atomic no-replace publication primitives, and POSIX process groups and Windows Job Objects may use
+different system calls. They must expose the same success conditions, stable closed failures, and
+cleanup outcome without leaking native paths, error text, numeric OS errors, security identifiers,
+or platform names into a canonical value or public response.
+
 The indexed-record ceiling is enforced once, while constructing the immutable process-lifetime
 snapshot; an oversized catalog fails startup before a session exists and never fails midway
 through that session. The 500-candidate search bound is a frozen controller requirement, but it
@@ -1246,11 +1265,18 @@ absolute root. Roots, catalog location, and session-state base directory are lau
 never be tool arguments. The server refuses `~`, environment or glob expansion, relative paths,
 `..`, archives, devices, sockets, FIFOs, and symlinked or reparse-point intermediate or final path
 components. It accepts a regular CSV/JSON file only after handle-based containment checks against
-an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`;
-Windows will open reparse points without following them and validate the final handle path and
-type once that boundary is implemented and tested. Phase 3 enables local-file registration and
-session CAS only on tested POSIX hosts with `O_NOFOLLOW`; other platforms fail startup closed until
-equivalent owner-only ACL, reparse-point, handle-containment, locking, and cleanup behavior exists.
+an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`.
+Windows must use native handles to refuse every intermediate and final reparse point, validate the
+final handle path, volume identity, and regular-file type beneath the pinned root, and prevent
+handle inheritance. Windows path checks use Unicode native APIs and support Unicode local paths and
+local paths longer than 260 characters without locale, code-page, short-name, or separator changes
+to semantic or hashed values. UNC paths, device namespaces, mapped network drives, and other remote
+or network filesystem roots fail startup closed for the alpha; they are not silently normalized to
+or treated as local configured roots or session-state locations.
+Phase 3 currently enables local-file registration and session CAS only on tested POSIX hosts with
+`O_NOFOLLOW`; that fail-closed Windows behavior is a temporary implementation restriction, not a
+platform-scope decision. Phase 4 cannot ship until Windows has equivalent tested owner-only ACL,
+reparse-point, handle-containment, locking, atomic-publication, and cleanup behavior.
 
 Files are hashed and size-limited while streaming. The dedicated `Source.local_file.path` value
 never enters canonical records, responses, resource URIs, or logs. This is not generic free-text
@@ -1259,20 +1285,40 @@ explicit manifest view, so callers must not put secrets, credentials, or local p
 bytes are discarded after normalization.
 
 The session directory is created beneath a fixed application temporary root with `0700`
-directories and `0600` files. A future non-POSIX implementation requires the platform-equivalent
-owner-only ACL before it may enable this store. It refuses a symlinked, reparse-point, wrongly
+directories and `0600` files. Windows creates and verifies a protected, non-inheriting, owner-only
+DACL for the corresponding application root, session root, directories, records, members, staging
+files, lock files, quarantine entries, and cleanup markers before exposing any of them. The owner
+must be the current token's user SID; a wrong owner, inherited ACE, additional principal, replaced
+descriptor, or reparse point fails closed. The store refuses a symlinked, reparse-point, wrongly
 owned, or group/world-accessible root. Quota is checked before and during staged writes. A full store
 returns `cache_full` and never evicts a live reference. Clean shutdown removes only the exact
 active marked directory. Startup cleanup may remove only marker-bearing, correctly owned,
 unlocked application session directories older than 24 hours; it never recursively cleans a
 caller-supplied path.
 
+Record and bundle publication is atomic and no-replace under concurrent writers. The Windows
+implementation uses a handle-based same-volume NTFS operation with replacement disabled and proves
+by native contention and forced-termination tests that a destination is either absent or complete;
+`MoveFileEx` replacement, `ReplaceFile`, copy/delete, and overwrite fallbacks are forbidden.
+Portable member paths reject case-fold collisions, reserved Windows device segments, alternate data
+streams, trailing dots, and trailing spaces on every platform before touching disk.
+
+Live-session locking on Windows uses a `LockFileEx`-compatible exclusive byte-range lock held for
+the complete live interval. Cleanup acquires the same lock non-blockingly and atomically claims an
+eligible tree before deletion. Windows open-file rename/delete behavior must not require releasing
+the cleanup claim before the tree is made unreachable. Concurrent startup, shutdown, publication,
+and cleanup tests must prove that a live, foreign, replaced, or newly locked session is never
+removed.
+
 ### 7.3 Worker boundary
 
-On the supported alpha platforms, every selected inspection or execution starts in a separate
-POSIX process group, with unrelated file descriptors closed and a private working/staging
-directory. A Windows Job Object boundary belongs to the separate future Windows workstream. The
-controller sends one strict typed request and receives one control response.
+Every selected inspection or execution starts in a bounded native process tree with unrelated
+descriptors or handles closed and a private working/staging directory. macOS and Linux use a POSIX
+process group. Windows must use a kill-on-close Job Object with tested active-process, descendant,
+job-wide memory, timeout, cancellation, and forced-cleanup controls before Phase 4 can ship. The
+worker mechanism is a subprocess with an import-safe entry point, not `multiprocessing`; Windows
+creates it suspended, assigns it to the configured Job Object before user code can run, and then
+resumes it. The controller sends one strict typed request and receives one control response.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
 Worker admission uses a non-blocking semaphore at the configured concurrency value; there is no
@@ -1282,10 +1328,15 @@ staging directory is created.
 The controller creates the environment from an allowlist instead of copying the parent. It sets a
 private `TMPDIR`/`TEMP`/`TMP`, `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`,
 `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `PYTHONHASHSEED=0`, `NO_COLOR=1`, and `TZ=UTC`.
-No platform environment is copied wholesale. A future Windows implementation may additionally
-allow only required `SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after its boundary is implemented
-and tested. Home directories, proxy settings, cloud and provider credentials, API keys, tokens,
+No platform environment is copied wholesale. Windows may additionally allow only the required
+`SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after validating them at startup. Home directories,
+proxy settings, cloud and provider credentials, API keys, tokens,
 cookies, user-site settings, and unrelated variables are absent.
+
+Windows process creation allowlists inherited handles as well as environment variables. Only the
+exact worker control and redirected STDIO handles may be temporarily inheritable; session, root,
+record, lock, job, token, unrelated pipe, and controller handles are absent from the child. The
+controller retains the Job Object handle until every cleanup obligation is complete.
 
 The launcher enforces the 512 MiB worker memory ceiling with a tested OS mechanism and an
 independent controller-side usage monitor; exceeding the memory or captured-stream ceiling kills
@@ -1377,6 +1428,12 @@ ID is not parsed), emits only a fixed redacted transport code, and runs normal w
 cleanup. This is the ingress ceiling before SDK JSON parsing; it is independent of the stricter
 1 MiB compact `arguments` ceiling.
 
+On Windows the server places STDIN, STDOUT, and STDERR in binary mode before the first read or
+write. LF and CRLF request framing must parse independently without CRT newline conversion; output
+uses exact UTF-8 bytes and LF only, and byte `0x1a` is never treated as end-of-file. Native tests
+cover split UTF-8 code points, invalid UTF-8, exact and over-limit raw frames, controller shutdown,
+and the rule that STDOUT contains MCP frames only.
+
 The advertised tool input schemas do not validate `CallToolRequestParams.arguments`. After SDK
 JSON-RPC parsing and before service dispatch, `server.py` rejects an unknown tool name first, then
 enforces the argument-byte limit and the project-owned strict closed request model for a known
@@ -1401,12 +1458,27 @@ exactly `mcp==2.0.0` in the separate MCP package and commits its platform-comple
 does not declare `mcp-types` separately.
 An SDK upgrade is a dedicated dependency change that updates pin and lock together, reviews the
 full platform-marked dependency/licence/hash diff, and reruns official-client tool, resource,
-failure, annotation, cancellation, and cleanup tests on macOS and Linux across Python 3.11–3.13.
-Windows support is a separate future workstream requiring tested reparse-point, owner-only ACL,
-handle-containment, locking, and cleanup boundaries before it can enter the client test matrix.
+failure, annotation, cancellation, and cleanup tests on Windows, macOS, and Linux at Python 3.11
+and 3.13. All three platforms are required lanes; Windows is neither allowed to fail nor permitted
+to skip the public-service product story, filesystem/session-store boundary, worker cleanup, or
+official-client interoperability cases.
 Automatic major upgrades are forbidden. PR0 adds no SDK dependency or lock.
 Supported-line decisions also follow the official
 [security policy](https://github.com/modelcontextprotocol/python-sdk/security).
+
+Windows acceptance uses native Windows tests, including owner and replacement DACL cases; every
+intermediate and final reparse-point position and swap race; handle-contained Unicode and long
+local paths; fail-closed UNC and network roots; case-insensitive member collisions and reserved
+names; concurrent atomic no-replace directory publication; `LockFileEx` contention and cleanup;
+Job Object descendant, memory, timeout, cancellation, and controller-exit cleanup; inherited-handle
+and environment allowlists; binary STDIO; exact hash and byte fixtures; installed core and MCP
+wheels; and the official client's complete tool, resource, failure, cancellation, and cleanup
+story. POSIX emulation is not Windows validation, and no required case may skip, xfail,
+`continue-on-error`, or use an unbounded fallback.
+
+WSL2 is an unsupported convenience for running the Linux build under Linux semantics. It is not a
+Windows release path and never counts as validation of Windows paths, DACLs, reparse points,
+locking, publication, Job Objects, STDIO, wheels, or official-client behavior.
 
 ## 9. Frozen evaluation cases
 
@@ -1425,7 +1497,14 @@ not commit 10,000 component directories.
 
 ## 10. Implementation order and non-goals
 
-**Supported MCP alpha platforms:** macOS and Linux. Windows is not an alpha release target.
+**Required MCP alpha release platforms:** Windows, macOS, and Linux. The current Phase-3
+POSIX-only gates are release blockers that Phase 4 must replace with the equivalent tested Windows
+boundary before the alpha is described as supported.
+
+**Currently implemented MCP alpha platform providers:** macOS and Linux. This status describes the
+in-tree host mechanisms at this contract amendment, not the release target. Windows remains
+fail-closed and the existing public release-support wording must not be changed until its provider,
+native tests, six-cell CI matrix, official-client story, and exact-wheel installation all pass.
 
 Implementation order is fixed so transport work cannot create a second runtime:
 
@@ -1440,16 +1519,18 @@ Implementation order is fixed so transport work cannot create a second runtime:
    vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits.
 4. **Phase 4 — STDIO MCP server and worker.** Add the optional package, isolate SDK code in
    `server.py`, expose the seven tools and one resource, and add official-client and process-cleanup
-   tests. Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for
-   every operation source exactly as section 4.2 specifies.
+   tests on Windows, macOS, and Linux. Implement and test the Windows filesystem, session-store,
+   Job Object, environment, locking, and cleanup boundary before declaring Phase 4 complete.
+   Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for every
+   operation source exactly as section 4.2 specifies.
 5. **Phase 4B — deferred protocol 0.5 provenance and one-hop composition.** Phase 4B is explicitly
    excluded from Phase 4 and from the initial MCP alpha release. Adopting it later is its own
    change: it must complete the lockstep version work in section 3 and add the required descriptor,
    compatibility, default, downgrade, and hash tests before permitting one exact compatible
    operation source. It still adds no managed plan execution.
 6. **Phase 5 — packaging and user documentation.** Build and test exact compatible core and MCP
-   wheels together for macOS and Linux. Document local installation, STDIO registration, privacy,
-   trust, platform scope, and rollback. Windows remains a separate future workstream.
+   wheels together for Windows, macOS, and Linux. Document local installation, STDIO registration,
+   privacy, trust, platform scope, and rollback.
 
 For this no-4B release, Phase 5 follows Phase 4 directly. The release targets are
 `defined-quant` `0.2.0`, `defined_quant_protocol` unchanged at `0.4.0`, and

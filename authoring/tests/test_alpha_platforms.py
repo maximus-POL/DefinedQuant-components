@@ -1,4 +1,4 @@
-"""Keep the documented MCP-alpha platform set aligned with fail-closed runtime gates."""
+"""Keep the MCP release target and temporary platform gaps explicit and synchronized."""
 
 from __future__ import annotations
 
@@ -8,21 +8,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = ROOT / "docs" / "LOCAL_MCP_ALPHA_DESIGN.md"
-ARCHITECTURE = ROOT / "ARCHITECTURE.md"
-README = ROOT / "README.md"
 SESSION_CAS = ROOT / "shared" / "session_cas.py"
 DATASET_REGISTRY = ROOT / "shared" / "dataset_registry.py"
+OPERATION_RUNTIME = ROOT / "shared" / "operation_runtime.py"
 
-_PLATFORM_MARKER = re.compile(
-    r"\*\*Supported MCP alpha platforms:\*\* (?P<platforms>[^.]+)\."
+_REQUIRED_PLATFORM_MARKER = re.compile(
+    r"\*\*Required MCP alpha release platforms:\*\* (?P<platforms>[^.]+)\."
+)
+_IMPLEMENTED_PROVIDER_MARKER = re.compile(
+    r"\*\*Currently implemented MCP alpha platform providers:\*\* "
+    r"(?P<platforms>[^.]+)\."
 )
 _DOCUMENTED_TO_RUNTIME = {"macOS": "darwin", "Linux": "linux", "Windows": "win32"}
 
 
-def _documented_platforms(path: Path) -> set[str]:
-    matches = _PLATFORM_MARKER.findall(path.read_text(encoding="utf-8"))
-    assert len(matches) == 1, f"{path.name} must declare the platform set exactly once"
-    names = matches[0].split(" and ")
+def _documented_platforms(marker: re.Pattern[str]) -> set[str]:
+    matches = marker.findall(DESIGN.read_text(encoding="utf-8"))
+    assert len(matches) == 1, "the design must declare this platform set exactly once"
+    names = matches[0].replace(", and ", ", ").replace(" and ", ", ").split(", ")
     assert all(name in _DOCUMENTED_TO_RUNTIME for name in names)
     return {_DOCUMENTED_TO_RUNTIME[name] for name in names}
 
@@ -83,22 +86,22 @@ def _atomic_publication_platforms(tree: ast.Module) -> set[str]:
     return platforms
 
 
-def test_documented_alpha_platforms_match_the_implemented_gates() -> None:
-    documented = {
-        frozenset(_documented_platforms(path))
-        for path in (DESIGN, ARCHITECTURE, README)
-    }
-    assert len(documented) == 1
-    supported = set(next(iter(documented)))
+def test_required_alpha_platforms_are_distinct_from_implemented_providers() -> None:
+    required = _documented_platforms(_REQUIRED_PLATFORM_MARKER)
+    implemented = _documented_platforms(_IMPLEMENTED_PROVIDER_MARKER)
+
+    assert required == {"darwin", "linux", "win32"}
+    assert implemented == {"darwin", "linux"}
+    assert implemented < required
+    assert required - implemented == {"win32"}
 
     session_tree = ast.parse(SESSION_CAS.read_text(encoding="utf-8"))
     registry_tree = ast.parse(DATASET_REGISTRY.read_text(encoding="utf-8"))
+    operation_tree = ast.parse(OPERATION_RUNTIME.read_text(encoding="utf-8"))
     assert _has_posix_nofollow_gate(_method(session_tree, "SessionCas", "__init__"))
     assert _has_posix_nofollow_gate(_function(session_tree, "cleanup_orphan_sessions"))
     assert _has_posix_nofollow_gate(
         _method(registry_tree, "ConfiguredFileRoots", "__init__")
     )
-    assert supported == _atomic_publication_platforms(session_tree) == {
-        "darwin",
-        "linux",
-    }
+    assert _atomic_publication_platforms(session_tree) == implemented
+    assert _atomic_publication_platforms(operation_tree) == implemented
