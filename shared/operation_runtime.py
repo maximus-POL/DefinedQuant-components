@@ -922,7 +922,7 @@ def execute_operation(
         return operation_failure(exc, request=validated_request)
 
 
-def _execute_resolved_operation(
+def execute_resolved_operation(
     request: OperationRequest,
     record: ComponentRecord,
     *,
@@ -944,6 +944,7 @@ __all__ = [
     "component_reference",
     "execute_component",
     "execute_operation",
+    "execute_resolved_operation",
     "execute_validated_component",
     "operation_failure",
     "prepare_output_directory",

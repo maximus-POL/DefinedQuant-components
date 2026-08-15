@@ -411,3 +411,32 @@ def test_numerical_evidence_has_no_second_component_execution_path() -> None:
         and node.module == "defined_quant.operation_runtime"
         for node in ast.walk(tree)
     )
+
+
+def test_no_consumer_imports_a_private_operation_runtime_name() -> None:
+    assert "execute_resolved_operation" in operation_runtime.__all__
+
+    runtime_path = ROOT / "shared" / "operation_runtime.py"
+    offenders: list[str] = []
+    for source_root in (
+        ROOT / "shared",
+        ROOT / "protocol",
+        ROOT / "categories",
+        ROOT / "authoring",
+        ROOT / ".agents",
+    ):
+        for path in source_root.rglob("*.py"):
+            if path == runtime_path:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or node.module not in {
+                    "defined_quant.operation_runtime",
+                    "shared.operation_runtime",
+                }:
+                    continue
+                for imported in node.names:
+                    if imported.name.startswith("_"):
+                        offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+
+    assert offenders == []

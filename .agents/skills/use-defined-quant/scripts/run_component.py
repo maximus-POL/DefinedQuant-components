@@ -15,7 +15,7 @@ activate_source_runtime()
 
 from defined_quant.operation_runtime import (  # noqa: E402
     OperationRuntimeError,
-    _execute_resolved_operation,
+    execute_resolved_operation,
     operation_failure,
     prepare_output_directory,
     resolve_component,
@@ -175,7 +175,7 @@ def _legacy_operation(args: argparse.Namespace) -> OperationResult:
         ),
         artifacts=SvgArtifactRequest(),
     )
-    return _execute_resolved_operation(request, record, output_dir=output_dir)
+    return execute_resolved_operation(request, record, output_dir=output_dir)
 
 
 def _serialize_operation_result(result: OperationResult) -> tuple[bytes, bool]:

@@ -12,6 +12,9 @@ Small, reusable foundations used by every component:
 - `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG.
 - `operation_runtime.py` owns the one catalog-wide validation, invocation, byte construction,
   bundle reconciliation, and atomic unmanaged-publication path used by CLI and evidence.
+  `execute_resolved_operation()` is its supported pre-resolved seam for consumers such as the
+  legacy CLI that have already called `prepare_output_directory()` and `resolve_component()`;
+  unresolved host requests should use `DefinedQuantService.execute_operation()` instead.
 - `data_records.py`, `dataset_registry.py`, `operation_records.py`, `record_views.py`, and
   `session_cas.py` implement the closed V1 content roots, structural normalization, manifest
   reconciliation, bounded paging, and owner-private session storage without a transport SDK.
