@@ -12,23 +12,27 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import yaml  # type: ignore[import-untyped]
-from defined_quant import component_models, component_record, load_component, subject_hash
-from defined_quant.types import DQError
+from defined_quant import component_record
+from defined_quant.operation_runtime import (
+    OperationRuntimeError,
+    component_reference,
+    execute_component,
+)
 from defined_quant_protocol import (
     CallerProvenance,
-    ComponentRef,
     InterpretationMethod,
+    OperationErrorCode,
     OperationFailure,
     OperationRequest,
     OperationSuccess,
     ProvenanceStatus,
     SourceKind,
 )
-from pydantic import BaseModel, ValidationError
 
 from authoring.input_validation import (
     expected_input_validation_issues,
     input_validation_issues,
+    input_validation_issues_from_details,
 )
 
 EXECUTABLE_EVIDENCE_SECTIONS = ("known_answers", "boundary_cases", "cross_checks")
@@ -116,8 +120,8 @@ def _as_mapping(value: Any, *, label: str) -> Mapping[str, Any]:
     return value
 
 
-def _violation_ids(error: DQError) -> set[str]:
-    violations = error.details.get("violations", [])
+def _violation_ids(details: Mapping[str, Any]) -> set[str]:
+    violations = details.get("violations", [])
     if not isinstance(violations, list):
         return set()
     return {
@@ -225,46 +229,62 @@ def _assert_output(payload: Mapping[str, Any], assertion: Mapping[str, Any]) -> 
 def execute_numerical_case(component_dir: Path, record: Mapping[str, Any]) -> None:
     """Execute one known answer, boundary case, or cross-check from authored data."""
 
-    inputs_model, output_model = component_models(component_dir)
+    selected = component_record(component_dir)
+    component = component_reference(selected)
     inputs = materialize_fixture(record.get("inputs"))
     if not isinstance(inputs, Mapping):
         raise AssertionError("evidence inputs must materialize to an object")
     expectation = _as_mapping(record.get("expect"), label="expect")
     expected_outcome = expectation.get("outcome")
     try:
-        validated_inputs = inputs_model.model_validate(inputs)
-    except ValidationError as exc:
-        actual_issues = input_validation_issues(exc)
-        if expected_outcome != "input_validation_error":
+        execution = execute_component(
+            selected,
+            component,
+            inputs,
+        )
+    except OperationRuntimeError as exc:
+        if exc.code is OperationErrorCode.INVALID_COMPONENT_INPUT:
+            raw_issues = exc.details.get("errors", [])
+            if not isinstance(raw_issues, list):
+                raise AssertionError(
+                    "runtime input validation details must contain errors"
+                ) from exc
+            actual_issues = input_validation_issues_from_details(raw_issues)
+            if expected_outcome != "input_validation_error":
+                raise AssertionError(
+                    f"expected {expected_outcome!r} but Inputs validation failed with "
+                    f"{actual_issues!r}"
+                ) from exc
+            expected_issues = expected_input_validation_issues(expectation)
+            if actual_issues != expected_issues:
+                raise AssertionError(
+                    f"input validation issues {actual_issues!r} do not equal "
+                    f"{expected_issues!r}"
+                ) from exc
+            return
+        if exc.code is not OperationErrorCode.COMPONENT_REFUSED:
             raise AssertionError(
-                f"expected {expected_outcome!r} but Inputs validation failed with "
-                f"{actual_issues!r}"
+                f"component runtime failed with non-evidence code {exc.code.value!r}"
             ) from exc
-        expected_issues = expected_input_validation_issues(expectation)
-        if actual_issues != expected_issues:
-            raise AssertionError(
-                f"input validation issues {actual_issues!r} do not equal "
-                f"{expected_issues!r}"
-            ) from exc
-        return
-
-    if expected_outcome == "input_validation_error":
-        raise AssertionError("expected input validation to fail but Inputs were valid")
-
-    component = load_component(component_dir)
-    try:
-        raw_result = component(**validated_inputs.model_dump(mode="python"))
-    except DQError as exc:
+        component_error = _as_mapping(
+            exc.details.get("component_error", {}),
+            label="component_error",
+        )
+        error_code = component_error.get("code")
         if expected_outcome != "error":
             raise AssertionError(
-                f"expected successful output but component raised {exc.code}: {exc.message}"
+                f"expected successful output but component raised {error_code!r}"
             ) from exc
-        if exc.code != expectation.get("code"):
+        if error_code != expectation.get("code"):
             raise AssertionError(
-                f"error code {exc.code!r} does not equal {expectation.get('code')!r}"
+                f"error code {error_code!r} does not equal {expectation.get('code')!r}"
             ) from exc
         expected_violations = set(expectation.get("violation_ids", []))
-        actual_violations = _violation_ids(exc)
+        component_details = _as_mapping(
+            component_error.get("details", {}),
+            label="component error details",
+        )
+        actual_violations = _violation_ids(component_details)
         if actual_violations != expected_violations:
             raise AssertionError(
                 f"violation IDs {sorted(actual_violations)!r} do not equal "
@@ -272,16 +292,13 @@ def execute_numerical_case(component_dir: Path, record: Mapping[str, Any]) -> No
             ) from exc
         return
 
+    if expected_outcome == "input_validation_error":
+        raise AssertionError("expected input validation to fail but Inputs were valid")
     if expected_outcome == "error":
         raise AssertionError(
             f"expected error {expectation.get('code')!r} but component returned output"
         )
-    if not isinstance(raw_result, output_model):
-        raise AssertionError(
-            f"component returned {type(raw_result).__name__}, not canonical Output"
-        )
-    result: BaseModel = output_model.model_validate(raw_result.model_dump(mode="python"))
-    payload = result.model_dump(mode="json")
+    payload = execution.result.model_dump(mode="json")
     assertions = expectation.get("assertions")
     if not isinstance(assertions, list):
         raise AssertionError("success expectations require assertions")
@@ -311,11 +328,7 @@ def execute_agent_case(component_dir: Path, record: Mapping[str, Any]) -> None:
     project_root = component_dir.parents[2]
     component = component_record(component_dir)
     request = OperationRequest(
-        component=ComponentRef(
-            id=component.component_id,
-            version=component.version,
-            subject_hash=subject_hash(component),
-        ),
+        component=component_reference(component),
         input=materialize_fixture(record.get("inputs")),
         provenance=CallerProvenance(
             source_kind=SourceKind.SYNTHETIC,

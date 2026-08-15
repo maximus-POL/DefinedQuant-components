@@ -10,6 +10,10 @@ Small, reusable foundations used by every component:
   deterministic ranking, positive-versus-boundary match explanations, exact facets, and bounded
   results for both developer tools and agent adapters.
 - `charts.py` renders trusted `VisualizationSpec` values as deterministic SVG.
+- `operation_runtime.py` owns the one catalog-wide validation, invocation, byte construction,
+  bundle reconciliation, and atomic unmanaged-publication path used by CLI and evidence.
+- `service.py` exposes the transport-neutral `DefinedQuantService` execution boundary without
+  importing a transport SDK or pre-implementing later discovery and storage phases.
 - `agent.py` is a compatibility-only re-export of the canonical `defined_quant_protocol` models.
 - `managed_profiles/` contains closed, packaged execution allowlists rather than component-ID
   branches in production code.

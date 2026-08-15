@@ -266,8 +266,7 @@ def test_component_reference_uses_explicit_fresh_subject_verification() -> None:
         """
 import json
 import sys
-sys.path.insert(0, sys.argv[1])
-import run_component as runner
+import defined_quant.operation_runtime as runner
 
 calls = []
 def verified(component_id, *, root=None):
@@ -276,7 +275,7 @@ def verified(component_id, *, root=None):
 
 runner.verify_subject = verified
 record = runner.component_record("dq.market_data.simple_return")
-reference = runner._component_ref(record)
+reference = runner.component_reference(record)
 print(json.dumps({"calls": calls, "reference": reference.model_dump(mode="json")}))
 """
     )
@@ -377,16 +376,16 @@ def test_nonfinite_component_output_is_rejected_before_staging(tmp_path: Path) -
 import sys
 from pathlib import Path
 
-sys.path.insert(0, sys.argv[1])
-import run_component as runner
+import defined_quant.operation_runtime as runner
+from defined_quant_protocol import CallerProvenance, OperationRequest
 
 root = Path(sys.argv[2])
 record = runner.component_record("dq.market_data.simple_return")
-reference = runner._component_ref(record)
-request = runner.OperationRequest(
+reference = runner.component_reference(record)
+request = OperationRequest(
     component=reference,
     input={"prices": [100.0, 101.0], "price_kind": "adjusted"},
-    provenance=runner.CallerProvenance(
+    provenance=CallerProvenance(
         source_kind="synthetic",
         interpretation_method="caller_structured",
         label="Synthetic non-finite output regression fixture.",
@@ -402,9 +401,9 @@ def nonfinite_component(**kwargs):
 
 runner.load_component = lambda selected: nonfinite_component
 try:
-    runner._run(request, record, root / "output")
+    runner._execute_operation_success(request, record, root / "output")
 except Exception as error:
-    runner._print_model(runner._failure(error, request=request), stream=sys.stdout)
+    sys.stdout.write(runner.operation_failure(error, request=request).model_dump_json() + "\\n")
 """,
         str(tmp_path),
     )
@@ -509,15 +508,15 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, sys.argv[1])
-import run_component as runner
+import defined_quant.operation_runtime as runner
+from defined_quant_protocol import ComponentRef
 
 root = Path(sys.argv[2])
 staging = root / "staging"
 staging.mkdir()
 (staging / "result.json").write_text("{}", encoding="utf-8")
 destination = root / "output"
-component = runner.ComponentRef(
+component = ComponentRef(
     id="dq.market_data.simple_return",
     version="0.1.0",
     subject_hash="a" * 64,
@@ -536,7 +535,7 @@ try:
         ("result.json",),
         component=component,
     )
-except runner.AdapterError as error:
+except runner.OperationRuntimeError as error:
     code = error.code.value
 else:
     code = "succeeded"
@@ -594,8 +593,8 @@ def test_dq_error_taxonomy_and_failure_sanitization_are_fail_closed() -> None:
         """
 import json
 import sys
-sys.path.insert(0, sys.argv[1])
-import run_component as runner
+import defined_quant.operation_runtime as runner
+from defined_quant_protocol import OperationErrorCode
 from defined_quant.types import (
     AmbiguousInput,
     ComponentContractError,
@@ -640,12 +639,12 @@ payload["integrity_details"] = {
     ).details["component_error"]
     for name, error_type in integrity_errors.items()
 }
-unsafe = runner.AdapterError(
-    runner.OperationErrorCode.OPERATION_FAILED,
+unsafe = runner.OperationRuntimeError(
+    OperationErrorCode.OPERATION_FAILED,
     "unsafe",
     details={"nan": float("nan"), "object": object()},
 )
-failure = runner._failure(unsafe, request=None)
+failure = runner.operation_failure(unsafe, request=None)
 payload["failure"] = failure.model_dump(mode="json")
 print(json.dumps(payload, sort_keys=True, allow_nan=False))
 """
@@ -681,15 +680,15 @@ def test_component_stdout_is_captured_and_never_leaks() -> None:
     completed = _python_probe(
         """
 import sys
-sys.path.insert(0, sys.argv[1])
-import run_component as runner
+import defined_quant.operation_runtime as runner
+from defined_quant_protocol import CallerProvenance, OperationRequest
 
 record = runner.component_record("dq.market_data.simple_return")
-reference = runner._component_ref(record)
-request = runner.OperationRequest(
+reference = runner.component_reference(record)
+request = OperationRequest(
     component=reference,
     input={"prices": [100.0, 101.0], "price_kind": "adjusted"},
-    provenance=runner.CallerProvenance(
+    provenance=CallerProvenance(
         source_kind="synthetic",
         interpretation_method="caller_structured",
         label="Synthetic noise test.",
@@ -705,9 +704,13 @@ def noisy_component(**kwargs):
 
 runner.load_component = lambda selected: noisy_component
 try:
-    runner._execute(record, request, validated)
+    runner._invoke_component(
+        record,
+        validated,
+        component=request.component,
+    )
 except Exception as error:
-    runner._print_model(runner._failure(error, request=request), stream=sys.stdout)
+    sys.stdout.write(runner.operation_failure(error, request=request).model_dump_json() + "\\n")
 """
     )
 

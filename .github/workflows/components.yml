@@ -60,6 +60,8 @@ jobs:
           uv pip install --python .wheel-check/bin/python dist/*.whl
           .wheel-check/bin/python - <<'PY'
           from math import isclose
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
 
           from defined_quant import iter_components, load_execution_policy
           from defined_quant.market_data.log_return.component import (
@@ -71,7 +73,14 @@ jobs:
               Inputs as HistoricalVolatilityInputs,
               historical_volatility,
           )
-          from defined_quant_protocol import PROTOCOL_VERSION, require_compatible_ports
+          from defined_quant.service import DefinedQuantService
+          from defined_quant_protocol import (
+              PROTOCOL_VERSION,
+              CallerProvenance,
+              OperationRequest,
+              OperationSuccess,
+              require_compatible_ports,
+          )
 
           assert PROTOCOL_VERSION == "0.4.0"
           assert [item.component_id for item in iter_components()] == [
@@ -90,6 +99,22 @@ jobs:
               "0.3.4",
               "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a",
           )
+          request = OperationRequest(
+              component=ref,
+              input={"prices": [100, 101], "price_kind": "adjusted"},
+              provenance=CallerProvenance(
+                  source_kind="synthetic",
+                  interpretation_method="caller_structured",
+                  label="Installed-wheel shared-runtime smoke test.",
+              ),
+          )
+          with TemporaryDirectory(prefix="defined-quant-wheel-runtime-") as temporary:
+              operation = DefinedQuantService().execute_operation(
+                  request,
+                  output_dir=Path(temporary) / "operation",
+              )
+              assert isinstance(operation, OperationSuccess)
+              assert operation.manifest.request == request
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1
           assert simple.disclosures

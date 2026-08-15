@@ -1,7 +1,8 @@
 # Local MCP alpha technical design
 
-**Status:** frozen implementation contract for PR0; design only. The repository does not yet
-contain an MCP package, server, worker, dataset registry, or shared host runtime.
+**Status:** frozen implementation contract from PR0; this document remains design-only. Phase 1
+now supplies the shared operation runtime and `DefinedQuantService`; the repository still does not
+contain an MCP package, server, worker, or dataset registry.
 
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:

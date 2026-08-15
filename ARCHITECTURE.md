@@ -192,7 +192,8 @@ publishes a fully staged directory with an atomic no-replace rename; mutable ove
 are deliberately unsupported. Linux, macOS, and Windows use their native no-clobber behavior, and
 unsupported hosts fail rather than falling back to a replace operation.
 
-The generic adapter then performs the following catalog-wide sequence:
+`defined_quant.operation_runtime` performs the following catalog-wide sequence for the thin CLI,
+numerical evidence execution, and `DefinedQuantService`:
 
 1. Validate the closed operation request.
 2. Discover the component by stable ID, freshly recompute and cache its filesystem-backed
@@ -201,8 +202,17 @@ The generic adapter then performs the following catalog-wide sequence:
 4. Invoke only the callable declared by the component catalog.
 5. Validate the return value through the canonical Pydantic `Output` model and verify its
    component identity and subject provenance.
-6. Materialize normalized input, typed result, and requested SVG artifacts.
-7. Emit a typed result whose manifest records relative POSIX member names and content hashes.
+6. Materialize normalized input, typed result, and requested SVG artifacts in a sibling staging
+   directory.
+7. Reconcile the exact staged members, canonical manifest bytes, and every declared digest.
+8. Publish once with atomic no-replace rename and emit the existing typed result.
+
+The CLI retains only strict JSON and argument handling, legacy request construction, protocol
+response serialization, and exit status. Numerical evidence uses the lower raw-mapping execution
+seam because its deliberate non-finite fixtures are not valid `OperationRequest` JSON; it does not
+maintain a second component invocation path. `DefinedQuantService` currently exposes only Phase-1
+canonical unmanaged execution. Catalog indexing, dataset/session storage, worker isolation, and
+transport methods remain later phases.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
 but adding another conforming component requires no runner edit. Pydantic models remain canonical
