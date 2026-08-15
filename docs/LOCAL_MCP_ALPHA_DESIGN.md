@@ -1,8 +1,10 @@
 # Local MCP alpha technical design
 
 **Status:** frozen implementation contract from PR0. Phase 1 now supplies the shared operation
-runtime and `DefinedQuantService`; Phase 2 supplies its immutable import-free contract index. The
-repository still does not contain an MCP package, server, worker, or dataset registry.
+runtime and `DefinedQuantService`; Phase 2 supplies its immutable import-free contract index;
+Phase 3 supplies the canonical dataset/operation records, strict normalizer, bounded projections,
+and scoped ephemeral CAS. The repository still does not contain an MCP package, server, worker,
+SDK dependency, or protocol-0.5 implementation.
 
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:
@@ -1191,8 +1193,9 @@ pre-validation boundary.
 Initialization and list payloads are serialized and checked before the server advertises
 readiness; exceeding their static frame ceiling fails startup with no partial STDIO session.
 
-Pages are stable source-order slices. An opaque cursor binds record digest, view, selector, next
-index, and session; changing any bound field refuses the cursor. Byte limits take precedence over
+Pages are stable source-order slices. An opaque cursor binds record digest, view, the
+domain-separated SHA-256 digest of any selector, next index, and session; selector text is not
+embedded. Changing any bound field refuses the cursor. Byte limits take precedence over
 requested counts, so a page may be shorter. A single value too large to fit is
 `result_limit_exceeded`, not truncated.
 
@@ -1204,8 +1207,10 @@ never be tool arguments. The server refuses `~`, environment or glob expansion, 
 `..`, archives, devices, sockets, FIFOs, and symlinked or reparse-point intermediate or final path
 components. It accepts a regular CSV/JSON file only after handle-based containment checks against
 an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`;
-Windows opens reparse points without following them and validates the final handle path and type.
-Local paths remain disabled on a platform until equivalent fail-closed behavior is tested.
+Windows will open reparse points without following them and validate the final handle path and
+type once that boundary is implemented and tested. Phase 3 enables local-file registration and
+session CAS only on tested POSIX hosts with `O_NOFOLLOW`; other platforms fail startup closed until
+equivalent owner-only ACL, reparse-point, handle-containment, locking, and cleanup behavior exists.
 
 Files are hashed and size-limited while streaming. The dedicated `Source.local_file.path` value
 never enters canonical records, responses, resource URIs, or logs. This is not generic free-text
@@ -1214,8 +1219,9 @@ explicit manifest view, so callers must not put secrets, credentials, or local p
 bytes are discarded after normalization.
 
 The session directory is created beneath a fixed application temporary root with `0700`
-directories and `0600` files, or the platform-equivalent owner-only ACL. It refuses a symlinked,
-reparse-point, or wrongly owned root. Quota is checked before and during staged writes. A full store
+directories and `0600` files. A future non-POSIX implementation requires the platform-equivalent
+owner-only ACL before it may enable this store. It refuses a symlinked, reparse-point, wrongly
+owned, or group/world-accessible root. Quota is checked before and during staged writes. A full store
 returns `cache_full` and never evicts a live reference. Clean shutdown removes only the exact
 active marked directory. Startup cleanup may remove only marker-bearing, correctly owned,
 unlocked application session directories older than 24 hours; it never recursively cleans a

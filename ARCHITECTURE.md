@@ -222,9 +222,21 @@ The CLI retains only strict JSON and argument handling, legacy request construct
 response serialization, and exit status. Numerical evidence uses the lower raw-mapping execution
 seam because its deliberate non-finite fixtures are not valid `OperationRequest` JSON; it does not
 maintain a second component invocation path. `DefinedQuantService` exposes Phase-1 canonical
-unmanaged execution and Phase-2 indexed discovery. The discovery snapshot is never an execution
-trust source: operation execution still resolves and verifies the selected filesystem subject
-freshly. Dataset/session storage, worker isolation, and transport methods remain later phases.
+unmanaged execution, Phase-2 indexed discovery, and Phase-3 session-scoped data and operation
+records. The discovery snapshot is never an execution trust source: operation execution still
+resolves and verifies the selected filesystem subject freshly.
+
+Phase 3 normalizes only the frozen structural JSON/CSV cases, records every host-applied change,
+and publishes `DatasetPayloadV1`, `DatasetRecordV1`, and manifest-reconciled `OperationRecordV1`
+through owner-private, content-addressed session storage. Every read revalidates schema, hashes,
+members, cross-record dimensions, and source bindings before returning a bounded page. References
+expire with the session; corruption is quarantined and never repaired or partially returned.
+The store retains no accepted raw source bytes or caller file path. Its hashes establish immutable
+byte consistency, not source authenticity, financial correctness, or independent execution
+attestation. The alpha storage and local-file boundary is enabled only on tested POSIX hosts and
+fails startup closed elsewhere until equivalent ACL, reparse-point, handle-containment, locking,
+and cleanup behavior is implemented and tested. Worker isolation and transport methods remain
+Phase 4.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
 but adding another conforming component requires no runner edit. Pydantic models remain canonical

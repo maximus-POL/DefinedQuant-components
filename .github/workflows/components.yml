@@ -133,6 +133,37 @@ jobs:
               )
               assert isinstance(operation, OperationSuccess)
               assert operation.manifest.request == request
+              phase3 = DefinedQuantService(
+                  session_state_root=Path(temporary) / "phase3-state"
+              )
+              registration = phase3.register_dataset(
+                  {
+                      "source": {
+                          "kind": "inline_rows",
+                          "rows": [{"value": 1.25}],
+                      },
+                      "columns": [
+                          {
+                              "source_name": "value",
+                              "field_id": "value",
+                              "data_type": "number",
+                              "role": "value",
+                          }
+                      ],
+                      "semantics": {"ordering": "preserve_source_order"},
+                      "provenance": {
+                          "source_kind": "synthetic",
+                          "interpretation_method": "caller_structured",
+                          "label": "Installed-wheel Phase-3 smoke test.",
+                      },
+                  }
+              )
+              assert registration["dataset_ref"].startswith("dqds:v1:")
+              preview = phase3.describe_dataset(
+                  registration["dataset_ref"], view="preview", limit=1
+              )
+              assert preview["preview"]["rows"] == [{"value": 1.25}]
+              phase3.close()
           simple = simple_return(prices=[100, 101], price_kind="adjusted")
           assert len(simple.returns) == len(simple.derivations) == 1
           assert simple.disclosures
