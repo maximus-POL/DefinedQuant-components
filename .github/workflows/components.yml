@@ -59,11 +59,30 @@ jobs:
           uv venv .wheel-check
           uv pip install --python .wheel-check/bin/python dist/*.whl
           .wheel-check/bin/python - <<'PY'
+          import sys
           from math import isclose
           from pathlib import Path
           from tempfile import TemporaryDirectory
 
           from defined_quant import iter_components, load_execution_policy
+          from defined_quant.service import DefinedQuantService
+
+          service = DefinedQuantService()
+          assert len(service.contract_index) == 7
+          assert tuple(service.contract_index.by_component_id) == (
+              "dq.market_data.log_return",
+              "dq.market_data.monthly_return_matrix",
+              "dq.market_data.rebased_price_index",
+              "dq.market_data.simple_return",
+              "dq.performance.drawdown",
+              "dq.volatility.historical_volatility",
+              "dq.volatility.rolling_historical_volatility",
+          )
+          discovery = service.search_components("calculate period price changes", limit=5)
+          assert discovery.hits[0].record.component_id == "dq.market_data.simple_return"
+          assert service.contract_index is service.contract_index
+          assert not any(name.endswith(".component") for name in sys.modules)
+
           from defined_quant.market_data.log_return.component import (
               Output as LogReturnOutput,
               log_return,
@@ -73,7 +92,6 @@ jobs:
               Inputs as HistoricalVolatilityInputs,
               historical_volatility,
           )
-          from defined_quant.service import DefinedQuantService
           from defined_quant_protocol import (
               PROTOCOL_VERSION,
               CallerProvenance,
@@ -109,7 +127,7 @@ jobs:
               ),
           )
           with TemporaryDirectory(prefix="defined-quant-wheel-runtime-") as temporary:
-              operation = DefinedQuantService().execute_operation(
+              operation = service.execute_operation(
                   request,
                   output_dir=Path(temporary) / "operation",
               )

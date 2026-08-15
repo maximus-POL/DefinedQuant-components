@@ -1,8 +1,8 @@
 # Local MCP alpha technical design
 
-**Status:** frozen implementation contract from PR0; this document remains design-only. Phase 1
-now supplies the shared operation runtime and `DefinedQuantService`; the repository still does not
-contain an MCP package, server, worker, or dataset registry.
+**Status:** frozen implementation contract from PR0. Phase 1 now supplies the shared operation
+runtime and `DefinedQuantService`; Phase 2 supplies its immutable import-free contract index. The
+repository still does not contain an MCP package, server, worker, or dataset registry.
 
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:
@@ -1383,7 +1383,8 @@ Implementation order is fixed so transport work cannot create a second runtime:
    identity, failure, and real subprocess behavior. No MCP dependency.
 2. **Phase 2 — indexed discovery.** Build one immutable process-lifetime contract index and stable
    ID map; prove parity with current ranking, boundary explanations, filters, and facets; add the
-   generated 10,000-record functional and timed case.
+   generated 10,000-record bounded functional case. Local timings are diagnostic only: the frozen
+   fixture defines no portable wall-clock acceptance threshold, so CI must not invent one.
 3. **Phase 3 — dataset registry and session store.** Implement the canonical records, fixed hash
    vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits.
 4. **Phase 4 — STDIO MCP server and worker.** Add the optional package, isolate SDK code in

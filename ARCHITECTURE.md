@@ -178,6 +178,17 @@ do-not-use and unsupported-scope fields. A boundary-only match never recommends 
 The integration must not describe or special-case an individual component in production code. A
 component's financial instructions remain in its own `contract.yaml`.
 
+`ContractIndex` takes one deep-immutable metadata snapshot, orders it by stable component ID, and
+precomputes normalized positive-term and facet postings without importing a component callable.
+It retains immutable authored field values so exact phrase scoring and boundary explanations are
+computed only for shortlisted records rather than stored as hundreds of thousands of tiny sets.
+`DefinedQuantService` owns exactly one such index for its lifetime; repeated searches and stable-ID
+discovery lookups never reopen the catalog. Constructing a new service is the explicit refresh
+boundary. The compatibility `search_components()` function builds the same index for an explicit
+in-memory catalog or one standalone catalog query. Ranking weights, explanations, exact filters,
+complete pre-limit facets, and `(-score, component_id)` ordering remain the existing public
+discovery semantics.
+
 The adapter is a host convenience layer, not another source of truth. It cannot redefine inputs,
 defaults, constraints, outputs, or presentation semantics. New components become available to
 agent hosts through catalog discovery without adding another skill or editing the generic one.
@@ -210,9 +221,10 @@ numerical evidence execution, and `DefinedQuantService`:
 The CLI retains only strict JSON and argument handling, legacy request construction, protocol
 response serialization, and exit status. Numerical evidence uses the lower raw-mapping execution
 seam because its deliberate non-finite fixtures are not valid `OperationRequest` JSON; it does not
-maintain a second component invocation path. `DefinedQuantService` currently exposes only Phase-1
-canonical unmanaged execution. Catalog indexing, dataset/session storage, worker isolation, and
-transport methods remain later phases.
+maintain a second component invocation path. `DefinedQuantService` exposes Phase-1 canonical
+unmanaged execution and Phase-2 indexed discovery. The discovery snapshot is never an execution
+trust source: operation execution still resolves and verifies the selected filesystem subject
+freshly. Dataset/session storage, worker isolation, and transport methods remain later phases.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
 but adding another conforming component requires no runner edit. Pydantic models remain canonical
