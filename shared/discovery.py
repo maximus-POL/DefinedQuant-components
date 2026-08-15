@@ -21,6 +21,7 @@ from defined_quant.types import ComponentContractError, ComponentNotFound
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+MAX_INDEXED_RECORDS = 10_000
 
 FacetName = Literal[
     "categories",
@@ -550,7 +551,12 @@ class ContractIndex:
 
     def __init__(self, records: Iterable[ComponentRecord]) -> None:
         snapshots: dict[str, ComponentRecord] = {}
-        for record in records:
+        for record_count, record in enumerate(records, start=1):
+            if record_count > MAX_INDEXED_RECORDS:
+                raise ComponentContractError(
+                    "contract index supports at most "
+                    f"{MAX_INDEXED_RECORDS} component records"
+                )
             if record.component_id in snapshots:
                 raise ComponentContractError(
                     f"duplicate component id: {record.component_id}",
@@ -714,6 +720,7 @@ def search_components(
 __all__ = [
     "DEFAULT_LIMIT",
     "FACET_NAMES",
+    "MAX_INDEXED_RECORDS",
     "MAX_LIMIT",
     "ContractIndex",
     "DiscoveryFilters",

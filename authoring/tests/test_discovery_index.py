@@ -15,6 +15,7 @@ import pytest
 from defined_quant.catalog import ComponentRecord, iter_components
 from defined_quant.discovery import (
     FACET_NAMES,
+    MAX_INDEXED_RECORDS,
     ContractIndex,
     DiscoveryFilters,
     SearchResults,
@@ -80,6 +81,26 @@ def _record(
         callable_path=f"{callable_prefix}.{category}.{slug}.component:{slug}",
         path=Path("/synthetic_catalog") / category / slug,
         metadata=metadata,
+    )
+
+
+def _limit_record(index: int) -> ComponentRecord:
+    """Return a compact unique record for construction-boundary tests."""
+
+    slug = f"limit_{index:05d}"
+    component_id = f"dq.benchmark.{slug}"
+    return ComponentRecord(
+        component_id=component_id,
+        category="benchmark",
+        slug=slug,
+        version="0.1.0",
+        callable_path=f"synthetic_components.benchmark.{slug}:never_import",
+        path=Path("/synthetic_catalog/benchmark") / slug,
+        metadata={
+            "id": component_id,
+            "category": "benchmark",
+            "slug": slug,
+        },
     )
 
 
@@ -259,6 +280,26 @@ def test_service_preserves_an_injected_empty_index() -> None:
 
     assert service.contract_index is index
     assert service.search_components("anything").total_matches == 0
+
+
+def test_index_construction_succeeds_just_below_record_ceiling() -> None:
+    index = ContractIndex(
+        _limit_record(record_index)
+        for record_index in range(MAX_INDEXED_RECORDS - 1)
+    )
+
+    assert len(index) == MAX_INDEXED_RECORDS - 1
+
+
+def test_index_construction_fails_closed_just_above_record_ceiling() -> None:
+    with pytest.raises(
+        ComponentContractError,
+        match=rf"supports at most {MAX_INDEXED_RECORDS} component records",
+    ):
+        ContractIndex(
+            _limit_record(record_index)
+            for record_index in range(MAX_INDEXED_RECORDS + 1)
+        )
 
 
 class _RejectComponentImports(importlib.abc.MetaPathFinder):

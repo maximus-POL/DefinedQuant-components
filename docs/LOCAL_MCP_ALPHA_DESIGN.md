@@ -1157,6 +1157,9 @@ allowed by the failure fixture.
 | Dataset rows | 250,000 | 250,000 |
 | Dataset columns | 128 | 128 |
 | One decoded cell | 64 KiB | 64 KiB |
+| Indexed component records | current catalog: 7 | 10,000 |
+| Search candidates considered per query | unbounded today | 500 specified; enforcement deferred |
+| Expected retained index memory per record | about 29 KB | observational planning value; not enforced |
 | Search response | 64 KiB | 64 KiB |
 | Other structured tool response | 256 KiB | 256 KiB |
 | Initialization and list response frame | 256 KiB | 256 KiB |
@@ -1192,6 +1195,23 @@ closed request model runs, so every tool surface can return `input_limit_exceede
 pre-validation boundary.
 Initialization and list payloads are serialized and checked before the server advertises
 readiness; exceeding their static frame ceiling fails startup with no partial STDIO session.
+
+The indexed-record ceiling is enforced once, while constructing the immutable process-lifetime
+snapshot; an oversized catalog fails startup before a session exists and never fails midway
+through that session. The 500-candidate search bound is a frozen controller requirement, but it
+is intentionally not enforced in the alpha index yet; enforcement lands when catalog growth
+warrants it. Until then a broad query can consider the complete accepted index. No search path
+uses a wall-clock deadline: elapsed-time outcomes would vary by machine and violate deterministic
+discovery.
+
+Controller measurements are diagnostic observations, not limits, deadlines, or CI thresholds.
+For the current seven-component catalog, idle RSS was about 41 MB, cold start about 107 ms, and a
+search 1–2 ms. For the synthetic 10,000-component catalog, index construction was about 3.9 s
+and retained about 290 MB (about 29 KB per record); selective search was about 0.3 ms, while a
+broad search matching every record cost about 0.17–0.27 ms per candidate, or roughly 1.7–2.7 s.
+The per-record memory observation is the reported retained index RSS divided by its 10,000
+records. These figures were recorded from the diagnostic measurement run and are not re-derived
+by tests.
 
 Pages are stable source-order slices. An opaque cursor binds record digest, view, the
 domain-separated SHA-256 digest of any selector, next index, and session; selector text is not
