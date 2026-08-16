@@ -691,6 +691,7 @@ class WorkerController:
             "PYTHONHASHSEED": "0",
             "PYTHONIOENCODING": "utf-8",
             "PYTHONNOUSERSITE": "1",
+            "PYTHONWARNINGS": "error",
             "PYTHONUTF8": "1",
             "TEMP": value,
             "TMP": value,

@@ -23,6 +23,8 @@ from defined_quant.worker_runtime import WorkerController, WorkerLimits
 from defined_quant_protocol import (
     CallerProvenance,
     ComponentRef,
+    OperationErrorCode,
+    OperationFailure,
     OperationRequest,
     OperationSuccess,
 )
@@ -36,6 +38,7 @@ COMMON_ENVIRONMENT = {
     "PYTHONHASHSEED",
     "PYTHONIOENCODING",
     "PYTHONNOUSERSITE",
+    "PYTHONWARNINGS",
     "PYTHONUTF8",
     "TEMP",
     "TMP",
@@ -65,6 +68,7 @@ _COMPONENT_SOURCE = dedent(
     Mode = Literal[
         "normal", "sleep", "spawn_tree", "memory", "crash",
         "stdout_overflow", "stderr_overflow", "python_output_overflow",
+        "stdout_byte", "stderr_byte", "deprecation_warning",
         "environment", "handle_probe", "breakaway_probe",
     ]
 
@@ -147,6 +151,14 @@ _COMPONENT_SOURCE = dedent(
             os.write(2, b"x" * (2 * 1024 * 1024))
         elif inputs.mode == "python_output_overflow":
             print("x" * (2 * 1024 * 1024))
+        elif inputs.mode == "stdout_byte":
+            os.write(1, b"x")
+        elif inputs.mode == "stderr_byte":
+            os.write(2, b"x")
+        elif inputs.mode == "deprecation_warning":
+            import warnings
+
+            warnings.warn("synthetic deprecated path", DeprecationWarning)
 
         environment_keys = tuple(sorted(os.environ)) if mode == "environment" else ()
         inherited = _handle_is_valid(handle_value) if mode == "handle_probe" else None
@@ -374,6 +386,34 @@ def test_stdout_and_stderr_are_capped_separately(
         tmp_path / f"operation-{mode}",
         mode,
     ) is HostFailureCode.WORKER_RESOURCE_LIMIT
+    controller.close()
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_code"),
+    [
+        ("stdout_byte", OperationErrorCode.COMPONENT_CONTRACT_ERROR),
+        ("stderr_byte", OperationErrorCode.COMPONENT_CONTRACT_ERROR),
+        ("deprecation_warning", OperationErrorCode.COMPONENT_EXECUTION_FAILED),
+    ],
+)
+def test_small_process_output_and_python_warnings_have_stable_failures(
+    worker_component: tuple[Path, ComponentRef],
+    tmp_path: Path,
+    mode: str,
+    expected_code: OperationErrorCode,
+) -> None:
+    catalog_root, reference = worker_component
+    output = tmp_path / f"operation-{mode}"
+    controller = WorkerController(limits=WorkerLimits(wall_seconds=5))
+    execution = controller.execute_operation(
+        _request(reference, mode),
+        output_dir=output,
+        catalog_root=catalog_root,
+    )
+    assert isinstance(execution.result, OperationFailure)
+    assert execution.result.error.code is expected_code
+    assert not output.exists()
     controller.close()
 
 

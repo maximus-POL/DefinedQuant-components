@@ -32,6 +32,7 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase 4 | Status; §10 | Recorded the in-tree Windows, macOS, and Linux providers, subprocess worker, and separate locked MCP STDIO distribution while retaining native six-cell validation as a release gate. | Keep implementation status truthful without turning unexecuted native validation into a release-support claim. |
 | 2026-08-16 | this commit | Phase 4 / release handoff | §7.2; §7.3; §8; §10 | Replaced obsolete future-Windows and uncommitted-spike descriptions with the implemented secure-filesystem, session-state, Job Object, binary-STDIO, SDK-isolated server, exact-wheel, and installation state; marked native six-cell validation as the remaining release gate. | Make the frozen plan directly usable for MCP completion and review without misdescribing landed Windows mechanisms or overstating unexecuted native validation. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.1 | Added the 2 MiB resolved worker-request and 4 MiB worker-control-response ceilings and required their controller-side overflow mappings to remain distinct from worker crashes. | Legal size refusal must occur before worker launch and oversized typed results must retain the closed input/result limit failures rather than collapsing to a retryable crash. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made any component stdout or stderr outside the typed control protocol a contract failure, and made Python warnings deterministic errors through the constructed worker environment. | Even small untyped output can disclose data or corrupt a future transport if accidentally forwarded; an explicit warning policy removes interpreter-default variability without exposing captured text. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1334,6 +1335,11 @@ acceptance must prove those mechanisms before release. The controller sends one 
 request and receives one control response.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
+Any non-empty capture below that ceiling is still a `component_contract_error`: installed
+components may communicate results, warnings, and disclosures only through their typed output.
+Captured text is discarded and is never attached to a response or audit record. The constructed
+environment sets `PYTHONWARNINGS=error`, so interpreter warning-filter defaults cannot turn the
+same component into success on one host and untyped stderr on another.
 Worker admission uses a non-blocking semaphore at the configured concurrency value; there is no
 hidden server-side queue. A request above that limit returns `worker_capacity` before a process or
 staging directory is created.
@@ -1341,6 +1347,8 @@ staging directory is created.
 The controller creates the environment from an allowlist instead of copying the parent. It sets a
 private `TMPDIR`/`TEMP`/`TMP`, `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`,
 `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `PYTHONHASHSEED=0`, `NO_COLOR=1`, and `TZ=UTC`.
+It also sets `PYTHONWARNINGS=error` so warning behavior is explicit and independent of interpreter
+defaults.
 No platform environment is copied wholesale. Windows may additionally allow only the required
 `SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after validating them at startup. Home directories,
 proxy settings, cloud and provider credentials, API keys, tokens,
