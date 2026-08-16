@@ -85,7 +85,7 @@ _FILE_ATTRIBUTE_TAG_INFO_CLASS = 9
 _FILE_ID_INFO_CLASS = 18
 _FILE_IS_REMOTE_DEVICE_INFO_CLASS = 51
 _FILE_BASIC_INFO_CLASS = 0
-_FILE_RENAME_INFO_CLASS = 3
+_FILE_RENAME_INFORMATION_CLASS = 10
 _FILE_DISPOSITION_INFO_CLASS = 4
 _ERROR_HANDLE_EOF = 38
 _ERROR_INSUFFICIENT_BUFFER = 122
@@ -557,6 +557,16 @@ class _WindowsApi:
             ctypes.c_int,
         ]
         self.NtQueryInformationFile.restype = ctypes.c_int32
+
+        self.NtSetInformationFile = self.ntdll.NtSetInformationFile
+        self.NtSetInformationFile.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(_IO_STATUS_BLOCK),
+            ctypes.c_void_p,
+            wintypes.ULONG,
+            ctypes.c_int,
+        ]
+        self.NtSetInformationFile.restype = ctypes.c_int32
 
 
 class WindowsSecureFilesystem:
@@ -1658,7 +1668,7 @@ class WindowsSecureFilesystem:
         source: int,
         destination_parent: int,
         destination_name: str,
-    ) -> bool:
+    ) -> int:
         encoded = destination_name.encode("utf-16-le")
         offset = _FILE_RENAME_INFO.FileName.offset
         size = ctypes.sizeof(_FILE_RENAME_INFO) + len(encoded)
@@ -1668,12 +1678,14 @@ class WindowsSecureFilesystem:
         info.RootDirectory = wintypes.HANDLE(destination_parent)
         info.FileNameLength = len(encoded)
         ctypes.memmove(ctypes.addressof(buffer) + offset, encoded, len(encoded))
-        return bool(
-            self._api.SetFileInformationByHandle(
+        io_status = _IO_STATUS_BLOCK()
+        return int(
+            self._api.NtSetInformationFile(
                 wintypes.HANDLE(source),
-                _FILE_RENAME_INFO_CLASS,
+                ctypes.byref(io_status),
                 buffer,
                 size,
+                _FILE_RENAME_INFORMATION_CLASS,
             )
         )
 
@@ -1736,17 +1748,18 @@ class WindowsSecureFilesystem:
                     destination_parts[-1],
                 ):
                     raise _failure(SecureFilesystemErrorCode.ALREADY_EXISTS)
-                set_last_error = getattr(ctypes, "set_last_error")
-                set_last_error(0)
-                renamed = self._set_rename_information(
+                status = self._set_rename_information(
                     source_handle,
                     destination_parent,
                     destination_parts[-1],
                 )
-                if not renamed:
-                    if self._relative_entry_exists(
-                        destination_parent,
-                        destination_parts[-1],
+                if status < 0:
+                    if (
+                        ctypes.c_uint32(status).value == _STATUS_OBJECT_NAME_COLLISION
+                        or self._relative_entry_exists(
+                            destination_parent,
+                            destination_parts[-1],
+                        )
                     ):
                         raise _failure(SecureFilesystemErrorCode.ALREADY_EXISTS)
                     raise _failure(SecureFilesystemErrorCode.PUBLICATION_FAILED)

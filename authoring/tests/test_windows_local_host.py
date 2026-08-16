@@ -1172,18 +1172,19 @@ def test_windows_publication_native_request_disables_replacement(
     destination = tmp_path / "native-rename-destination"
     secure.create_private_directory(source)
     secure.create_private_file(source / "record.bin", b"complete")
-    original = secure._api.SetFileInformationByHandle
+    original = secure._api.NtSetInformationFile
     replace_values: list[int] = []
     request_sizes: list[int] = []
     file_name_lengths: list[int] = []
 
     def inspect(
         handle: Any,
-        information_class: int,
+        io_status: Any,
         information: Any,
         size: int,
+        information_class: int,
     ) -> Any:
-        if information_class == windows_local._FILE_RENAME_INFO_CLASS:
+        if information_class == windows_local._FILE_RENAME_INFORMATION_CLASS:
             rename = ctypes.cast(
                 information,
                 ctypes.POINTER(windows_local._FILE_RENAME_INFO),
@@ -1191,9 +1192,9 @@ def test_windows_publication_native_request_disables_replacement(
             replace_values.append(int(rename.ReplaceIfExists))
             request_sizes.append(size)
             file_name_lengths.append(int(rename.FileNameLength))
-        return original(handle, information_class, information, size)
+        return original(handle, io_status, information, size, information_class)
 
-    monkeypatch.setattr(secure._api, "SetFileInformationByHandle", inspect)
+    monkeypatch.setattr(secure._api, "NtSetInformationFile", inspect)
     secure.publish_directory_no_replace(source, destination)
 
     assert replace_values == [0]

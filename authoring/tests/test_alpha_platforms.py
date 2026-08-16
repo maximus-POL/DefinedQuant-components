@@ -188,8 +188,8 @@ def test_native_secure_filesystem_mechanisms_live_only_in_platform_providers() -
     assert "UnlockFileEx" in windows_source
     assert "_LOCKFILE_FAIL_IMMEDIATELY" in windows_source
     assert "_LOCK_NAMESPACE" in windows_source
-    assert "SetFileInformationByHandle" in windows_source
-    assert "_FILE_RENAME_INFO_CLASS" in windows_source
+    assert "NtSetInformationFile" in windows_source
+    assert "_FILE_RENAME_INFORMATION_CLASS" in windows_source
     assert "info.ReplaceIfExists = 0" in windows_source
     assert "_FILE_DISPOSITION_INFO_CLASS" in windows_source
     assert "_CLEANUP_TOMBSTONE_PREFIX" in windows_source
