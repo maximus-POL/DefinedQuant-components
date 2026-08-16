@@ -16,17 +16,23 @@ from typing import Any
 import anyio
 import pytest
 from defined_quant.host_failures import HostFailureCode
+from defined_quant.local_host_platform import (
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+)
 from defined_quant.service import DefinedQuantService
 from mcp import StdioServerParameters, stdio_client
 from mcp.client import Client
 from mcp.server._otel import OpenTelemetryMiddleware
 from mcp.shared.exceptions import MCPError
 
+from defined_quant_mcp import server as server_module
 from defined_quant_mcp.server import (
     _ALLOWED_FAILURES,
     INITIALIZATION_INSTRUCTIONS,
     RESOURCE_TEMPLATE,
     create_server,
+    main,
 )
 
 _TOOLS = (
@@ -116,11 +122,52 @@ def _assert_audit_records(stream: Any) -> list[dict[str, Any]]:
             "elapsed_ms",
             "event",
             "outcome",
+            "provider_code",
             "request_id",
             "tool",
         }
         assert "path" not in json.dumps(record).lower()
     return records
+
+
+def test_startup_failures_distinguish_arguments_capabilities_and_internal_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records: list[dict[str, object]] = []
+    monkeypatch.setattr(server_module, "_configure_audit", lambda: None)
+    monkeypatch.setattr(server_module, "_audit", lambda payload: records.append(dict(payload)))
+    monkeypatch.setattr(server_module, "configure_binary_descriptors", lambda *_args: None)
+
+    assert main(["--unknown", "value"]) == 64
+    assert records == [
+        {"code": "invalid_launch_configuration", "event": "startup_failure"}
+    ]
+
+    records.clear()
+
+    def unavailable_service(**_arguments: Any) -> None:
+        raise SecureFilesystemError(SecureFilesystemErrorCode.CAPABILITY_UNAVAILABLE)
+
+    monkeypatch.setattr(server_module, "DefinedQuantService", unavailable_service)
+    assert main([]) == 69
+    assert records == [
+        {
+            "code": "host_capability_unavailable",
+            "event": "startup_failure",
+            "provider_code": "capability_unavailable",
+        }
+    ]
+
+    records.clear()
+
+    def broken_service(**_arguments: Any) -> None:
+        raise RuntimeError("must not cross the audit boundary")
+
+    monkeypatch.setattr(server_module, "DefinedQuantService", broken_service)
+    assert main([]) == 70
+    assert records == [
+        {"code": "internal_failure", "event": "startup_failure"}
+    ]
 
 
 def test_failure_allowlists_match_the_normative_fixture_exactly() -> None:

@@ -19,6 +19,7 @@ from typing import Any, TypeVar, cast
 import anyio
 import mcp.types as types
 from defined_quant.data_records import DatasetRegistrationRequest
+from defined_quant.dataset_registry import DatasetRegistryError
 from defined_quant.discovery import FACET_NAMES, DiscoveryFilters, SearchResults
 from defined_quant.host_failures import (
     HOST_SUCCESS_TEXT,
@@ -28,6 +29,7 @@ from defined_quant.host_failures import (
     host_failure,
     host_success,
 )
+from defined_quant.local_host_platform import SecureFilesystemError
 from defined_quant.service import DefinedQuantService
 from defined_quant.stdio_framing import (
     BinaryFrameError,
@@ -36,6 +38,7 @@ from defined_quant.stdio_framing import (
     write_utf8_lf_frame,
 )
 from defined_quant.types import ComponentContractError
+from defined_quant.worker_process import WorkerProcessError
 from mcp.os.win32.utilities import rebind_std_handle_to_fd
 from mcp.server._otel import OpenTelemetryMiddleware
 from mcp.server.lowlevel import Server
@@ -950,6 +953,26 @@ def _paths(arguments: Sequence[str]) -> tuple[Path | None, tuple[Path, ...], Pat
     return catalog, tuple(data_roots), state
 
 
+def _capability_provider_code(exc: BaseException) -> str | None:
+    """Return one stable provider code without reflecting native exception text."""
+
+    pending: list[BaseException] = [exc]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, (SecureFilesystemError, WorkerProcessError)):
+            code = current.code.value
+            if code == "capability_unavailable":
+                return code
+        for linked in (current.__cause__, current.__context__):
+            if linked is not None:
+                pending.append(linked)
+    return None
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     """Run the console entry point without reflecting launch values on STDERR."""
 
@@ -957,16 +980,31 @@ def main(arguments: Sequence[str] | None = None) -> int:
     global _AUDIT
     _AUDIT = _configure_audit()
     try:
-        catalog, data_roots, state = _paths(
-            tuple(sys.argv[1:] if arguments is None else arguments)
-        )
+        catalog, data_roots, state = _paths(tuple(sys.argv[1:] if arguments is None else arguments))
+    except ValueError:
+        _audit({"code": "invalid_launch_configuration", "event": "startup_failure"})
+        return 64
+    try:
         service = DefinedQuantService(
             catalog_root=catalog,
             data_roots=data_roots,
             session_state_root=state,
         )
         service.contract_index
-    except Exception:
+    except Exception as exc:
+        provider_code = _capability_provider_code(exc)
+        if provider_code is not None:
+            _audit(
+                {
+                    "code": "host_capability_unavailable",
+                    "event": "startup_failure",
+                    "provider_code": provider_code,
+                }
+            )
+            return 69
+        if not isinstance(exc, (ComponentContractError, DatasetRegistryError, ValueError)):
+            _audit({"code": "internal_failure", "event": "startup_failure"})
+            return 70
         _audit({"code": "invalid_launch_configuration", "event": "startup_failure"})
         return 64
     try:
