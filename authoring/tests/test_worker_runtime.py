@@ -6,6 +6,7 @@ import ctypes
 import importlib
 import json
 import os
+import secrets
 import sys
 import time
 from pathlib import Path
@@ -54,6 +55,7 @@ _COMPONENT_SOURCE = dedent(
 
     import ctypes
     import os
+    import stat
     import subprocess
     import sys
     import time
@@ -81,6 +83,7 @@ _COMPONENT_SOURCE = dedent(
         mode: Mode
         marker: str = ""
         handle_value: int = -1
+        handle_sentinel: str = ""
 
 
     class Output(DiagnosticOutput):
@@ -116,24 +119,54 @@ _COMPONENT_SOURCE = dedent(
         time.sleep(30)
 
 
-    def _handle_is_valid(value: int) -> bool:
+    def _handle_is_inherited(value: int, sentinel: str) -> bool:
+        """Report inheritance of the parent's pipe by object identity.
+
+        Windows handle values and POSIX descriptor numbers are per-process and
+        recycled, so a numerically valid handle here may name an unrelated object
+        this process opened itself. Only the parent's sentinel bytes prove that
+        the parent's pipe itself crossed the spawn boundary.
+        """
+
+        if value < 0 or not sentinel:
+            return False
+        token = sentinel.encode("ascii")
         if os.name == "nt":
-            flags = ctypes.c_ulong()
-            return bool(
-                ctypes.windll.kernel32.GetHandleInformation(
-                    ctypes.c_void_p(value), ctypes.byref(flags)
-                )
-            )
+            buffer = ctypes.create_string_buffer(len(token))
+            peeked = ctypes.c_ulong()
+            available = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.PeekNamedPipe(
+                ctypes.c_void_p(value),
+                buffer,
+                ctypes.c_ulong(len(token)),
+                ctypes.byref(peeked),
+                ctypes.byref(available),
+                None,
+            ):
+                return False
+            return buffer.raw[: peeked.value] == token
         try:
-            os.fstat(value)
+            if not stat.S_ISFIFO(os.fstat(value).st_mode):
+                return False
+            os.set_blocking(value, False)
+            return os.read(value, len(token)) == token
         except OSError:
             return False
-        return True
 
 
-    def phase4(mode: Mode, marker: str = "", handle_value: int = -1) -> Output:
+    def phase4(
+        mode: Mode,
+        marker: str = "",
+        handle_value: int = -1,
+        handle_sentinel: str = "",
+    ) -> Output:
         inputs = Inputs.model_validate(
-            {"mode": mode, "marker": marker, "handle_value": handle_value}
+            {
+                "mode": mode,
+                "marker": marker,
+                "handle_value": handle_value,
+                "handle_sentinel": handle_sentinel,
+            }
         )
         if inputs.mode == "sleep":
             _mark(inputs.marker, str(os.getpid()))
@@ -163,7 +196,11 @@ _COMPONENT_SOURCE = dedent(
             warnings.warn("synthetic deprecated path", DeprecationWarning)
 
         environment_keys = tuple(sorted(os.environ)) if mode == "environment" else ()
-        inherited = _handle_is_valid(handle_value) if mode == "handle_probe" else None
+        inherited = (
+            _handle_is_inherited(handle_value, handle_sentinel)
+            if mode == "handle_probe"
+            else None
+        )
         breakaway = None
         if mode == "breakaway_probe":
             try:
@@ -624,6 +661,11 @@ def test_unrelated_inheritable_descriptor_or_handle_is_not_inherited(
     read_fd, write_fd = os.pipe()
     try:
         os.set_inheritable(read_fd, True)
+        # Handle values and descriptor numbers are per-process and recycled, so the
+        # worker must prove inheritance by reading these bytes rather than by finding
+        # any valid object at the same number.
+        sentinel = "dq-handle-sentinel-" + secrets.token_hex(8)
+        os.write(write_fd, sentinel.encode("ascii"))
         value = read_fd
         if sys.platform == "win32":
             import msvcrt
@@ -637,6 +679,7 @@ def test_unrelated_inheritable_descriptor_or_handle_is_not_inherited(
             tmp_path,
             "handle_probe",
             handle_value=value,
+            handle_sentinel=sentinel,
         )
         assert result["inherited_handle"] is False
         controller.close()
