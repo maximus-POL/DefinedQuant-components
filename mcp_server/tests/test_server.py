@@ -30,7 +30,13 @@ from defined_quant_mcp import server as server_module
 from defined_quant_mcp.server import (
     _ALLOWED_FAILURES,
     INITIALIZATION_INSTRUCTIONS,
+    MAX_SEARCH_RESULT_BYTES,
+    MAX_TOOL_RESULT_BYTES,
     RESOURCE_TEMPLATE,
+    _bounded_tool_result,
+    _compact_bytes,
+    _success_result,
+    _tool_result_projection,
     create_server,
     main,
 )
@@ -109,6 +115,37 @@ def _assert_success(result: Any) -> dict[str, Any]:
     assert result.structured_content["host_schema_version"] == 1
     assert result.structured_content["outcome"] == "ok"
     return result.structured_content["data"]
+
+
+def _assert_failure(result: Any, code: str) -> dict[str, Any]:
+    assert result.is_error is True
+    assert result.structured_content["error"]["code"] == code
+    assert result.content[0].text == result.structured_content["error"]["message"]
+    return result.structured_content["error"]
+
+
+def _minimal_tool_arguments() -> dict[str, dict[str, Any]]:
+    component = {
+        "id": "dq.market_data.simple_return",
+        "version": "0.3.4",
+        "subject_hash": "a" * 64,
+    }
+    return {
+        "search_components": {"query": "return"},
+        "inspect_component": {"component_id": "dq.market_data.simple_return"},
+        "register_dataset": _registration(),
+        "describe_dataset": {"dataset_ref": "dqds:v1:" + "a" * 64},
+        "compare_ports": {
+            "producer": {"component": component, "field": "returns"},
+            "consumer": {"component": component, "field": "prices"},
+        },
+        "execute_component": {
+            "component": component,
+            "literals": {"prices": [100.0, 101.0], "price_kind": "adjusted"},
+            "provenance": _PROVENANCE,
+        },
+        "get_operation": {"operation_ref": "dqop:v1:" + "a" * 64},
+    }
 
 
 def _assert_audit_records(stream: Any) -> list[dict[str, Any]]:
@@ -390,6 +427,154 @@ def test_official_client_safe_failure_envelopes_and_resource_errors() -> None:
                 assert malformed.value.code == -32002
                 assert malformed.value.data["host_failure_code"] == "invalid_tool_request"
                 assert malformed.value.data["trust"]["label"] == "no_verified_result"
+
+    anyio.run(story)
+
+
+def test_every_tool_rejects_extra_fields_and_handles_host_schema_versions() -> None:
+    async def story() -> None:
+        with _audit_file() as audit:
+            async with _client(audit) as client:
+                for tool, valid in _minimal_tool_arguments().items():
+                    closed = await client.call_tool(tool, {**valid, "unexpected": True})
+                    error = _assert_failure(closed, "invalid_tool_request")
+                    assert error["details"] == {"fields": []}
+
+                    unsupported = await client.call_tool(
+                        tool,
+                        {"host_schema_version": 2},
+                    )
+                    error = _assert_failure(unsupported, "unsupported_host_schema")
+                    assert error["details"] == {"requested_version": 2}
+
+                    wrong_type = await client.call_tool(
+                        tool,
+                        {"host_schema_version": "1"},
+                    )
+                    error = _assert_failure(wrong_type, "invalid_tool_request")
+                    assert error["details"] == {"fields": ["host_schema_version"]}
+
+    anyio.run(story)
+
+
+@pytest.mark.parametrize(
+    ("surface", "maximum", "limit_name"),
+    [
+        ("search_components", MAX_SEARCH_RESULT_BYTES, "search_response_bytes"),
+        ("inspect_component", MAX_TOOL_RESULT_BYTES, "structured_tool_response_bytes"),
+    ],
+)
+def test_tool_response_ceilings_accept_exact_bytes_and_refuse_the_next_byte(
+    surface: str,
+    maximum: int,
+    limit_name: str,
+) -> None:
+    empty = _success_result(surface, {"payload": ""})
+    overhead = len(_compact_bytes(_tool_result_projection(empty)))
+    exact = _success_result(surface, {"payload": "x" * (maximum - overhead)})
+    assert len(_compact_bytes(_tool_result_projection(exact))) == maximum
+    assert _bounded_tool_result(surface, exact) is exact
+
+    over = _success_result(surface, {"payload": "x" * (maximum - overhead + 1)})
+    failure = _bounded_tool_result(surface, over)
+    error = _assert_failure(failure, "result_limit_exceeded")
+    assert error["details"] == {
+        "actual": maximum + 1,
+        "limit_name": limit_name,
+        "maximum": maximum,
+    }
+
+
+def test_official_client_cursor_binding_tampering_and_resource_error_set() -> None:
+    async def story() -> None:
+        with _audit_file() as audit:
+            async with _client(audit) as client:
+                first = _assert_success(
+                    await client.call_tool("register_dataset", _registration())
+                )
+                second_registration = _registration()
+                second_registration["source"]["rows"][2]["price"] = 122.0
+                second = _assert_success(
+                    await client.call_tool("register_dataset", second_registration)
+                )
+
+                preview = _assert_success(
+                    await client.call_tool(
+                        "describe_dataset",
+                        {
+                            "dataset_ref": first["dataset_ref"],
+                            "view": "preview",
+                            "limit": 1,
+                        },
+                    )
+                )
+                cursor = preview["preview"]["next_cursor"]
+                assert isinstance(cursor, str)
+                replacement = "A" if cursor[-1] != "A" else "B"
+                tampered = cursor[:-1] + replacement
+
+                tamper_failure = await client.call_tool(
+                    "describe_dataset",
+                    {
+                        "dataset_ref": first["dataset_ref"],
+                        "view": "preview",
+                        "cursor": tampered,
+                        "limit": 1,
+                    },
+                )
+                assert _assert_failure(tamper_failure, "invalid_tool_request")["details"] == {
+                    "fields": []
+                }
+
+                binding_failure = await client.call_tool(
+                    "describe_dataset",
+                    {
+                        "dataset_ref": second["dataset_ref"],
+                        "view": "preview",
+                        "cursor": cursor,
+                        "limit": 1,
+                    },
+                )
+                assert _assert_failure(binding_failure, "invalid_tool_request")["details"] == {
+                    "fields": []
+                }
+
+                with pytest.raises(MCPError) as unknown_operation:
+                    await client.read_resource(
+                        "dqop://v1/" + "a" * 64 + "/artifact/simple_return",
+                        cache_mode="reload",
+                    )
+                assert unknown_operation.value.data["host_failure_code"] == (
+                    "reference_not_found"
+                )
+
+                inspected = _assert_success(
+                    await client.call_tool(
+                        "inspect_component",
+                        {"component_id": "dq.market_data.simple_return"},
+                    )
+                )
+                operation = _assert_success(
+                    await client.call_tool(
+                        "execute_component",
+                        {
+                            "component": inspected["component"],
+                            "literals": {
+                                "prices": [100.0, 101.0],
+                                "price_kind": "adjusted",
+                            },
+                            "provenance": _PROVENANCE,
+                            "artifacts": "svg_all",
+                        },
+                    )
+                )
+                operation_digest = operation["operation_ref"].rsplit(":", maxsplit=1)[1]
+                with pytest.raises(MCPError) as missing_artifact:
+                    await client.read_resource(
+                        f"dqop://v1/{operation_digest}/artifact/not_present",
+                        cache_mode="reload",
+                    )
+                assert missing_artifact.value.data["host_failure_code"] == "artifact_not_found"
 
     anyio.run(story)
 
