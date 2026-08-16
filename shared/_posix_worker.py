@@ -7,6 +7,7 @@ import os
 import resource
 import signal
 import subprocess
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,6 +74,12 @@ class PosixWorkerProcessProvider:
 
     def required_environment(self) -> dict[str, str]:
         return {}
+
+    @staticmethod
+    def inspection_work_root_parents() -> tuple[Path, ...]:
+        """Select the canonical system temporary root for managed inspection state."""
+
+        return (Path(os.path.realpath(tempfile.gettempdir())),)
 
     @staticmethod
     def work_root_parents(output_parent: Path) -> tuple[Path, ...]:

@@ -378,12 +378,18 @@ def test_worker_scratch_uses_a_locked_cleanup_managed_state_root(
 ) -> None:
     catalog_root, reference = worker_component
     controller = WorkerController(limits=WorkerLimits(wall_seconds=5))
+    state_parent = local_host_platform().worker_processes.work_root_parents(tmp_path)[0]
     _run(controller, catalog_root, reference, tmp_path, "normal")
     controller.close()
 
-    state = tmp_path / ".defined-quant-worker-state-v1"
+    state = state_parent / ".defined-quant-worker-state-v1"
     assert state.is_dir()
-    assert list(state.iterdir()) == []
+    expected_entries = (
+        {".defined-quant-session-locks-v1"}
+        if local_host_platform().provider_id == "win32"
+        else set()
+    )
+    assert {entry.name for entry in state.iterdir()} == expected_entries
     assert [
         path
         for path in tmp_path.glob(".defined-quant-worker-*")
@@ -391,11 +397,34 @@ def test_worker_scratch_uses_a_locked_cleanup_managed_state_root(
     ] == []
 
 
-def test_windows_worker_keeps_scratch_at_the_selected_output_parent(
+def test_windows_worker_selects_short_managed_same_volume_parents(
     tmp_path: Path,
 ) -> None:
     provider = local_host_platform().worker_processes
-    assert provider.work_root_parents(tmp_path) == (tmp_path,)
+    long_parent = tmp_path
+    while len(os.fspath(long_parent)) < 280:
+        long_parent /= "long-worker-parent-segment"
+    parents = provider.work_root_parents(long_parent)
+    assert parents
+    assert all(parent.parent != parent for parent in parents)
+    assert all(parent != Path.home().resolve() for parent in parents)
+    assert all(parent.drive.casefold() == long_parent.drive.casefold() for parent in parents)
+    assert all(
+        len(os.fspath(parent).encode("utf-16-le")) // 2 <= 64
+        for parent in parents
+    )
+
+
+def test_inspection_worker_uses_provider_selected_managed_scratch() -> None:
+    controller = WorkerController(limits=WorkerLimits(wall_seconds=5))
+    try:
+        result = controller.inspect_component(
+            {"component_id": "dq.market_data.simple_return", "view": "compact"}
+        )
+    finally:
+        controller.close()
+
+    assert result["component"]["id"] == "dq.market_data.simple_return"
 
 
 @pytest.mark.parametrize("mode", ["stdout_overflow", "stderr_overflow", "python_output_overflow"])
@@ -645,7 +674,7 @@ def test_windows_job_prevents_child_breakaway(
 
 if sys.platform != "win32":
     setattr(
-        test_windows_worker_keeps_scratch_at_the_selected_output_parent,
+        test_windows_worker_selects_short_managed_same_volume_parents,
         "__test__",
         False,
     )

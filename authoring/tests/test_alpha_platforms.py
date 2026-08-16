@@ -245,6 +245,8 @@ def test_native_worker_mechanisms_live_behind_one_shared_lifecycle() -> None:
     assert '"defined_quant._windows_worker_entry"' in windows_source
     assert '"-m"' in windows_source
     assert "bootstrap_directory" in windows_source
+    assert "inspection_work_root_parents" in posix_source
+    assert "inspection_work_root_parents" in windows_source
     assert "work_root_parents" in posix_source
     assert "work_root_parents" in windows_source
     assign = windows_source.index("self._api.AssignProcessToJobObject(")

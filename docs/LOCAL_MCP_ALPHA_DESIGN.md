@@ -36,6 +36,8 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase-4 remediation | §6 | Split invalid launch arguments, unavailable native host capabilities, and unexpected startup failures into distinct redacted audit outcomes and exit statuses while retaining only stable provider codes. | A missing native provider is an operator/platform condition rather than bad configuration, and no native message, path, SID, or exception representation is needed to diagnose that class safely. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.2 | Routed caller output-parent creation and CLI request-file reads through the secure-filesystem provider, including native handle-relative Windows traversal. | Unicode and long local paths must work without depending on the machine-wide `LongPathsEnabled` registry value or test setup that silently assumes it. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Removed the Windows home-directory staging dependency; placed every worker workspace inside a fixed owner-private, locked, orphan-cleaned session-state namespace on the selected output volume; limited Windows platform environment inheritance to validated `SYSTEMROOT`; and recorded the Windows bootstrap-current-directory mechanism. | A controller crash must not leave unmanaged home/drive-root litter, home paths do not belong in the worker allowlist, and long-path-safe same-volume publication must retain liveness-protected cleanup. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made the native worker provider select inspection scratch roots and required POSIX to canonicalize the trusted system temporary root before the session store pins it. | macOS exposes `/var` as a symlink alias of `/private/var`; provider-owned canonical selection preserves strict symlink refusal for caller paths while allowing the session store to verify the actual local temporary root. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Required Windows worker state to use the deepest eligible non-home, non-volume-root same-volume ancestor whose path is at most 64 UTF-16 code units, while keeping the workspace inside the locked session namespace and publishing to long destinations with native handles. | CPython startup and library paths used by the child are not uniformly `MAX_PATH`-independent on a default Windows installation; bounding only the internal managed path preserves long caller-output support without machine-wide registry settings or unmanaged home/drive-root staging. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1337,11 +1339,20 @@ assigns it to the configured Job Object before user code can run, and then resum
 acceptance must prove those mechanisms before release. The controller sends one strict typed
 request and receives one control response.
 Worker staging is never created directly as an unmanaged home-directory or drive-root entry. Each
-workspace is a child of a fixed owner-private worker-state namespace at the selected existing
-output parent, with the same marker, held lock, age check, atomic cleanup claim, and tombstone
-deletion protocol as other session state. Normal completion removes the live session; process
+workspace is a child of a fixed owner-private worker-state namespace at a provider-selected
+existing same-volume parent, with the same marker, held lock, age check, atomic cleanup claim, and
+tombstone deletion protocol as other session state. Normal completion removes the live session; process
 loss leaves a locked-session orphan that a later controller can claim only after the frozen orphan
 age.
+On Windows, the provider selects the deepest eligible existing ancestor on the output volume that
+is neither the user home nor the volume root and is at most 64 UTF-16 code units. The fixed
+worker-state namespace is created there with the Windows private-session descriptor before use.
+This bounds only internal CPython workspace paths; the caller's Unicode or longer-than-260 output
+path remains unchanged and publication reaches it through the handle-based no-replace provider.
+Inspection workspaces use the same managed session-state protocol. Their parent is selected by the
+native worker provider; on POSIX the trusted system temporary root is canonicalized before the
+session store pins and verifies it, so macOS's `/var` alias cannot be mistaken for a caller-supplied
+symlink path. This mechanism does not relax symlink or reparse-point refusal for caller paths.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
 Any non-empty capture below that ceiling is still a `component_contract_error`: installed

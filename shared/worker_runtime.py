@@ -6,7 +6,6 @@ import os
 import re
 import secrets
 import sys
-import tempfile
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -412,11 +411,12 @@ class WorkerController:
                 if self._closed:
                     raise HostFailureException(HostFailureCode.WORKER_CANCELLED)
             try:
-                parent = self._existing_parent(
-                    Path(os.path.abspath(tempfile.gettempdir()))
+                parents = tuple(
+                    self._existing_parent(parent)
+                    for parent in self._provider.inspection_work_root_parents()
                 )
                 workspace, work_root = self._create_work_root(
-                    self._provider.work_root_parents(parent)
+                    parents
                 )
                 temporary = work_root / "tmp"
                 self._secure.create_private_directory(temporary)

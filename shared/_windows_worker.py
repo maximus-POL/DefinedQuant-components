@@ -7,6 +7,7 @@ import math
 import msvcrt
 import os
 import subprocess
+import tempfile
 from collections.abc import Mapping
 from ctypes import wintypes
 from dataclasses import dataclass, field
@@ -37,6 +38,7 @@ _STILL_ACTIVE = 259
 _INFINITE = 0xFFFFFFFF
 _INVALID_RESUME_RESULT = 0xFFFFFFFF
 _O_BINARY = getattr(os, "O_BINARY", 0)
+_MAX_SHORT_WORK_ROOT_PARENT_UNITS = 64
 
 
 class _SECURITY_ATTRIBUTES(ctypes.Structure):
@@ -293,9 +295,27 @@ class WindowsWorkerProcessProvider:
             raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE) from None
 
     def work_root_parents(self, output_parent: Path) -> tuple[Path, ...]:
-        """Keep scratch on the caller-selected volume inside its managed state root."""
+        """Select short same-volume ancestors for the managed worker-state root."""
 
-        return (output_parent,)
+        candidates: list[Path] = []
+        try:
+            home = Path.home().resolve()
+        except (OSError, RuntimeError):
+            home = None
+        current = output_parent
+        while current.parent != current:
+            utf16_units = len(os.fspath(current).encode("utf-16-le")) // 2
+            if utf16_units <= _MAX_SHORT_WORK_ROOT_PARENT_UNITS and current != home:
+                candidates.append(current)
+            current = current.parent
+        if not candidates:
+            raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE)
+        return tuple(candidates)
+
+    def inspection_work_root_parents(self) -> tuple[Path, ...]:
+        """Select a short managed-state parent beneath the local temporary tree."""
+
+        return self.work_root_parents(Path(tempfile.gettempdir()))
 
     def launch(
         self,
