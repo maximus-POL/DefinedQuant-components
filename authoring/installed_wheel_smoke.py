@@ -21,6 +21,7 @@ from defined_quant.worker_runtime import MAX_WORKER_MEMORY_BYTES
 from defined_quant_protocol import (
     CallerProvenance,
     InterpretationMethod,
+    OperationFailure,
     OperationRequest,
     OperationSuccess,
     SourceKind,
@@ -112,8 +113,15 @@ def main() -> int:
             if search.hits[0].record.component_id != "dq.market_data.simple_return":
                 raise AssertionError("installed core discovery smoke failed")
             result = service.execute_operation(request, output_dir=root / "operation")
-            if not isinstance(result, OperationSuccess) or result.manifest.request != request:
-                raise AssertionError("installed core execution smoke failed")
+            if not isinstance(result, OperationSuccess):
+                assert isinstance(result, OperationFailure)
+                detail_type = result.error.details.get("type", "none")
+                raise AssertionError(
+                    "installed core execution smoke failed: "
+                    f"{result.error.code.value} ({detail_type})"
+                )
+            if result.manifest.request != request:
+                raise AssertionError("installed core execution request changed")
         long_state = root / ("żółć-state-" + ("long-segment-" * 18))
         anyio.run(_mcp_smoke, long_state)
     return 0
