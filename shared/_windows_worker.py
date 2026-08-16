@@ -274,7 +274,7 @@ class WindowsWorkerProcessProvider:
     def required_environment(self) -> dict[str, str]:
         result: dict[str, str] = {}
         try:
-            for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "USERPROFILE"):
+            for name in ("SYSTEMROOT", "USERPROFILE"):
                 value = os.environ.get(name)
                 if (
                     value is None
@@ -285,9 +285,7 @@ class WindowsWorkerProcessProvider:
                 ):
                     raise ValueError
                 candidate = Path(value)
-                if name == "COMSPEC" and not candidate.is_file():
-                    raise ValueError
-                if name != "COMSPEC" and not candidate.is_dir():
+                if not candidate.is_dir():
                     raise ValueError
                 result[name] = value
             return result

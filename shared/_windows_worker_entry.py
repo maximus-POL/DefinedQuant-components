@@ -9,7 +9,6 @@ import sys
 _O_BINARY = getattr(os, "O_BINARY", 0)
 
 _ALLOWED_ENVIRONMENT = {
-    "COMSPEC",
     "NO_COLOR",
     "PYTHONDONTWRITEBYTECODE",
     "PYTHONHASHSEED",
@@ -22,7 +21,6 @@ _ALLOWED_ENVIRONMENT = {
     "TMPDIR",
     "TZ",
     "USERPROFILE",
-    "WINDIR",
 }
 
 
