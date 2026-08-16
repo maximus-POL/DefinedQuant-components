@@ -15,7 +15,6 @@ activate_source_runtime()
 
 from defined_quant.operation_runtime import (  # noqa: E402
     OperationRuntimeError,
-    execute_resolved_operation,
     operation_failure,
     prepare_output_directory,
     resolve_component,
@@ -199,7 +198,9 @@ def _legacy_operation(args: argparse.Namespace) -> OperationResult:
         ),
         artifacts=SvgArtifactRequest(),
     )
-    return execute_resolved_operation(request, record, output_dir=output_dir)
+    catalog_root = record.path.parents[1]
+    with DefinedQuantService(catalog_root=catalog_root) as service:
+        return service.execute_operation(request, output_dir=output_dir)
 
 
 def _serialize_operation_result(result: OperationResult) -> tuple[bytes, bool]:
@@ -236,12 +237,11 @@ def main() -> int:
                     "--input is only valid with the legacy --component interface.",
                 )
             request = _read_operation_request(args.request)
-            response = DefinedQuantService(
-                catalog_root=args.catalog_root
-            ).execute_operation(
-                request,
-                output_dir=args.output_dir,
-            )
+            with DefinedQuantService(catalog_root=args.catalog_root) as service:
+                response = service.execute_operation(
+                    request,
+                    output_dir=args.output_dir,
+                )
         else:
             if args.input is None:
                 raise OperationRuntimeError(
