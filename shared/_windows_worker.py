@@ -37,6 +37,7 @@ _STILL_ACTIVE = 259
 _INFINITE = 0xFFFFFFFF
 _INVALID_RESUME_RESULT = 0xFFFFFFFF
 _O_BINARY = getattr(os, "O_BINARY", 0)
+_MAX_SHORT_WORK_ROOT_PARENT_UNITS = 64
 
 
 class _SECURITY_ATTRIBUTES(ctypes.Structure):
@@ -291,6 +292,39 @@ class WindowsWorkerProcessProvider:
             return result
         except (OSError, ValueError):
             raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE) from None
+
+    def work_root_parents(self, output_parent: Path) -> tuple[Path, ...]:
+        """Return writable same-volume candidates that keep worker scratch paths short."""
+
+        candidates: list[Path] = []
+        output_drive = output_parent.drive.casefold()
+        profile = Path(self.required_environment()["USERPROFILE"])
+        profile_units = len(os.fspath(profile).encode("utf-16-le")) // 2
+        if (
+            profile.drive.casefold() == output_drive
+            and profile_units <= _MAX_SHORT_WORK_ROOT_PARENT_UNITS
+        ):
+            candidates.append(profile)
+
+        current = output_parent
+        while True:
+            utf16_units = len(os.fspath(current).encode("utf-16-le")) // 2
+            if utf16_units <= _MAX_SHORT_WORK_ROOT_PARENT_UNITS:
+                candidates.append(current)
+            if current.parent == current:
+                break
+            current = current.parent
+
+        result: list[Path] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = os.path.normcase(os.path.abspath(candidate))
+            if key not in seen:
+                seen.add(key)
+                result.append(candidate)
+        if not result:
+            raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE)
+        return tuple(result)
 
     def launch(
         self,

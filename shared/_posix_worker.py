@@ -74,6 +74,10 @@ class PosixWorkerProcessProvider:
     def required_environment(self) -> dict[str, str]:
         return {}
 
+    @staticmethod
+    def work_root_parents(output_parent: Path) -> tuple[Path, ...]:
+        return (output_parent,)
+
     def launch(
         self,
         *,

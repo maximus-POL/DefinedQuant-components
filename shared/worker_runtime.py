@@ -179,7 +179,10 @@ class WorkerController:
                     output_dir,
                     component=validated.component,
                 )
-                work_root = self._create_work_root(self._existing_parent(prepared.parent))
+                output_parent = self._existing_parent(prepared.parent)
+                work_root = self._create_work_root(
+                    self._provider.work_root_parents(output_parent)
+                )
                 temporary = work_root / "tmp"
                 self._secure.create_private_directory(temporary)
                 bundle = work_root / "bundle"
@@ -396,7 +399,9 @@ class WorkerController:
                     raise HostFailureException(HostFailureCode.WORKER_CANCELLED)
             try:
                 parent = self._existing_parent(Path(tempfile.gettempdir()).resolve())
-                work_root = self._create_work_root(parent)
+                work_root = self._create_work_root(
+                    self._provider.work_root_parents(parent)
+                )
                 temporary = work_root / "tmp"
                 self._secure.create_private_directory(temporary)
                 normalized_catalog = (
@@ -624,16 +629,19 @@ class WorkerController:
             if not self._active:
                 self._all_done.set()
 
-    def _create_work_root(self, parent: Path) -> Path:
-        for _attempt in range(100):
-            candidate = parent / f"{_WORK_ROOT_PREFIX}{secrets.token_hex(16)}"
-            try:
-                self._secure.create_private_directory(candidate)
-                return candidate
-            except Exception:
-                if candidate.exists():
-                    continue
-                raise
+    def _create_work_root(self, parents: tuple[Path, ...]) -> Path:
+        for parent in parents:
+            for _attempt in range(100):
+                candidate = parent / f"{_WORK_ROOT_PREFIX}{secrets.token_hex(16)}"
+                try:
+                    self._secure.create_private_directory(candidate)
+                    return candidate
+                except Exception:
+                    if candidate.exists():
+                        continue
+                    if len(parents) == 1:
+                        raise
+                    break
         raise OSError
 
     @staticmethod

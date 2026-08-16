@@ -35,6 +35,8 @@ class WorkerProcessProvider(Protocol):
 
     def required_environment(self) -> Mapping[str, str]: ...
 
+    def work_root_parents(self, output_parent: Path) -> tuple[Path, ...]: ...
+
     def launch(
         self,
         *,
