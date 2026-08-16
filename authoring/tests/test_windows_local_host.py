@@ -1174,6 +1174,8 @@ def test_windows_publication_native_request_disables_replacement(
     secure.create_private_file(source / "record.bin", b"complete")
     original = secure._api.SetFileInformationByHandle
     replace_values: list[int] = []
+    request_sizes: list[int] = []
+    file_name_lengths: list[int] = []
 
     def inspect(
         handle: Any,
@@ -1187,12 +1189,17 @@ def test_windows_publication_native_request_disables_replacement(
                 ctypes.POINTER(windows_local._FILE_RENAME_INFO),
             ).contents
             replace_values.append(int(rename.ReplaceIfExists))
+            request_sizes.append(size)
+            file_name_lengths.append(int(rename.FileNameLength))
         return original(handle, information_class, information, size)
 
     monkeypatch.setattr(secure._api, "SetFileInformationByHandle", inspect)
     secure.publish_directory_no_replace(source, destination)
 
     assert replace_values == [0]
+    encoded_name = destination.name.encode("utf-16-le")
+    assert request_sizes == [ctypes.sizeof(windows_local._FILE_RENAME_INFO) + len(encoded_name)]
+    assert file_name_lengths == [len(encoded_name)]
     assert (destination / "record.bin").read_bytes() == b"complete"
 
 

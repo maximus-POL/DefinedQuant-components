@@ -1661,7 +1661,7 @@ class WindowsSecureFilesystem:
     ) -> bool:
         encoded = destination_name.encode("utf-16-le")
         offset = _FILE_RENAME_INFO.FileName.offset
-        size = max(ctypes.sizeof(_FILE_RENAME_INFO), offset + len(encoded))
+        size = ctypes.sizeof(_FILE_RENAME_INFO) + len(encoded)
         buffer = ctypes.create_string_buffer(size)
         info = ctypes.cast(buffer, ctypes.POINTER(_FILE_RENAME_INFO)).contents
         info.ReplaceIfExists = 0
