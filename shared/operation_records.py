@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
-import stat
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal
@@ -20,6 +18,11 @@ from defined_quant.data_records import (
 )
 from defined_quant.dataset_registry import resolve_dataset_fields
 from defined_quant.host_failures import HostFailureCode, HostFailureException
+from defined_quant.local_host_platform import (
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+    local_host_platform,
+)
 from defined_quant_protocol import (
     FileDigest,
     OperationManifest,
@@ -27,6 +30,7 @@ from defined_quant_protocol import (
     SvgArtifact,
     canonical_json_bytes,
 )
+from defined_quant_protocol.operation import portable_member_key
 from pydantic import ValidationError
 
 MAX_NORMALIZED_RESULT_BYTES = 64 * 1024 * 1024
@@ -67,38 +71,18 @@ def _same_json(left: Any, right: Any) -> bool:
 
 def _bounded_member_bytes(path: Path, *, maximum: int, limit_name: str) -> bytes:
     try:
-        metadata = path.lstat()
-        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
-            raise OperationRecordError("record_corrupt")
-        if metadata.st_size > maximum:
-            raise _result_limit(limit_name, maximum, metadata.st_size)
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except OperationRecordError:
-        raise
-    except OSError as exc:
+        return local_host_platform().secure_filesystem.read_regular_file(
+            path,
+            maximum_bytes=maximum,
+        )
+    except SecureFilesystemError as exc:
+        if exc.code is SecureFilesystemErrorCode.BYTE_LIMIT_EXCEEDED:
+            raise _result_limit(
+                limit_name,
+                maximum,
+                exc.actual if exc.actual is not None else maximum + 1,
+            ) from exc
         raise OperationRecordError("record_corrupt") from exc
-    chunks: list[bytes] = []
-    actual = 0
-    try:
-        while True:
-            chunk = os.read(descriptor, min(1024 * 1024, maximum + 1 - actual))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            actual += len(chunk)
-            if actual > maximum:
-                raise _result_limit(limit_name, maximum, actual)
-        after = os.fstat(descriptor)
-        if (
-            after.st_dev != metadata.st_dev
-            or after.st_ino != metadata.st_ino
-            or after.st_size != metadata.st_size
-            or actual != metadata.st_size
-        ):
-            raise OperationRecordError("record_corrupt")
-        return b"".join(chunks)
-    finally:
-        os.close(descriptor)
 
 
 def _manifest_bytes(
@@ -202,17 +186,24 @@ def _derive_record(
             "operation_artifacts", MAX_OPERATION_ARTIFACTS, len(manifest.artifacts)
         )
 
-    expected_names = {
+    expected_names = (
         "manifest.json",
         manifest.input.path,
         manifest.result.path,
         *(artifact.path for artifact in manifest.artifacts),
-    }
+    )
     try:
+        expected_keys = tuple(portable_member_key(name) for name in expected_names)
         entries = tuple(directory.iterdir())
-    except OSError as exc:
+        actual_names = tuple(entry.name for entry in entries)
+        actual_keys = tuple(portable_member_key(name) for name in actual_names)
+    except (OSError, ValueError) as exc:
         raise OperationRecordError("record_corrupt") from exc
-    if {entry.name for entry in entries} != expected_names:
+    if (
+        len(set(expected_keys)) != len(expected_keys)
+        or len(set(actual_keys)) != len(actual_keys)
+        or set(actual_names) != set(expected_names)
+    ):
         raise OperationRecordError("record_corrupt")
 
     manifest_content = _bounded_member_bytes(

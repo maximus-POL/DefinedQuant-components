@@ -38,16 +38,60 @@ _RELATIVE_MEMBER_PATH_PATTERN = (
     r"(?:/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*$"
 )
 _UNSAFE_MEMBER_PATH_CHARACTER_PATTERN = r"[^A-Za-z0-9_./-]"
+_WINDOWS_DEVICE_MEMBER_PATTERN = (
+    r"(^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|"
+    r"[Cc][Oo][Mm][1-9]|[Ll][Pp][Tt][1-9])(?:\.[A-Za-z0-9_-]+)*(?:/|$)"
+)
+_RELATIVE_MEMBER_PATH_ERROR = (
+    "member path must use safe-ASCII segments with dots only inside segment names"
+)
+_ASCII_CASEFOLD_TABLE = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "abcdefghijklmnopqrstuvwxyz",
+)
+_WINDOWS_DEVICE_MEMBER_NAMES = frozenset(
+    {
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{index}" for index in range(1, 10)),
+        *(f"lpt{index}" for index in range(1, 10)),
+    }
+)
 _OPERATION_HASH_DOMAIN = "operation.request.v1"
+
+
+def portable_member_key(value: str) -> str:
+    """Return the platform-independent identity key for one portable member path."""
+
+    try:
+        encoded = value.encode("ascii")
+    except (AttributeError, UnicodeEncodeError) as exc:
+        raise ValueError(_RELATIVE_MEMBER_PATH_ERROR) from exc
+    if not 1 <= len(encoded) <= 512 or re.fullmatch(_RELATIVE_MEMBER_PATH_PATTERN, value) is None:
+        raise ValueError(_RELATIVE_MEMBER_PATH_ERROR)
+
+    folded_segments: list[str] = []
+    for segment in value.split("/"):
+        if (
+            segment in {".", ".."}
+            or segment.endswith((".", " "))
+            or ":" in segment
+            or "\\" in segment
+        ):
+            raise ValueError(_RELATIVE_MEMBER_PATH_ERROR)
+        folded = segment.translate(_ASCII_CASEFOLD_TABLE)
+        if folded.split(".", 1)[0] in _WINDOWS_DEVICE_MEMBER_NAMES:
+            raise ValueError(_RELATIVE_MEMBER_PATH_ERROR)
+        folded_segments.append(folded)
+    return "/".join(folded_segments)
 
 
 def _relative_member_path(value: str) -> str:
     """Validate one portable safe-ASCII bundle-member path."""
 
-    if re.fullmatch(_RELATIVE_MEMBER_PATH_PATTERN, value) is None:
-        raise ValueError(
-            "member path must use safe-ASCII segments with dots only inside segment names"
-        )
+    portable_member_key(value)
     return value
 
 
@@ -57,7 +101,14 @@ RelativeMemberPath: TypeAlias = Annotated[
         min_length=1,
         max_length=512,
         pattern=_RELATIVE_MEMBER_PATH_PATTERN,
-        json_schema_extra={"not": {"pattern": _UNSAFE_MEMBER_PATH_CHARACTER_PATTERN}},
+        json_schema_extra={
+            "not": {
+                "anyOf": [
+                    {"pattern": _UNSAFE_MEMBER_PATH_CHARACTER_PATTERN},
+                    {"pattern": _WINDOWS_DEVICE_MEMBER_PATTERN},
+                ]
+            }
+        },
     ),
     AfterValidator(_relative_member_path),
 ]
@@ -223,7 +274,11 @@ class OperationManifest(BaseModel):
         if self.component != self.request.component:
             raise ValueError("manifest component does not match its request")
         paths = [self.input.path, self.result.path, *(artifact.path for artifact in self.artifacts)]
-        if len(set(paths)) != len(paths):
+        portable_keys = [portable_member_key(path) for path in paths]
+        if (
+            len(set(portable_keys)) != len(portable_keys)
+            or portable_member_key("manifest.json") in portable_keys
+        ):
             raise ValueError("manifest member paths must be unique")
         visualization_ids = [artifact.visualization_id for artifact in self.artifacts]
         if len(set(visualization_ids)) != len(visualization_ids):
@@ -350,4 +405,5 @@ __all__ = [
     "VerificationStatus",
     "operation_hash",
     "operation_protocol_schema",
+    "portable_member_key",
 ]

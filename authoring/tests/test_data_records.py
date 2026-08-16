@@ -349,6 +349,16 @@ def test_operation_record_refuses_noncanonical_members_and_binding_overlap() -> 
     with pytest.raises(ValidationError, match="overlap"):
         OperationRecordV1.model_validate(value)
 
+    value = deepcopy(_vector("operation_record_dataset_bound")["value"])
+    value["members"][1]["path"] = "INPUT.JSON"
+    with pytest.raises(ValidationError, match="operation member paths must be unique"):
+        OperationRecordV1.model_validate(value)
+
+    value = deepcopy(_vector("operation_record_dataset_bound")["value"])
+    value["members"][1]["path"] = "MANIFEST.JSON"
+    with pytest.raises(ValidationError, match="operation member paths must be unique"):
+        OperationRecordV1.model_validate(value)
+
 
 def test_operation_source_binding_is_deferred_until_protocol_050() -> None:
     value = deepcopy(_vector("operation_record_dataset_bound")["value"])

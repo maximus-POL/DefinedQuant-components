@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import errno
 import json
 import os
 import stat
 from pathlib import Path
 from typing import Any
 
-import defined_quant.session_cas as session_cas
 import pytest
 from defined_quant.data_records import (
     DatasetPayloadV1,
@@ -18,6 +16,10 @@ from defined_quant.data_records import (
     cas_json_bytes,
 )
 from defined_quant.host_failures import HostFailureCode, HostFailureException
+from defined_quant.local_host_platform import (
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+)
 from defined_quant.operation_records import build_operation_record
 from defined_quant.operation_runtime import execute_operation
 from defined_quant.session_cas import (
@@ -38,6 +40,14 @@ from defined_quant_protocol import (
 ROOT = Path(__file__).resolve().parents[2]
 HASH_VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.v1.json"
 OPERATION_FIXTURE = Path(__file__).parent / "fixtures" / "operation_runtime_phase0.v1.json"
+WINDOWS_DEVICE_NAMES = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+}
 
 
 def _vector(vector_id: str) -> dict[str, Any]:
@@ -79,6 +89,14 @@ def _assert_code(exc: pytest.ExceptionInfo[HostFailureException], code: HostFail
     assert exc.value.code is code
 
 
+def _assert_portable_host_filename(name: str) -> None:
+    assert name not in {"", ".", ".."}
+    assert not name.endswith((".", " "))
+    assert not set(name).intersection('<>:"/\\|?*')
+    stem = name.split(".", 1)[0].lower()
+    assert not stem or stem not in WINDOWS_DEVICE_NAMES
+
+
 def test_dataset_publication_is_private_verified_and_idempotent(tmp_path: Path) -> None:
     payload, record = _dataset()
     sibling = tmp_path / "caller-owned-sibling"
@@ -106,6 +124,38 @@ def test_dataset_publication_is_private_verified_and_idempotent(tmp_path: Path) 
     store.close()
     assert not store.directory.exists()
     assert sibling.exists()
+    store.close()
+
+
+def test_every_generated_session_cas_filename_is_windows_portable(tmp_path: Path) -> None:
+    payload, dataset_record = _dataset()
+    result, bundle, binding = _phase1_operation(tmp_path)
+    operation_record = build_operation_record(result.manifest, bundle, binding)
+    store = SessionCas(tmp_path / "state")
+
+    dataset_reference = store.publish_dataset(payload, dataset_record)
+    store.publish_operation(
+        operation_record,
+        manifest_bytes=(bundle / "manifest.json").read_bytes(),
+        members=_operation_members(result, bundle),
+    )
+    for kind in ("dataset", "operation"):
+        stage = store._new_stage(kind)
+        _assert_portable_host_filename(stage.name)
+        stage.rmdir()
+
+    dataset_entry = store.directory / "datasets" / dataset_record.digest
+    store._quarantine(dataset_entry, dataset_reference)
+
+    _assert_portable_host_filename(store.directory.name)
+    generated_paths = tuple(store.directory.rglob("*"))
+    assert generated_paths
+    for path in generated_paths:
+        _assert_portable_host_filename(path.name)
+    assert (store.directory / ".lock").is_file()
+    assert (store.directory / ".defined-quant-session-v1").is_file()
+    assert tuple((store.directory / "quarantine").iterdir())
+    assert (store.directory / "operations" / operation_record.digest / "record.json").is_file()
     store.close()
 
 
@@ -180,7 +230,6 @@ def test_stored_records_must_preserve_every_materialized_default(tmp_path: Path)
     store.close()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX nonblocking FIFO regression")
 def test_fifo_replacing_a_cas_member_is_quarantined_without_blocking(tmp_path: Path) -> None:
     payload, record = _dataset()
     store = SessionCas(tmp_path)
@@ -198,7 +247,6 @@ def test_fifo_replacing_a_cas_member_is_quarantined_without_blocking(tmp_path: P
     store.close()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX owner-mode regression")
 def test_session_state_root_must_be_owner_private(tmp_path: Path) -> None:
     state_root = tmp_path / "public-state"
     state_root.mkdir(mode=0o700)
@@ -209,6 +257,11 @@ def test_session_state_root_must_be_owner_private(tmp_path: Path) -> None:
         _assert_code(refused, HostFailureCode.RECORD_PUBLICATION_FAILED)
     finally:
         os.chmod(state_root, 0o700)
+
+
+if os.name != "posix":
+    setattr(test_fifo_replacing_a_cas_member_is_quarantined_without_blocking, "__test__", False)
+    setattr(test_session_state_root_must_be_owner_private, "__test__", False)
 
 
 def test_limits_fail_before_publication_and_leave_no_stage(tmp_path: Path) -> None:
@@ -255,9 +308,13 @@ def test_competing_equal_atomic_publication_reuses_verified_entry(
 
     def competing_publish(stage: Path, destination: Path) -> None:
         shutil_copytree(stage, destination)
-        raise OSError(errno.EEXIST, "synthetic publication race")
+        raise SecureFilesystemError(SecureFilesystemErrorCode.ALREADY_EXISTS)
 
-    monkeypatch.setattr(session_cas, "_atomic_rename_no_replace", competing_publish)
+    monkeypatch.setattr(
+        store._secure_filesystem,
+        "publish_directory_no_replace",
+        competing_publish,
+    )
     assert store.publish_dataset(payload, record) == record.reference
     assert store.load_dataset(record.reference).payload == payload
     assert not list((store.directory / "staging").iterdir())
@@ -340,6 +397,55 @@ def test_operation_publication_reconciles_phase1_manifest_and_members(tmp_path: 
     _assert_code(corrupt, HostFailureCode.RECORD_CORRUPT)
     assert len(tuple((store.directory / "quarantine").iterdir())) == 1
     store.close()
+
+
+@pytest.mark.parametrize(
+    "alias",
+    [
+        "RESULT.JSON",
+        "MANIFEST.JSON",
+        "CON.txt",
+        "result.json.",
+        "result.json ",
+        "result.json:stream",
+        "result\\json",
+        "PROGRA~1.json",
+    ],
+)
+def test_operation_publication_maps_nonportable_member_names_to_closed_failure(
+    tmp_path: Path,
+    alias: str,
+) -> None:
+    result, bundle, binding = _phase1_operation(tmp_path)
+    record = build_operation_record(result.manifest, bundle, binding)
+    members = _operation_members(result, bundle)
+    members[alias] = next(iter(members.values()))
+    store = SessionCas(tmp_path / "state")
+
+    with pytest.raises(HostFailureException) as refused:
+        store.publish_operation(
+            record,
+            manifest_bytes=(bundle / "manifest.json").read_bytes(),
+            members=members,
+        )
+
+    _assert_code(refused, HostFailureCode.RECORD_PUBLICATION_FAILED)
+    assert refused.value.failure.error.message == (
+        "The immutable host record could not be published safely."
+    )
+    assert not tuple((store.directory / "operations").iterdir())
+    assert not tuple((store.directory / "staging").iterdir())
+    store.close()
+
+
+def test_session_member_mapping_uses_segmentwise_portable_identity() -> None:
+    with pytest.raises(ValueError, match="operation member mapping is invalid"):
+        SessionCas._validated_member_mapping(
+            {
+                "Reports/Result.JSON": b"first",
+                "reports/result.json": b"second",
+            }
+        )
 
 
 def test_cursor_is_bound_to_session_reference_view_selector_and_index(tmp_path: Path) -> None:

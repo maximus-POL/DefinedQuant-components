@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
+import re
 import tempfile
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from types import MappingProxyType
 from typing import Any
 
@@ -32,25 +33,33 @@ from defined_quant.host_failures import (
     HostFailureException,
     map_operation_failure,
 )
+from defined_quant.local_host_platform import local_host_platform
 from defined_quant.operation_records import (
     build_operation_record,
     reconciled_bundle_bytes,
 )
-from defined_quant.operation_runtime import execute_operation
 from defined_quant.record_views import describe_dataset, get_operation, operation_summary
 from defined_quant.session_cas import SessionCas, StoredOperation
+from defined_quant.worker_runtime import WorkerController
 from defined_quant_protocol import (
     CallerProvenance,
     ComponentRef,
-    InterpretationMethod,
     OperationFailure,
     OperationRequest,
     OperationResult,
     OperationSuccess,
-    SourceKind,
     SvgArtifactRequest,
 )
 from pydantic import ValidationError
+
+
+@dataclass(frozen=True, slots=True)
+class OperationArtifact:
+    """One service-verified artifact payload without transport-specific encoding."""
+
+    content: bytes
+    media_type: str
+    sha256: str
 
 
 class DefinedQuantService:
@@ -64,6 +73,7 @@ class DefinedQuantService:
         "_session_cas",
         "_session_lock",
         "_session_state_root",
+        "_worker_controller",
     )
 
     def __init__(
@@ -74,6 +84,7 @@ class DefinedQuantService:
         data_roots: Sequence[Path] = (),
         session_state_root: Path | None = None,
         session_cas: SessionCas | None = None,
+        worker_controller: WorkerController | None = None,
     ) -> None:
         if catalog_root is not None and contract_index is not None:
             raise ValueError("catalog_root cannot be combined with contract_index")
@@ -85,10 +96,11 @@ class DefinedQuantService:
             session_state_root
             if session_state_root is not None
             else Path(tempfile.gettempdir()).resolve()
-            / f"defined-quant-local-mcp-{getattr(os, 'getuid', lambda: 0)()}"
+            / f"defined-quant-local-mcp-{local_host_platform().state_namespace}"
         )
         self._session_cas = session_cas
         self._session_lock = Lock()
+        self._worker_controller = worker_controller or WorkerController()
 
     @property
     def catalog_root(self) -> Path | None:
@@ -140,19 +152,59 @@ class DefinedQuantService:
 
         return self.contract_index.search(query, filters=filters, limit=limit)
 
+    def inspect_component(
+        self,
+        component_id: str,
+        *,
+        expected_version: str | None = None,
+        expected_subject_hash: str | None = None,
+        view: str = "compact",
+        cancel_event: Event | None = None,
+    ) -> dict[str, object]:
+        """Inspect one selected installed subject through the bounded worker."""
+
+        arguments: dict[str, object] = {
+            "component_id": component_id,
+            "view": view,
+        }
+        if expected_version is not None:
+            arguments["expected_version"] = expected_version
+        if expected_subject_hash is not None:
+            arguments["expected_subject_hash"] = expected_subject_hash
+        return self._worker_controller.inspect_component(
+            arguments,
+            catalog_root=self._catalog_root,
+            cancel_event=cancel_event,
+        )
+
+    def compare_ports(
+        self,
+        producer: Mapping[str, object],
+        consumer: Mapping[str, object],
+        *,
+        cancel_event: Event | None = None,
+    ) -> dict[str, object]:
+        """Compare two selected component fields through the bounded worker."""
+
+        return self._worker_controller.compare_ports(
+            {"producer": dict(producer), "consumer": dict(consumer)},
+            catalog_root=self._catalog_root,
+            cancel_event=cancel_event,
+        )
+
     def execute_operation(
         self,
         request: OperationRequest,
         *,
         output_dir: Path,
     ) -> OperationResult:
-        """Execute one exact request through the shared canonical runtime."""
+        """Execute one exact host request through the bounded worker boundary."""
 
-        return execute_operation(
+        return self._worker_controller.execute_operation(
             request,
             output_dir=output_dir,
             catalog_root=self._catalog_root,
-        )
+        ).result
 
     def register_dataset(
         self,
@@ -197,6 +249,7 @@ class DefinedQuantService:
         sources: Sequence[Mapping[str, Any]] = (),
         provenance: CallerProvenance | Mapping[str, Any] | None = None,
         artifacts: str = "none",
+        cancel_event: Event | None = None,
     ) -> dict[str, Any]:
         """Resolve one source, run Phase-1 execution, and publish its receipt record."""
 
@@ -229,6 +282,19 @@ class DefinedQuantService:
                 source_value = sources[0]
                 if source_value.get("kind") == "operation":
                     raise HostFailureException(HostFailureCode.UNSUPPORTED_BINDING)
+                source_reference = source_value.get("ref")
+                if isinstance(source_reference, str):
+                    reference_match = re.fullmatch(
+                        r"dqds:v([0-9]{1,3}):[0-9a-f]{64}",
+                        source_reference,
+                    )
+                    if reference_match is not None and reference_match.group(1) != "1":
+                        raise HostFailureException(
+                            HostFailureCode.UNSUPPORTED_REFERENCE_VERSION,
+                            details={
+                                "requested_version": f"v{reference_match.group(1)}"
+                            },
+                        )
                 source = DatasetOperationSourceV1.model_validate(source_value)
                 stored_dataset = self.session_cas.load_dataset(source.ref)
                 binding_value["source"] = source.model_dump(mode="json")
@@ -271,12 +337,18 @@ class DefinedQuantService:
                 HostFailureCode.INVALID_FIELD_MAPPING, details={"fields": []}
             ) from exc
 
-        outcome = self.execute_operation(operation_request, output_dir=output_dir)
+        execution = self._worker_controller.execute_operation(
+            operation_request,
+            output_dir=output_dir,
+            catalog_root=self._catalog_root,
+            cancel_event=cancel_event,
+        )
+        outcome = execution.result
         if isinstance(outcome, OperationFailure):
             mapped = map_operation_failure(
                 outcome,
                 validated_request=operation_request,
-                component_input_fields=self._component_input_fields(component_ref),
+                component_input_fields=execution.component_input_fields,
             )
             raise HostFailureException(
                 mapped.error.code,
@@ -318,27 +390,28 @@ class DefinedQuantService:
         assert reference == record.reference
         return summary
 
-    def _component_input_fields(self, component: ComponentRef) -> tuple[str, ...]:
-        try:
-            from defined_quant.operation_runtime import (
-                component_execution_models,
-                component_record_for_request,
-            )
+    def execute_component(
+        self,
+        component: ComponentRef | Mapping[str, Any],
+        *,
+        literals: Mapping[str, Any] | None = None,
+        sources: Sequence[Mapping[str, Any]] = (),
+        provenance: CallerProvenance | Mapping[str, Any] | None = None,
+        artifacts: str = "none",
+        cancel_event: Event | None = None,
+    ) -> dict[str, Any]:
+        """Execute and publish without exposing a transport-owned filesystem location."""
 
-            probe = OperationRequest(
-                component=component,
-                input={},
-                provenance=CallerProvenance(
-                    source_kind=SourceKind.SYNTHETIC,
-                    interpretation_method=InterpretationMethod.CALLER_STRUCTURED,
-                    label="Host failure field projection only.",
-                ),
+        with self.session_cas.temporary_operation_output() as output_dir:
+            return self.execute_recorded_operation(
+                component,
+                output_dir=output_dir,
+                literals=literals,
+                sources=sources,
+                provenance=provenance,
+                artifacts=artifacts,
+                cancel_event=cancel_event,
             )
-            record = component_record_for_request(probe, catalog_root=self._catalog_root)
-            input_model, _ = component_execution_models(record, component=component)
-            return tuple(input_model.model_fields)
-        except Exception:
-            return ()
 
     def get_operation(
         self,
@@ -362,9 +435,40 @@ class DefinedQuantService:
             limit=limit,
         )
 
+    def read_operation_artifact(
+        self,
+        reference: str,
+        artifact_id: str,
+    ) -> OperationArtifact:
+        """Return one declared artifact only after full record and digest reconciliation."""
+
+        stored = self.session_cas.load_operation(reference)
+        artifact = next(
+            (
+                candidate
+                for candidate in stored.manifest.artifacts
+                if candidate.visualization_id == artifact_id
+            ),
+            None,
+        )
+        if artifact is None:
+            raise HostFailureException(
+                HostFailureCode.ARTIFACT_NOT_FOUND,
+                details={"artifact_id": artifact_id},
+            )
+        content = stored.members.get(artifact.path)
+        if content is None:
+            raise HostFailureException(HostFailureCode.RECORD_CORRUPT)
+        return OperationArtifact(
+            content=content,
+            media_type=artifact.media_type,
+            sha256=artifact.sha256,
+        )
+
     def close(self) -> None:
         """Expire and remove this service's Phase-3 session state, if opened."""
 
+        self._worker_controller.close()
         with self._session_lock:
             cas = self._session_cas
             self._session_cas = None
@@ -379,4 +483,4 @@ class DefinedQuantService:
         self.close()
 
 
-__all__ = ["DefinedQuantService"]
+__all__ = ["DefinedQuantService", "OperationArtifact"]

@@ -30,6 +30,7 @@ from defined_quant_protocol import (
     canonical_json_bytes,
     operation_protocol_schema,
 )
+from defined_quant_protocol.operation import portable_member_key
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 from pydantic import TypeAdapter, ValidationError
 
@@ -39,6 +40,29 @@ COMPONENT = ComponentRef(
     id="dq.market_data.simple_return",
     version="0.1.0",
     subject_hash=SHA_A,
+)
+WINDOWS_DEVICE_NAMES = (
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+)
+
+
+def _mixed_ascii_case(value: str) -> str:
+    return "".join(
+        character.upper() if index % 2 == 0 else character
+        for index, character in enumerate(value)
+    )
+
+
+WINDOWS_DEVICE_MEMBER_PATHS = tuple(
+    path
+    for name in WINDOWS_DEVICE_NAMES
+    for spelling in (name, name.upper(), _mixed_ascii_case(name))
+    for path in (spelling, f"{spelling}.txt", f"safe/{spelling}.data.json")
 )
 
 
@@ -238,7 +262,11 @@ def test_tagged_canonical_refuses_ambiguous_or_invalid_values(value: Any) -> Non
         ("results/", False),
         (".hidden", False),
         ("result.", False),
+        ("result.json.", False),
+        ("result.json ", False),
+        ("result.json:stream", False),
         ("result..json", False),
+        ("PROGRA~1/result.json", False),
         ("result name.json", False),
         ("résult.json", False),
         ("result.json\n", False),
@@ -273,7 +301,10 @@ def test_member_path_rule_is_visible_in_public_schemas() -> None:
 
     assert path_schema["minLength"] == 1
     assert path_schema["maxLength"] == 512
-    assert path_schema["not"] == {"pattern": "[^A-Za-z0-9_./-]"}
+    path_exclusions = cast(dict[str, object], path_schema["not"])
+    exclusions = cast(list[dict[str, str]], path_exclusions["anyOf"])
+    assert exclusions[0] == {"pattern": "[^A-Za-z0-9_./-]"}
+    assert exclusions[1]["pattern"].startswith("(^|/)")
     for invalid in ("/result.json", "C:/result.json", "../result.json", "a//b"):
         assert re.fullmatch(pattern, invalid) is None
 
@@ -282,6 +313,23 @@ def test_member_path_rule_is_visible_in_public_schemas() -> None:
     manifest_properties = cast(dict[str, object], manifest_file_schema["properties"])
     manifest_path_schema = cast(dict[str, object], manifest_properties["path"])
     assert manifest_path_schema["pattern"] == pattern
+
+
+@pytest.mark.parametrize("path", WINDOWS_DEVICE_MEMBER_PATHS)
+def test_member_paths_refuse_every_windows_device_alias(path: str) -> None:
+    path_schema = FileDigest.model_json_schema()["properties"]["path"]
+
+    assert not Draft202012Validator(path_schema).is_valid(path)
+    with pytest.raises(ValidationError, match="safe-ASCII segments"):
+        FileDigest(path=path, sha256=SHA_A)
+    with pytest.raises(ValueError, match="safe-ASCII segments"):
+        portable_member_key(path)
+
+
+def test_portable_member_key_is_segmentwise_ascii_case_folded() -> None:
+    assert portable_member_key("Artifacts/File.V1.JSON") == "artifacts/file.v1.json"
+    assert portable_member_key("A_B-C/D.E") == "a_b-c/d.e"
+    assert RunnerIdentity(name="con", version="0.1.0").name == "con"
 
 
 def test_manifest_reconciles_request_identity_hash_and_members() -> None:
@@ -311,6 +359,23 @@ def test_manifest_reconciles_request_identity_hash_and_members() -> None:
             **{
                 **manifest.model_dump(mode="python"),
                 "result": FileDigest(path="input.json", sha256=SHA_B),
+            }
+        )
+
+    with pytest.raises(ValidationError, match="member paths must be unique"):
+        OperationManifest(
+            **{
+                **manifest.model_dump(mode="python"),
+                "input": FileDigest(path="Input.JSON", sha256=SHA_A),
+                "result": FileDigest(path="input.json", sha256=SHA_B),
+            }
+        )
+
+    with pytest.raises(ValidationError, match="member paths must be unique"):
+        OperationManifest(
+            **{
+                **manifest.model_dump(mode="python"),
+                "result": FileDigest(path="MANIFEST.JSON", sha256=SHA_B),
             }
         )
 

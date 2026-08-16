@@ -521,13 +521,13 @@ component = ComponentRef(
     version="0.1.0",
     subject_hash="a" * 64,
 )
-atomic_publish = runner._atomic_rename_no_replace
-
 def race(source, target):
     target.mkdir()
     atomic_publish(source, target)
 
-runner._atomic_rename_no_replace = race
+secure_filesystem = runner.local_host_platform().secure_filesystem
+atomic_publish = secure_filesystem.publish_directory_no_replace
+secure_filesystem.publish_directory_no_replace = race
 try:
     runner._publish_staged_directory(
         staging,

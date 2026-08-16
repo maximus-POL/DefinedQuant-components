@@ -3,8 +3,9 @@
 **Status:** frozen implementation contract from PR0. Phase 1 now supplies the shared operation
 runtime and `DefinedQuantService`; Phase 2 supplies its immutable import-free contract index;
 Phase 3 supplies the canonical dataset/operation records, strict normalizer, bounded projections,
-and scoped ephemeral CAS. The repository still does not contain an MCP package, server, worker,
-SDK dependency, or protocol-0.5 implementation.
+and scoped ephemeral CAS. Phase 4 now supplies the subprocess worker, native platform providers,
+and separate `defined-quant-mcp` STDIO transport. Native six-cell release validation remains
+mandatory; the repository still does not contain the deferred protocol-0.5 implementation.
 
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:
@@ -28,6 +29,8 @@ commit's actual diff.
 | 2026-08-15 | `9fcd648` | Phase-4 planning | §3; §10 | Explicitly excluded Phase 4B from Phase 4, froze the no-4B release targets, and made later protocol-0.5 composition a separately reviewed change with its required compatibility and hash tests. | Prevent optional provenance and composition work from expanding the initial transport implementation mid-phase. |
 | 2026-08-15 | `8efa80a` | Phase-4 readiness | §7.1 | Added the 10,000-record construction cap, specified but deferred the 500-candidate query cap, and recorded controller memory and timing observations without adding a deadline. | Bound long-lived controller indexing deterministically while preserving frozen search projections and avoiding machine-dependent outcomes. |
 | 2026-08-15 | this commit | Phase-4 planning | §7.1; §7.2; §7.3; §8; §10 | Restored Windows as a required alpha release target; froze the cross-platform byte-identity contract, platform-abstraction boundary, local-path policy, and native Windows filesystem, session-store, worker, STDIO, official-client, CI, and packaging acceptance gates. | Platform breadth and deterministic outputs are product requirements; the current fail-closed Windows behavior is unfinished implementation rather than a reason to narrow the alpha. |
+| 2026-08-16 | this commit | Phase 4 | Status; §10 | Recorded the in-tree Windows, macOS, and Linux providers, subprocess worker, and separate locked MCP STDIO distribution while retaining native six-cell validation as a release gate. | Keep implementation status truthful without turning unexecuted native validation into a release-support claim. |
+| 2026-08-16 | this commit | Phase 4 / release handoff | §7.2; §7.3; §8; §10 | Replaced obsolete future-Windows and uncommitted-spike descriptions with the implemented secure-filesystem, session-state, Job Object, binary-STDIO, SDK-isolated server, exact-wheel, and installation state; marked native six-cell validation as the remaining release gate. | Make the frozen plan directly usable for MCP completion and review without misdescribing landed Windows mechanisms or overstating unexecuted native validation. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1266,17 +1269,18 @@ never be tool arguments. The server refuses `~`, environment or glob expansion, 
 `..`, archives, devices, sockets, FIFOs, and symlinked or reparse-point intermediate or final path
 components. It accepts a regular CSV/JSON file only after handle-based containment checks against
 an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`.
-Windows must use native handles to refuse every intermediate and final reparse point, validate the
+Windows uses native handles to refuse every intermediate and final reparse point, validate the
 final handle path, volume identity, and regular-file type beneath the pinned root, and prevent
 handle inheritance. Windows path checks use Unicode native APIs and support Unicode local paths and
 local paths longer than 260 characters without locale, code-page, short-name, or separator changes
 to semantic or hashed values. UNC paths, device namespaces, mapped network drives, and other remote
 or network filesystem roots fail startup closed for the alpha; they are not silently normalized to
 or treated as local configured roots or session-state locations.
-Phase 3 currently enables local-file registration and session CAS only on tested POSIX hosts with
-`O_NOFOLLOW`; that fail-closed Windows behavior is a temporary implementation restriction, not a
-platform-scope decision. Phase 4 cannot ship until Windows has equivalent tested owner-only ACL,
-reparse-point, handle-containment, locking, atomic-publication, and cleanup behavior.
+The transport-neutral facade now routes configured-root reads, private session state, locking,
+atomic no-replace publication, and cleanup through the selected Windows, macOS, or Linux provider.
+The in-tree Windows provider implements the owner-only DACL, reparse-point, handle-containment,
+locking, atomic-publication, and tombstone-cleanup mechanisms below. This implementation status is
+not release support; native Windows acceptance and the complete six-cell matrix remain mandatory.
 
 Files are hashed and size-limited while streaming. The dedicated `Source.local_file.path` value
 never enters canonical records, responses, resource URIs, or logs. This is not generic free-text
@@ -1314,11 +1318,12 @@ removed.
 
 Every selected inspection or execution starts in a bounded native process tree with unrelated
 descriptors or handles closed and a private working/staging directory. macOS and Linux use a POSIX
-process group. Windows must use a kill-on-close Job Object with tested active-process, descendant,
-job-wide memory, timeout, cancellation, and forced-cleanup controls before Phase 4 can ship. The
-worker mechanism is a subprocess with an import-safe entry point, not `multiprocessing`; Windows
-creates it suspended, assigns it to the configured Job Object before user code can run, and then
-resumes it. The controller sends one strict typed request and receives one control response.
+process group. Windows uses an in-tree kill-on-close Job Object provider with job-wide memory,
+timeout, cancellation, descendant, and forced-cleanup controls. The worker mechanism is a
+subprocess with an import-safe entry point, not `multiprocessing`; Windows creates it suspended,
+assigns it to the configured Job Object before user code can run, and then resumes it. Native
+acceptance must prove those mechanisms before release. The controller sends one strict typed
+request and receives one control response.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
 Worker admission uses a non-blocking semaphore at the configured concurrency value; there is no
@@ -1367,7 +1372,7 @@ log record is emitted.
 client/model context. Metadata is the default; dataset previews, result pages, and artifacts
 require explicit calls and remain bounded. Raw source bytes are never returned.
 
-## 8. Official Python MCP SDK spike
+## 8. Official Python MCP SDK and transport
 
 Phase 4 selects the official Python SDK distribution `mcp==2.0.0`, the latest stable release at
 the spike date (2026-08-14). It is MIT-licensed, requires Python `>=3.10`, and classifies Python
@@ -1402,14 +1407,16 @@ The exploratory server spike used the high-level `MCPServer` API; the client use
 [server run documentation](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/run/index.md)
 and [client transport documentation](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/client/transports.md).
 
-The minimal uncommitted interoperability spike ran the official client against a real subprocess
-STDIO server with `mcp==2.0.0` on macOS arm64 and Python 3.13.13. It negotiated protocol
+Before transport implementation, a minimal uncommitted interoperability spike ran the official
+client against a real subprocess STDIO server with `mcp==2.0.0` on macOS arm64 and Python 3.13.13.
+It negotiated protocol
 `2026-07-28`; listed the synthetic annotated tool; returned structured
 `{"value":"alpha"}` with `is_error == false`; read a deterministic `dqop://` resource; exited 0;
 and cleaned up the subprocess. No repository file or dependency was changed.
 
-Phase 4 uses the official low-level `mcp.server.lowlevel.Server`, not high-level decorators. The
-constructor registers exactly `on_list_tools`, `on_call_tool`, `on_list_resources`,
+The committed Phase-4 transport replaces that spike and uses the official low-level
+`mcp.server.lowlevel.Server`, not high-level decorators. The constructor registers exactly
+`on_list_tools`, `on_call_tool`, `on_list_resources`,
 `on_list_resource_templates`, and `on_read_resource`. `on_list_resources` returns an empty list;
 it is still required because v2.0.0 advertises the resources capability only when that handler is
 present. The other list handlers return exactly the seven frozen tools and one resource template.
@@ -1453,8 +1460,8 @@ The private middleware import and this pin-specific assertion remain isolated in
 the official [telemetry opt-out](https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/v2.0.0/docs/run/opentelemetry.md).
 
 All imports and conversions involving `mcp`, `mcp.types`, low-level handlers, MCP annotations and
-content/resource types, telemetry opt-out, and STDIO startup stay in `server.py`. Phase 4 pins
-exactly `mcp==2.0.0` in the separate MCP package and commits its platform-complete hashed lock; it
+content/resource types, telemetry opt-out, and STDIO startup stay in `server.py`. The separate MCP
+package pins exactly `mcp==2.0.0` and commits its platform-complete hashed lock; it
 does not declare `mcp-types` separately.
 An SDK upgrade is a dedicated dependency change that updates pin and lock together, reviews the
 full platform-marked dependency/licence/hash diff, and reruns official-client tool, resource,
@@ -1462,7 +1469,8 @@ failure, annotation, cancellation, and cleanup tests on Windows, macOS, and Linu
 and 3.13. All three platforms are required lanes; Windows is neither allowed to fail nor permitted
 to skip the public-service product story, filesystem/session-store boundary, worker cleanup, or
 official-client interoperability cases.
-Automatic major upgrades are forbidden. PR0 adds no SDK dependency or lock.
+Automatic major upgrades are forbidden. The original PR0 added no SDK dependency or lock; the
+separate Phase-4 distribution now owns both without changing the core dependency boundary.
 Supported-line decisions also follow the official
 [security policy](https://github.com/modelcontextprotocol/python-sdk/security).
 
@@ -1497,30 +1505,32 @@ not commit 10,000 component directories.
 
 ## 10. Implementation order and non-goals
 
-**Required MCP alpha release platforms:** Windows, macOS, and Linux. The current Phase-3
-POSIX-only gates are release blockers that Phase 4 must replace with the equivalent tested Windows
-boundary before the alpha is described as supported.
+**Required MCP alpha release platforms:** Windows, macOS, and Linux. Native verification of the
+equivalent Windows boundary remains a release blocker before the alpha is described as supported.
 
-**Currently implemented MCP alpha platform providers:** macOS and Linux. This status describes the
-in-tree host mechanisms at this contract amendment, not the release target. Windows remains
-fail-closed and the existing public release-support wording must not be changed until its provider,
-native tests, six-cell CI matrix, official-client story, and exact-wheel installation all pass.
+**Currently implemented MCP alpha platform providers:** Windows, macOS, and Linux. This status
+describes the in-tree host mechanisms, not release support. The existing public release-support
+wording must not be changed until the native tests, six-cell CI matrix, official-client story, and
+exact-wheel installation all pass.
 
-Implementation order is fixed so transport work cannot create a second runtime:
+The implementation and release order remains fixed so transport work cannot create a second
+runtime. Status below describes this working tree; only the native release gate remains open:
 
-1. **Phase 1 — shared runtime extraction and CLI parity.** Add `operation_runtime` and
-   `DefinedQuantService`; move CLI and evidence execution onto the runtime; preserve public bytes,
-   identity, failure, and real subprocess behavior. No MCP dependency.
-2. **Phase 2 — indexed discovery.** Build one immutable process-lifetime contract index and stable
-   ID map; prove parity with current ranking, boundary explanations, filters, and facets; add the
+1. **Phase 1 — shared runtime extraction and CLI parity: complete.** `operation_runtime` and
+   `DefinedQuantService` own the shared runtime; CLI and evidence execution preserve the public
+   bytes, identity, failures, and subprocess behavior without an MCP dependency.
+2. **Phase 2 — indexed discovery: complete.** One immutable process-lifetime contract index and
+   stable-ID map preserve ranking, boundary explanations, filters, and facets and include the
    generated 10,000-record bounded functional case. Local timings are diagnostic only: the frozen
    fixture defines no portable wall-clock acceptance threshold, so CI must not invent one.
-3. **Phase 3 — dataset registry and session store.** Implement the canonical records, fixed hash
-   vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits.
-4. **Phase 4 — STDIO MCP server and worker.** Add the optional package, isolate SDK code in
-   `server.py`, expose the seven tools and one resource, and add official-client and process-cleanup
-   tests on Windows, macOS, and Linux. Implement and test the Windows filesystem, session-store,
-   Job Object, environment, locking, and cleanup boundary before declaring Phase 4 complete.
+3. **Phase 3 — dataset registry and session store: complete.** Canonical records, fixed hash
+   vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits are
+   implemented behind the transport-neutral platform facade.
+4. **Phase 4 — STDIO MCP server and worker: implemented, native validation pending.** The optional
+   package isolates SDK code in `server.py`, exposes the seven tools and one resource, and includes
+   official-client and process-cleanup tests. The Windows filesystem, session-store, Job Object,
+   environment, locking, cleanup, and binary-STDIO providers are in-tree; the six native CI cells
+   must prove them before Phase 4 is declared release-complete.
    Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for every
    operation source exactly as section 4.2 specifies.
 5. **Phase 4B — deferred protocol 0.5 provenance and one-hop composition.** Phase 4B is explicitly
@@ -1528,9 +1538,11 @@ Implementation order is fixed so transport work cannot create a second runtime:
    change: it must complete the lockstep version work in section 3 and add the required descriptor,
    compatibility, default, downgrade, and hash tests before permitting one exact compatible
    operation source. It still adds no managed plan execution.
-6. **Phase 5 — packaging and user documentation.** Build and test exact compatible core and MCP
-   wheels together for Windows, macOS, and Linux. Document local installation, STDIO registration,
-   privacy, trust, platform scope, and rollback.
+6. **Phase 5 — packaging and user documentation: harness and docs in-tree; release versioning and
+   native validation pending.** CI builds one exact compatible core/MCP wheel pair and installs it
+   in every Windows, macOS, and Linux cell. The package README documents local installation, launch
+   configuration, privacy, trust, platform scope, WSL2, and the exact-wheel rule. Publication
+   remains blocked until the target version pair is applied and all six cells pass.
 
 For this no-4B release, Phase 5 follows Phase 4 directly. The release targets are
 `defined-quant` `0.2.0`, `defined_quant_protocol` unchanged at `0.4.0`, and
@@ -1541,7 +1553,8 @@ members, Phase 3 publishes their `OperationRecordV1` and `dqop:v1` reference, an
 only bounded projections. No phase in the alpha adds a separate calculation-receipt model or a
 portable reproduction bundle.
 
-PR0 must not add shared runtime code; the MCP package or dependency; server or worker code;
+The original PR0 was intentionally limited and did not add shared runtime code; the MCP package or
+dependency; server or worker code;
 storage or ingestion code; protocol implementation changes; component, contract, version, or
 evidence changes; provider/network code; persistent or managed execution; or generated schemas
 presented as production models.

@@ -213,6 +213,33 @@ def test_reconciliation_refuses_mutated_phase1_members(tmp_path: Path, member: s
     assert corrupt_error.value.code == "record_corrupt"
 
 
+@pytest.mark.parametrize(
+    "alias",
+    ["RESULT.JSON", "MANIFEST.JSON", "CON.txt", "result.json:stream", "PROGRA~1"],
+)
+def test_reconciliation_refuses_nonportable_or_case_colliding_member_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    alias: str,
+) -> None:
+    request = _literal_request(artifacts=False)
+    bundle = tmp_path / "bundle"
+    outcome = execute_operation(request, output_dir=bundle)
+    assert isinstance(outcome, OperationSuccess)
+    real_iterdir = Path.iterdir
+
+    def aliased_iterdir(path: Path) -> Any:
+        entries = tuple(real_iterdir(path))
+        if path == bundle:
+            return iter((*entries, path / alias))
+        return iter(entries)
+
+    monkeypatch.setattr(Path, "iterdir", aliased_iterdir)
+    with pytest.raises(OperationRecordError) as corrupt:
+        build_operation_record(outcome.manifest, bundle, {"literals": request.input})
+    assert corrupt.value.code == "record_corrupt"
+
+
 def test_binding_mismatch_and_operation_source_fail_before_publication(tmp_path: Path) -> None:
     request = _literal_request(artifacts=False)
     bundle = tmp_path / "bundle"

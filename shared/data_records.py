@@ -31,6 +31,7 @@ from defined_quant_protocol import (
     canonical_hash,
     canonical_json_bytes,
 )
+from defined_quant_protocol.operation import portable_member_key
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 DATASET_PAYLOAD_HASH_DOMAIN = "mcp.dataset.payload.v1"
@@ -982,7 +983,11 @@ class OperationRecordV1(_ClosedModel):
         if kinds.count("artifact") > MAX_OPERATION_ARTIFACTS:
             raise ValueError("operation record contains too many artifacts")
         paths = [member.path for member in self.members]
-        if len(set(paths)) != len(paths):
+        portable_keys = [portable_member_key(path) for path in paths]
+        if (
+            len(set(portable_keys)) != len(portable_keys)
+            or portable_member_key("manifest.json") in portable_keys
+        ):
             raise ValueError("operation member paths must be unique")
         expected_members = sorted(
             self.members,

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from defined_quant.types import ComponentOutput
+from defined_quant.validation import MEASURES
 from defined_quant_protocol import (
     PortCardinality,
     PortConcept,
@@ -29,7 +30,6 @@ from authoring.check_component import (
     _validate_output_model,
     _validate_semantic_port_metadata,
 )
-from shared.validation import MEASURES
 
 
 class ExampleInputs(BaseModel):

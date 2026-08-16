@@ -9,7 +9,6 @@ import json
 import math
 import os
 import re
-import stat
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -30,6 +29,13 @@ from defined_quant.data_records import (
     strict_json_loads,
 )
 from defined_quant.host_failures import HostFailureCode, HostFailureException
+from defined_quant.local_host_platform import (
+    PinnedRootHandle,
+    SecureFilesystem,
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+    local_host_platform,
+)
 from defined_quant_protocol import canonical_json_bytes
 from pydantic import ValidationError
 
@@ -252,66 +258,44 @@ def _lexical_path_parts(path: Path) -> tuple[str, ...]:
 class ConfiguredFileRoots:
     """Fail-closed configured-root reader that never records a caller path."""
 
-    __slots__ = ("_closed", "_lock", "_roots")
+    __slots__ = ("_closed", "_lock", "_roots", "_secure_filesystem")
 
     @dataclass(frozen=True, slots=True)
     class _PinnedRoot:
         path: Path
-        descriptor: int
-        device: int
-        inode: int
+        handle: PinnedRootHandle
 
     def __init__(self, roots: Sequence[Path] = ()) -> None:
         self._lock = RLock()
         self._closed = False
         self._roots: tuple[ConfiguredFileRoots._PinnedRoot, ...] = ()
+        self._secure_filesystem: SecureFilesystem | None = None
         if len(roots) > MAX_CONFIGURED_ROOTS:
             raise DatasetRegistryError("input_root_denied")
-        if roots and (os.name != "posix" or not hasattr(os, "O_NOFOLLOW")):
-            raise DatasetRegistryError("input_root_denied")
+        if roots:
+            try:
+                self._secure_filesystem = local_host_platform().secure_filesystem
+            except SecureFilesystemError as exc:
+                raise DatasetRegistryError("input_root_denied") from exc
         validated: list[ConfiguredFileRoots._PinnedRoot] = []
         try:
             for raw_root in roots:
                 root = Path(raw_root)
                 _lexical_path_parts(root)
-                if root.is_symlink() or not root.is_dir():
+                secure_filesystem = self._secure_filesystem
+                if secure_filesystem is None:
                     raise DatasetRegistryError("input_root_denied")
-                resolved = root.resolve(strict=True)
-                if resolved != root:
-                    raise DatasetRegistryError("input_root_denied")
-                descriptor = -1
-                try:
-                    descriptor = os.open(
-                        root,
-                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                    )
-                    metadata = os.fstat(descriptor)
-                    path_metadata = root.lstat()
-                    if (
-                        not stat.S_ISDIR(metadata.st_mode)
-                        or (metadata.st_dev, metadata.st_ino)
-                        != (path_metadata.st_dev, path_metadata.st_ino)
-                    ):
-                        raise DatasetRegistryError("input_root_denied")
-                    validated.append(
-                        self._PinnedRoot(
-                            path=root,
-                            descriptor=descriptor,
-                            device=metadata.st_dev,
-                            inode=metadata.st_ino,
-                        )
-                    )
-                    descriptor = -1
-                finally:
-                    if descriptor >= 0:
-                        os.close(descriptor)
+                handle = secure_filesystem.pin_configured_root(root)
+                validated.append(self._PinnedRoot(path=root, handle=handle))
         except DatasetRegistryError:
             for pinned in validated:
-                os.close(pinned.descriptor)
+                if self._secure_filesystem is not None:
+                    self._secure_filesystem.close_pinned_root(pinned.handle)
             raise
-        except OSError as exc:
+        except SecureFilesystemError as exc:
             for pinned in validated:
-                os.close(pinned.descriptor)
+                if self._secure_filesystem is not None:
+                    self._secure_filesystem.close_pinned_root(pinned.handle)
             raise DatasetRegistryError("input_root_denied") from exc
         self._roots = tuple(validated)
 
@@ -339,68 +323,26 @@ class ConfiguredFileRoots:
     def read(self, path_value: str) -> bytes:
         path = Path(path_value)
         root, parts = self._matching_root(path)
-        descriptors: list[int] = []
         try:
-            directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
             with self._lock:
-                if self._closed:
+                if self._closed or self._secure_filesystem is None:
                     raise DatasetRegistryError("input_root_denied")
-                descriptors.append(os.dup(root.descriptor))
-            pinned_metadata = os.fstat(descriptors[0])
-            if (pinned_metadata.st_dev, pinned_metadata.st_ino) != (
-                root.device,
-                root.inode,
-            ):
-                raise DatasetRegistryError("unsafe_input_path")
-            current = descriptors[-1]
-            for part in parts[:-1]:
-                current = os.open(part, directory_flags, dir_fd=current)
-                descriptors.append(current)
-            file_fd = os.open(
-                parts[-1],
-                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                dir_fd=current,
+                secure_filesystem = self._secure_filesystem
+            return secure_filesystem.read_file_beneath(
+                root.handle,
+                parts,
+                maximum_bytes=MAX_LOCAL_FILE_BYTES,
             )
-            descriptors.append(file_fd)
-            metadata = os.fstat(file_fd)
-            if not stat.S_ISREG(metadata.st_mode):
+        except SecureFilesystemError as exc:
+            if exc.code is SecureFilesystemErrorCode.NOT_REGULAR_FILE:
                 raise DatasetRegistryError("unsupported_data_format")
-            if metadata.st_size > MAX_LOCAL_FILE_BYTES:
+            if exc.code is SecureFilesystemErrorCode.BYTE_LIMIT_EXCEEDED:
                 raise _limit_error(
-                    "local_file_bytes", MAX_LOCAL_FILE_BYTES, metadata.st_size
+                    "local_file_bytes",
+                    MAX_LOCAL_FILE_BYTES,
+                    exc.actual if exc.actual is not None else MAX_LOCAL_FILE_BYTES + 1,
                 )
-            chunks: list[bytes] = []
-            remaining = MAX_LOCAL_FILE_BYTES + 1
-            while remaining:
-                chunk = os.read(file_fd, min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                remaining -= len(chunk)
-            content = b"".join(chunks)
-            if len(content) > MAX_LOCAL_FILE_BYTES:
-                raise _limit_error(
-                    "local_file_bytes", MAX_LOCAL_FILE_BYTES, len(content)
-                )
-            after = os.fstat(file_fd)
-            if (
-                after.st_dev != metadata.st_dev
-                or after.st_ino != metadata.st_ino
-                or after.st_size != metadata.st_size
-                or len(content) != metadata.st_size
-            ):
-                raise DatasetRegistryError("unsafe_input_path")
-            return content
-        except DatasetRegistryError:
-            raise
-        except OSError as exc:
             raise DatasetRegistryError("unsafe_input_path") from exc
-        finally:
-            for descriptor in reversed(descriptors):
-                try:
-                    os.close(descriptor)
-                except OSError:
-                    pass
 
     def close(self) -> None:
         """Release pinned configured-root handles; repeated closes are harmless."""
@@ -410,10 +352,8 @@ class ConfiguredFileRoots:
                 return
             self._closed = True
             for root in self._roots:
-                try:
-                    os.close(root.descriptor)
-                except OSError:
-                    pass
+                if self._secure_filesystem is not None:
+                    self._secure_filesystem.close_pinned_root(root.handle)
 
     def __del__(self) -> None:
         try:

@@ -24,6 +24,18 @@ conflate them with these repository instructions.
 | `shared/record_views.py` | Bounded dataset and operation projections; protected |
 | `shared/host_failures.py` | Closed host failures, outcomes, and trust labels; protected |
 | `shared/_immutable_json.py` | Recursively immutable JSON containers; protected |
+| `shared/local_host_platform.py` | Transport-neutral local host capability facade and provider selection; protected |
+| `shared/_posix_local_host.py` | POSIX secure-filesystem provider behind the host facade; protected |
+| `shared/_windows_local_host.py` | Native Windows secure-filesystem, private-state, locking, publication, and cleanup provider; protected |
+| `shared/worker_process.py` | Transport-neutral native worker-process contract; protected |
+| `shared/worker_runtime.py` | Shared bounded-worker lifecycle and atomic publication; protected |
+| `shared/worker_entry.py` | Strict one-request subprocess entry point; protected |
+| `shared/worker_inspection.py` | Selected-subject inspection and port comparison inside the bounded worker; protected |
+| `shared/_posix_worker.py` | POSIX subprocess-group provider; protected |
+| `shared/_posix_worker_entry.py` | POSIX pre-import resource-limit bootstrap; protected |
+| `shared/_windows_worker.py` | Windows suspended-process Job Object provider; protected |
+| `shared/_windows_worker_entry.py` | Windows binary-STDIO bootstrap; protected |
+| `shared/stdio_framing.py` | Bounded binary LF framing and exact byte I/O; protected |
 | `shared/plan_validation.py` | Managed plan validation and authorization; protected |
 | `shared/agent.py` | Compatibility imports only; protected |
 | `shared/__init__.py` | Public exports and source-layout bridge; protected |
@@ -32,6 +44,9 @@ conflate them with these repository instructions.
 | `authoring/*.py` | Explicit creation, checking, and catalog-export tools; protected |
 | `.agents/skills/use-defined-quant/` | Optional catalog-wide Codex adapter; never component-specific |
 | `protocol/` | Canonical typed operation envelopes, installed as `defined_quant_protocol` |
+| `mcp_server/` | Separate optional `defined-quant-mcp` distribution; all MCP SDK code stays here |
+| `mcp_server/src/defined_quant_mcp/server.py` | Low-level SDK adapter, bounded STDIO, safe envelopes, and redacted audit output |
+| `mcp_server/uv.lock` | Platform-complete locked MCP dependency graph; protected |
 | `ARCHITECTURE.md` | Structure, package projection, trust binding, and publication boundary |
 
 ## Local MCP alpha
@@ -40,8 +55,39 @@ conflate them with these repository instructions.
   add one row to its post-freeze amendment table in the same commit.
 - `docs/local_mcp/hash_vectors.v1.json`, `host_failures.v1.json`, and
   `evaluation_cases.v1.json` are normative test fixtures, not samples or generated schemas.
-- The MCP alpha is supported on macOS and Linux. Windows requires a separate tested platform
-  boundary before it can become an alpha target.
+
+| Surface | Required platforms |
+|---|---|
+| `defined-quant` core | Windows, macOS, and Linux |
+| Local MCP alpha | Windows, macOS, and Linux |
+| CI | Windows, macOS, and Linux at Python 3.11 and 3.13 |
+
+The Phase-4 provider, worker, and transport implementations are in-tree. Release readiness remains
+blocked until the configured-root, session-store, worker, official-client, and installed-wheel
+stories have native green CI in all six cells. Windows is not an allowed-failure lane and the
+complete public-service product story must not be skipped there.
+
+Do not create another MCP runtime. `DefinedQuantService` remains the only dispatch boundary;
+`shared/` owns transport-neutral behavior and stable failures, while `mcp_server/` owns every SDK
+import, SDK conversion, frame, and transport concern. Platform selection remains confined to
+`shared/local_host_platform.py`; provider mechanisms must not alter canonical records or public
+bytes.
+
+Before declaring the Windows MCP boundary ready, verify all of the following with native Windows
+tests, not POSIX emulation:
+
+1. Configured roots are pinned by handle; every intermediate and final reparse point is refused;
+   the final handle is a regular file contained beneath the configured root.
+2. Session roots, directories, records, staging files, locks, and cleanup markers use and verify
+   owner-only DACLs; replacement, inheritance, and wrong-owner cases fail closed.
+3. Record publication is atomic and no-replace under concurrent writers, live-session locking is
+   reliable, and cleanup never removes a live or foreign session.
+4. Workers run in kill-on-close Job Objects with the process, descendant, memory, timeout,
+   cancellation, and forced-cleanup limits frozen by the design.
+5. Handle inheritance and the environment are allowlisted; STDIO framing, UTF-8, long and Unicode
+   paths, cancellation, and controller shutdown work through the official client.
+6. Fixed hashes, byte fixtures, trust labels, failure mappings, paging, artifact digests, and the
+   full `DefinedQuantService` story are identical across all three platforms.
 
 ## Commands
 
@@ -49,7 +95,9 @@ Run these from the `components/` folder:
 
 ```bash
 uv sync --locked
+uv sync --project mcp_server --locked
 uv run pytest
+uv run --project mcp_server pytest mcp_server/tests
 uv run pytest categories/market_data/simple_return
 uv run python authoring/check_component.py
 uv run python authoring/check_component.py --bless categories/market_data/simple_return
@@ -60,6 +108,7 @@ uv run python authoring/create_category.py --id <id> --title "<title>"
 uv run python authoring/export_catalog.py
 uv run ruff check protocol shared categories authoring \
   .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
+uv run --project mcp_server ruff check mcp_server/src mcp_server/tests
 uv run --no-editable mypy shared categories authoring/*.py
 uv run --no-editable mypy -p defined_quant_protocol
 uv build

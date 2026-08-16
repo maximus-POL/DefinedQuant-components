@@ -31,6 +31,12 @@ components/
 │   ├── README.md                shared-runtime guide
 │   ├── __init__.py              public exports and source-layout bridge
 │   ├── _immutable_json.py       recursively immutable JSON containers
+│   ├── _posix_local_host.py     POSIX secure-filesystem provider
+│   ├── _posix_worker.py         POSIX subprocess-group provider
+│   ├── _posix_worker_entry.py   POSIX pre-import resource-limit bootstrap
+│   ├── _windows_local_host.py   Windows secure filesystem and session-state provider
+│   ├── _windows_worker.py       Windows suspended-process Job Object provider
+│   ├── _windows_worker_entry.py  Windows binary-STDIO bootstrap
 │   ├── agent.py                 compatibility imports only
 │   ├── catalog.py               component discovery, loading, and subject binding
 │   ├── charts.py                deterministic trusted SVG rendering
@@ -38,6 +44,7 @@ components/
 │   ├── dataset_registry.py      strict normalization and configured-root ingestion
 │   ├── discovery.py             import-free indexed contract search
 │   ├── host_failures.py         closed host failures, outcomes, and trust labels
+│   ├── local_host_platform.py   transport-neutral host facade and provider selection
 │   ├── managed_profiles/        packaged managed-execution allowlists
 │   ├── operation_records.py     manifest-to-operation-record reconciliation
 │   ├── operation_runtime.py     canonical validation, execution, and publication
@@ -46,8 +53,13 @@ components/
 │   ├── record_views.py          bounded dataset and operation projections
 │   ├── service.py               transport-neutral host API
 │   ├── session_cas.py           owner-private session-scoped content store
+│   ├── stdio_framing.py         bounded binary LF framing and exact byte I/O
 │   ├── types/                   canonical financial and presentation types
-│   └── validation.py            closed declarative constraint evaluator
+│   ├── validation.py            closed declarative constraint evaluator
+│   ├── worker_entry.py          strict one-request subprocess entry point
+│   ├── worker_inspection.py     selected-subject inspection inside the worker
+│   ├── worker_process.py        transport-neutral native process contract
+│   └── worker_runtime.py        shared bounded-worker lifecycle and publication
 ├── protocol/
 │   ├── __init__.py
 │   ├── README.md
@@ -59,6 +71,11 @@ components/
 │   ├── policy.py
 │   ├── version.py
 │   └── py.typed
+├── mcp_server/
+│   ├── pyproject.toml           separate optional transport distribution
+│   ├── uv.lock                  universal MCP dependency lock
+│   ├── src/defined_quant_mcp/   SDK-isolated STDIO transport package
+│   └── tests/                   official-client, wire, and packaging tests
 ├── authoring/
 │   ├── README.md
 │   ├── component-template/
@@ -90,6 +107,11 @@ The protocol has its own SemVer because transport compatibility is distinct from
 catalog releases. It initially ships in the `defined-quant` distribution so the project has one
 release train. Packaging tests must verify both namespaces in editable installation and wheel
 contents.
+
+`mcp_server/` is a second, optional distribution rather than another runtime. It installs the
+`defined_quant_mcp` namespace and `defined-quant-mcp` console entry point, pins the exact compatible
+`defined-quant` core, and owns every MCP SDK dependency. All tool and resource dispatch crosses
+`DefinedQuantService`; SDK types never enter `shared/`, `protocol/`, canonical records, or hashes.
 
 `defined_quant_protocol` depends only on Pydantic and the Python standard library. It never
 imports components, discovery, renderers, or application code. Runtime adapters under
@@ -245,10 +267,15 @@ members, cross-record dimensions, and source bindings before returning a bounded
 expire with the session; corruption is quarantined and never repaired or partially returned.
 The store retains no accepted raw source bytes or caller file path. Its hashes establish immutable
 byte consistency, not source authenticity, financial correctness, or independent execution
-attestation. The alpha storage and local-file boundary is enabled only on tested POSIX hosts and
-fails startup closed elsewhere until equivalent ACL, reparse-point, handle-containment, locking,
-and cleanup behavior is implemented and tested. Worker isolation and transport methods remain
-Phase 4.
+attestation. `local_host_platform` is the sole production platform selector. The POSIX provider
+implements handle-contained roots, owner modes, file locking, no-replace publication, and process
+groups; the Windows provider implements handle-relative reparse refusal, local-volume containment,
+owner-only protected DACLs, `LockFileEx` locking, handle-based no-replace publication, tombstone
+cleanup, and suspended-process Job Objects. Callers observe only bytes, opaque handles, and stable
+internal failures. Native mechanisms may differ, but record bytes, digests, references, failure
+codes and messages, trust wording, response envelopes, resource projections, and CLI output may
+not. The providers and STDIO transport are in-tree; release support remains gated on the complete
+six-cell native acceptance matrix.
 
 No production branch selects behavior by component ID. A component can serve as a test fixture,
 but adding another conforming component requires no runner edit. Pydantic models remain canonical
@@ -325,15 +352,16 @@ All seven current components have lifecycle `draft`, author-asserted evidence, a
 domain review. The typed operation protocol improves reproducibility and interface verification
 without changing those facts.
 
-The optional local MCP alpha transport is not yet implemented. Its frozen transport, host,
-reference, and security design is recorded in
+The optional local MCP alpha transport is implemented as the separate `defined-quant-mcp` STDIO
+distribution. Its frozen transport, host, reference, and security design is recorded in
 [`docs/LOCAL_MCP_ALPHA_DESIGN.md`](docs/LOCAL_MCP_ALPHA_DESIGN.md).
 It gives the existing operation record, manifest, and declared members the calculation-receipt
 role without adding a second record model; portable reproduction remains the deferred
 `ResearchBundle` capability.
 
-**Supported MCP alpha platforms:** macOS and Linux. Windows support requires a separate future
-security and operations boundary and is not part of the alpha.
+**Required MCP alpha release platforms:** Windows, macOS, and Linux. In-tree providers do not
+establish release support; all six native CI cells must pass the filesystem/session-store, worker,
+official-client, and exact-wheel stories.
 
 The current release defines an atomic `AnalysisPlan`, deterministic validation receipt,
 manual-only approval record, and revalidated authorization binding for one exact Simple Return
