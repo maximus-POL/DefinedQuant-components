@@ -14,6 +14,7 @@ from threading import Event, Thread
 from typing import Any
 
 import defined_quant
+import defined_quant.worker_runtime as worker_runtime
 import pytest
 from defined_quant import invalidate_subject_cache, subject_hash
 from defined_quant.host_failures import HostFailureCode, HostFailureException
@@ -374,6 +375,34 @@ def test_stdout_and_stderr_are_capped_separately(
         mode,
     ) is HostFailureCode.WORKER_RESOURCE_LIMIT
     controller.close()
+
+
+def test_worker_channel_byte_limits_have_closed_prelaunch_failures() -> None:
+    WorkerController._enforce_request_limit(  # noqa: SLF001
+        b"x" * worker_runtime.MAX_WORKER_REQUEST_BYTES
+    )
+    with pytest.raises(HostFailureException) as request_failure:
+        WorkerController._enforce_request_limit(  # noqa: SLF001
+            b"x" * (worker_runtime.MAX_WORKER_REQUEST_BYTES + 1)
+        )
+    assert request_failure.value.failure.error.code is HostFailureCode.INPUT_LIMIT_EXCEEDED
+    assert dict(request_failure.value.failure.error.details) == {
+        "actual": worker_runtime.MAX_WORKER_REQUEST_BYTES + 1,
+        "limit_name": "worker_request_bytes",
+        "maximum": worker_runtime.MAX_WORKER_REQUEST_BYTES,
+    }
+
+    control = worker_runtime._Capture(worker_runtime.MAX_WORKER_CONTROL_BYTES)  # noqa: SLF001
+    control.content.extend(b"x" * (worker_runtime.MAX_WORKER_CONTROL_BYTES + 1))
+    control.overflow.set()
+    with pytest.raises(HostFailureException) as result_failure:
+        WorkerController._enforce_control_limit(control)  # noqa: SLF001
+    assert result_failure.value.failure.error.code is HostFailureCode.RESULT_LIMIT_EXCEEDED
+    assert dict(result_failure.value.failure.error.details) == {
+        "actual": worker_runtime.MAX_WORKER_CONTROL_BYTES + 1,
+        "limit_name": "worker_control_response_bytes",
+        "maximum": worker_runtime.MAX_WORKER_CONTROL_BYTES,
+    }
 
 
 def test_timeout_kills_worker_child_and_grandchild(

@@ -17,10 +17,10 @@ from defined_quant.operation_runtime import (
     execute_operation,
     worker_output_limit,
 )
+from defined_quant.worker_limits import MAX_WORKER_REQUEST_BYTES
 from defined_quant_protocol import OperationFailure, OperationRequest
 from pydantic import ValidationError
 
-_MAX_WORKER_REQUEST_BYTES = 2 * 1024 * 1024
 _CAPTURE_LIMIT_BYTES = 1024 * 1024
 
 
@@ -33,15 +33,15 @@ def _request() -> tuple[
     chunks: list[bytes] = []
     total = 0
     while True:
-        chunk = os.read(0, min(64 * 1024, _MAX_WORKER_REQUEST_BYTES + 1 - total))
+        chunk = os.read(0, min(64 * 1024, MAX_WORKER_REQUEST_BYTES + 1 - total))
         if not chunk:
             break
         chunks.append(chunk)
         total += len(chunk)
-        if total > _MAX_WORKER_REQUEST_BYTES:
+        if total > MAX_WORKER_REQUEST_BYTES:
             raise ValueError("worker request exceeds its fixed limit")
     content = b"".join(chunks)
-    value = strict_cas_json_loads(content, maximum_bytes=_MAX_WORKER_REQUEST_BYTES)
+    value = strict_cas_json_loads(content, maximum_bytes=MAX_WORKER_REQUEST_BYTES)
     if not isinstance(value, dict):
         raise ValueError("worker request envelope is invalid")
     if value.get("schema_version") != 1:

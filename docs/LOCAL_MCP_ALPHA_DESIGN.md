@@ -31,6 +31,7 @@ commit's actual diff.
 | 2026-08-15 | this commit | Phase-4 planning | §7.1; §7.2; §7.3; §8; §10 | Restored Windows as a required alpha release target; froze the cross-platform byte-identity contract, platform-abstraction boundary, local-path policy, and native Windows filesystem, session-store, worker, STDIO, official-client, CI, and packaging acceptance gates. | Platform breadth and deterministic outputs are product requirements; the current fail-closed Windows behavior is unfinished implementation rather than a reason to narrow the alpha. |
 | 2026-08-16 | this commit | Phase 4 | Status; §10 | Recorded the in-tree Windows, macOS, and Linux providers, subprocess worker, and separate locked MCP STDIO distribution while retaining native six-cell validation as a release gate. | Keep implementation status truthful without turning unexecuted native validation into a release-support claim. |
 | 2026-08-16 | this commit | Phase 4 / release handoff | §7.2; §7.3; §8; §10 | Replaced obsolete future-Windows and uncommitted-spike descriptions with the implemented secure-filesystem, session-state, Job Object, binary-STDIO, SDK-isolated server, exact-wheel, and installation state; marked native six-cell validation as the remaining release gate. | Make the frozen plan directly usable for MCP completion and review without misdescribing landed Windows mechanisms or overstating unexecuted native validation. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.1 | Added the 2 MiB resolved worker-request and 4 MiB worker-control-response ceilings and required their controller-side overflow mappings to remain distinct from worker crashes. | Legal size refusal must occur before worker launch and oversized typed results must retain the closed input/result limit failures rather than collapsing to a retryable crash. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1173,6 +1174,8 @@ allowed by the failure fixture.
 |---|---:|---:|
 | Raw STDIO request frame, including LF | 2 MiB | 2 MiB |
 | Tool arguments | 1 MiB | 1 MiB |
+| Resolved worker request | 2 MiB | 2 MiB |
+| Worker control response | 4 MiB | 4 MiB |
 | Inline JSON source | 512 KiB | 512 KiB |
 | Configured local-file roots | 8 | 8 |
 | Local CSV/JSON file | 64 MiB | 64 MiB |
@@ -1213,6 +1216,11 @@ published; an existing stored record above that ceiling is `record_corrupt`. Nor
 artifact, complete-bundle, and structured-response overflow is `result_limit_exceeded` with the
 corresponding stable `limit_name`. Session quota exhaustion remains `cache_full`, and captured-
 stream overflow remains `worker_resource_limit`. These byte checks precede publication.
+The controller checks a resolved worker request before process launch; a request above 2 MiB is
+`input_limit_exceeded` with `limit_name:"worker_request_bytes"`. The child repeats that ceiling as
+defence in depth. A worker control response above 4 MiB is `result_limit_exceeded` with
+`limit_name:"worker_control_response_bytes"`; it is never reported as `worker_crashed` merely
+because the complete typed response could not fit the bounded channel.
 The only permitted input/result `limit_name` values are the enums in
 `host_failures.v1.json`; the field is not free-form. Tool-argument bytes are counted before the
 closed request model runs, so every tool surface can return `input_limit_exceeded` for that one

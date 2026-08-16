@@ -25,6 +25,7 @@ from defined_quant.operation_runtime import (
     prepare_output_directory,
     verify_operation_bundle,
 )
+from defined_quant.worker_limits import MAX_WORKER_CONTROL_BYTES, MAX_WORKER_REQUEST_BYTES
 from defined_quant.worker_process import (
     WorkerProcessError,
     WorkerProcessHandle,
@@ -42,7 +43,6 @@ MAX_WORKER_WALL_SECONDS = 60.0
 MAX_WORKER_GRACE_SECONDS = 5.0
 MAX_WORKER_STREAM_BYTES = 1024 * 1024
 MAX_WORKER_MEMORY_BYTES = 512 * 1024 * 1024
-MAX_WORKER_CONTROL_BYTES = 4 * 1024 * 1024
 MAX_CONCURRENT_WORKERS = 2
 _WORK_ROOT_PREFIX = ".defined-quant-worker-"
 _FIELD_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
@@ -201,6 +201,7 @@ class WorkerController:
                         "schema_version": 1,
                     }
                 )
+                self._enforce_request_limit(request_bytes)
                 environment = self._environment(temporary)
                 executable = Path(os.path.abspath(sys.executable))
                 if not executable.is_file():
@@ -275,6 +276,7 @@ class WorkerController:
                 )
 
             self._cleanup_process(active, readers=readers, stop_output=reason is not None)
+            self._enforce_control_limit(control)
             if reason is not None:
                 raise HostFailureException(reason)
             if self._shutdown.is_set():
@@ -291,7 +293,6 @@ class WorkerController:
                 or stdout.failed.is_set()
                 or stderr.failed.is_set()
                 or control.failed.is_set()
-                or control.overflow.is_set()
             ):
                 raise HostFailureException(HostFailureCode.WORKER_CRASHED)
             result, fields = self._control_response(control_bytes)
@@ -417,6 +418,7 @@ class WorkerController:
                         "schema_version": 1,
                     }
                 )
+                self._enforce_request_limit(request_bytes)
                 environment = self._environment(temporary)
                 executable = Path(os.path.abspath(sys.executable))
                 if not executable.is_file():
@@ -488,6 +490,7 @@ class WorkerController:
                     cancel_event=cancel_event,
                 )
             self._cleanup_process(active, readers=readers, stop_output=reason is not None)
+            self._enforce_control_limit(control)
             if reason is not None:
                 raise HostFailureException(reason)
             if self._shutdown.is_set():
@@ -499,7 +502,6 @@ class WorkerController:
                 or stdout.failed.is_set()
                 or stderr.failed.is_set()
                 or control.failed.is_set()
-                or control.overflow.is_set()
             ):
                 raise HostFailureException(HostFailureCode.WORKER_CRASHED)
             if stdout.bytes() or stderr.bytes():
@@ -643,6 +645,31 @@ class WorkerController:
                         raise
                     break
         raise OSError
+
+    @staticmethod
+    def _enforce_request_limit(content: bytes) -> None:
+        actual = len(content)
+        if actual > MAX_WORKER_REQUEST_BYTES:
+            raise HostFailureException(
+                HostFailureCode.INPUT_LIMIT_EXCEEDED,
+                details={
+                    "limit_name": "worker_request_bytes",
+                    "maximum": MAX_WORKER_REQUEST_BYTES,
+                    "actual": actual,
+                },
+            )
+
+    @staticmethod
+    def _enforce_control_limit(capture: _Capture) -> None:
+        if capture.overflow.is_set():
+            raise HostFailureException(
+                HostFailureCode.RESULT_LIMIT_EXCEEDED,
+                details={
+                    "limit_name": "worker_control_response_bytes",
+                    "maximum": MAX_WORKER_CONTROL_BYTES,
+                    "actual": len(capture.bytes()),
+                },
+            )
 
     @staticmethod
     def _existing_parent(candidate: Path) -> Path:
