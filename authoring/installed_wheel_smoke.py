@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.metadata
+import json
 import os
 import sys
 from pathlib import Path
@@ -129,27 +130,49 @@ async def _mcp_smoke(state_root: Path) -> None:
             encoding="utf-8",
             encoding_error_handler="strict",
         )
-        async with Client(stdio_client(params, errlog=audit)) as client:
-            if client.server_info is None or client.server_info.name != "defined-quant-mcp":
-                raise AssertionError("installed MCP server did not initialize")
-            tools = await client.list_tools(cache_mode="reload")
-            expected = (
-                "search_components",
-                "inspect_component",
-                "register_dataset",
-                "describe_dataset",
-                "compare_ports",
-                "execute_component",
-                "get_operation",
-            )
-            if tuple(tool.name for tool in tools.tools) != expected:
-                raise AssertionError("installed MCP tool list changed")
-            result = await client.call_tool(
-                "search_components",
-                {"query": "simple return", "limit": 1},
-            )
-            if result.is_error or result.structured_content["outcome"] != "ok":
-                raise AssertionError("installed MCP search smoke failed")
+        try:
+            async with Client(stdio_client(params, errlog=audit)) as client:
+                if client.server_info is None or client.server_info.name != "defined-quant-mcp":
+                    raise AssertionError("installed MCP server did not initialize")
+                tools = await client.list_tools(cache_mode="reload")
+                expected = (
+                    "search_components",
+                    "inspect_component",
+                    "register_dataset",
+                    "describe_dataset",
+                    "compare_ports",
+                    "execute_component",
+                    "get_operation",
+                )
+                if tuple(tool.name for tool in tools.tools) != expected:
+                    raise AssertionError("installed MCP tool list changed")
+                result = await client.call_tool(
+                    "search_components",
+                    {"query": "simple return", "limit": 1},
+                )
+                if result.is_error or result.structured_content["outcome"] != "ok":
+                    raise AssertionError("installed MCP search smoke failed")
+        except BaseException as exc:
+            audit.seek(0)
+            records: list[str] = []
+            non_audit = False
+            for line in audit.read().splitlines():
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError:
+                    non_audit = True
+                    continue
+                if isinstance(value, dict):
+                    event = value.get("event")
+                    code = value.get("code")
+                    if isinstance(event, str) and isinstance(code, str):
+                        records.append(f"{event}:{code}")
+            summary = ",".join(records) if records else "none"
+            if non_audit:
+                summary += ",non-audit-stderr"
+            raise AssertionError(
+                f"installed MCP smoke failed: {type(exc).__name__} ({summary})"
+            ) from None
 
 
 def main() -> int:
