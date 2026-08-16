@@ -6,6 +6,12 @@ import ast
 import re
 from pathlib import Path
 
+from authoring.pytest_native_inventory import (
+    POSIX_SESSION_FUNCTIONS,
+    WINDOWS_LOCAL_HOST_FUNCTION_COUNT,
+    WINDOWS_WORKER_FUNCTIONS,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = ROOT / "docs" / "LOCAL_MCP_ALPHA_DESIGN.md"
 SESSION_CAS = ROOT / "shared" / "session_cas.py"
@@ -142,6 +148,19 @@ def test_required_acceptance_suites_contain_no_skip_or_xfail_calls() -> None:
                 and (dotted := _dotted_name(node.func)) in _FORBIDDEN_PYTEST_CALLS
             )
     assert forbidden == []
+
+
+def test_native_only_suite_inventory_has_frozen_nonzero_counts() -> None:
+    assert WINDOWS_LOCAL_HOST_FUNCTION_COUNT == 34
+    assert WINDOWS_WORKER_FUNCTIONS == {
+        "test_windows_job_prevents_child_breakaway",
+        "test_windows_worker_keeps_scratch_at_the_selected_output_parent",
+        "test_windows_worker_supports_unicode_and_long_local_paths",
+    }
+    assert POSIX_SESSION_FUNCTIONS == {
+        "test_fifo_replacing_a_cas_member_is_quarantined_without_blocking",
+        "test_session_state_root_must_be_owner_private",
+    }
 
 
 def test_native_secure_filesystem_mechanisms_live_only_in_platform_providers() -> None:
