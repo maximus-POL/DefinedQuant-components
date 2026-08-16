@@ -21,6 +21,7 @@ _ALLOWED_ENVIRONMENT = {
     "TMP",
     "TMPDIR",
     "TZ",
+    "USERPROFILE",
     "WINDIR",
 }
 

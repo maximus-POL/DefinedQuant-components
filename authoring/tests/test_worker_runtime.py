@@ -343,7 +343,9 @@ def test_worker_uses_scratch_environment_and_does_not_import_component_in_contro
         controller, catalog_root, reference, tmp_path, "environment"
     )
     expected = COMMON_ENVIRONMENT | (
-        {"SYSTEMROOT", "WINDIR", "COMSPEC"} if sys.platform == "win32" else set()
+        {"SYSTEMROOT", "WINDIR", "COMSPEC", "USERPROFILE"}
+        if sys.platform == "win32"
+        else set()
     )
     assert set(result["environment_keys"]) == expected
     assert result["secret_present"] is False
