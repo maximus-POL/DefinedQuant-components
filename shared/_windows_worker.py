@@ -310,6 +310,9 @@ class WindowsWorkerProcessProvider:
         try:
             application = self._extended_local_path(executable)
             working_directory = self._extended_local_path(cwd)
+            bootstrap_directory = self._extended_local_path(
+                Path(environment["SYSTEMROOT"])
+            )
             stdin_read, stdin_write = self._pipe(raw_handles, parent="write")
             stdout_read, stdout_write = self._pipe(raw_handles, parent="read")
             stderr_read, stderr_write = self._pipe(raw_handles, parent="read")
@@ -337,6 +340,8 @@ class WindowsWorkerProcessProvider:
                     str(control_write),
                     "--memory-limit",
                     str(memory_limit_bytes),
+                    "--working-directory",
+                    working_directory,
                 ]
             )
             command_buffer = ctypes.create_unicode_buffer(command)
@@ -364,7 +369,7 @@ class WindowsWorkerProcessProvider:
                 True,
                 flags,
                 environment_buffer,
-                working_directory,
+                bootstrap_directory,
                 ctypes.byref(startup.StartupInfo),
                 ctypes.byref(process_information),
             ):

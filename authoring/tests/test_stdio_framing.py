@@ -113,6 +113,7 @@ def test_exact_two_mib_frame_is_accepted() -> None:
         ),
         (b"unterminated", BinaryFrameErrorCode.INCOMPLETE_FRAME),
     ],
+    ids=("over-limit", "unterminated"),
 )
 def test_over_limit_and_unterminated_frames_fail_closed(
     content: bytes,

@@ -414,7 +414,10 @@ def test_windows_unicode_and_long_paths_are_read_as_exact_bytes(
     member = current / "wynik-東京.json"
     relative_parts.append(member.name)
     payload = "zażółć-東京\r\n".encode()
-    descriptor = os.open(_extended(member), os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    descriptor = os.open(
+        _extended(member),
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+    )
     try:
         assert os.write(descriptor, payload) == len(payload)
     finally:
@@ -733,6 +736,7 @@ def test_windows_private_descriptor_is_supplied_at_native_creation_and_checked_b
         desired_access: int,
         disposition: int,
         security_descriptor: int | None = None,
+        share_access: int = windows_local._ALL_SHARING,
     ) -> tuple[int, int]:
         if disposition == windows_local._FILE_CREATE:
             assert security_descriptor == secure._private_security_descriptor
@@ -744,6 +748,7 @@ def test_windows_private_descriptor_is_supplied_at_native_creation_and_checked_b
             desired_access=desired_access,
             disposition=disposition,
             security_descriptor=security_descriptor,
+            share_access=share_access,
         )
 
     def audited_verify(handle: int) -> None:

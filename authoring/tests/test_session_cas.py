@@ -19,6 +19,7 @@ from defined_quant.host_failures import HostFailureCode, HostFailureException
 from defined_quant.local_host_platform import (
     SecureFilesystemError,
     SecureFilesystemErrorCode,
+    local_host_platform,
 )
 from defined_quant.operation_records import build_operation_record
 from defined_quant.operation_runtime import execute_operation
@@ -101,7 +102,7 @@ def test_dataset_publication_is_private_verified_and_idempotent(tmp_path: Path) 
     payload, record = _dataset()
     sibling = tmp_path / "caller-owned-sibling"
     sibling.mkdir()
-    store = SessionCas(tmp_path)
+    store = SessionCas(tmp_path / "state")
 
     reference = store.publish_dataset(payload, record)
     first_size = store.used_bytes
@@ -162,8 +163,8 @@ def test_every_generated_session_cas_filename_is_windows_portable(tmp_path: Path
 def test_active_session_scope_is_distinct_from_unknown_and_expired(tmp_path: Path) -> None:
     payload, record = _dataset()
     registry = SessionScopeRegistry()
-    first = SessionCas(tmp_path, scope_registry=registry)
-    second = SessionCas(tmp_path, scope_registry=registry)
+    first = SessionCas(tmp_path / "state", scope_registry=registry)
+    second = SessionCas(tmp_path / "state", scope_registry=registry)
     reference = first.publish_dataset(payload, record)
 
     with pytest.raises(HostFailureException) as foreign:
@@ -189,7 +190,7 @@ def test_active_session_scope_is_distinct_from_unknown_and_expired(tmp_path: Pat
 
 def test_corrupt_dataset_is_quarantined_and_remains_refused(tmp_path: Path) -> None:
     payload, record = _dataset()
-    store = SessionCas(tmp_path)
+    store = SessionCas(tmp_path / "state")
     reference = store.publish_dataset(payload, record)
     entry = store.directory / "datasets" / record.digest
     (entry / "payload.json").write_bytes(
@@ -215,7 +216,7 @@ def test_corrupt_dataset_is_quarantined_and_remains_refused(tmp_path: Path) -> N
 
 def test_stored_records_must_preserve_every_materialized_default(tmp_path: Path) -> None:
     payload, record = _dataset()
-    store = SessionCas(tmp_path)
+    store = SessionCas(tmp_path / "state")
     reference = store.publish_dataset(payload, record)
     record_path = store.directory / "datasets" / record.digest / "record.json"
     stored = json.loads(record_path.read_text(encoding="utf-8"))
@@ -232,7 +233,7 @@ def test_stored_records_must_preserve_every_materialized_default(tmp_path: Path)
 
 def test_fifo_replacing_a_cas_member_is_quarantined_without_blocking(tmp_path: Path) -> None:
     payload, record = _dataset()
-    store = SessionCas(tmp_path)
+    store = SessionCas(tmp_path / "state")
     reference = store.publish_dataset(payload, record)
     entry = store.directory / "datasets" / record.digest
     payload_path = entry / "payload.json"
@@ -268,7 +269,7 @@ def test_limits_fail_before_publication_and_leave_no_stage(tmp_path: Path) -> No
     payload, record = _dataset()
     payload_bytes = len(cas_json_bytes(payload))
     payload_store = SessionCas(
-        tmp_path,
+        tmp_path / "state",
         limits=CasLimits(dataset_payload_bytes=payload_bytes - 1),
     )
     with pytest.raises(HostFailureException) as payload_limit:
@@ -283,7 +284,7 @@ def test_limits_fail_before_publication_and_leave_no_stage(tmp_path: Path) -> No
     assert not list((payload_store.directory / "staging").iterdir())
     payload_store.close()
 
-    quota_store = SessionCas(tmp_path, limits=CasLimits(session_bytes=1))
+    quota_store = SessionCas(tmp_path / "state", limits=CasLimits(session_bytes=1))
     with pytest.raises(HostFailureException) as quota:
         quota_store.publish_dataset(payload, record)
     _assert_code(quota, HostFailureCode.CACHE_FULL)
@@ -291,7 +292,7 @@ def test_limits_fail_before_publication_and_leave_no_stage(tmp_path: Path) -> No
     assert not list((quota_store.directory / "staging").iterdir())
     quota_store.close()
 
-    record_store = SessionCas(tmp_path, limits=CasLimits(record_bytes=1))
+    record_store = SessionCas(tmp_path / "state", limits=CasLimits(record_bytes=1))
     with pytest.raises(HostFailureException) as record_limit:
         record_store.publish_dataset(payload, record)
     _assert_code(record_limit, HostFailureCode.RECORD_PUBLICATION_FAILED)
@@ -304,7 +305,7 @@ def test_competing_equal_atomic_publication_reuses_verified_entry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     payload, record = _dataset()
-    store = SessionCas(tmp_path)
+    store = SessionCas(tmp_path / "state")
 
     def competing_publish(stage: Path, destination: Path) -> None:
         shutil_copytree(stage, destination)
@@ -451,8 +452,8 @@ def test_session_member_mapping_uses_segmentwise_portable_identity() -> None:
 def test_cursor_is_bound_to_session_reference_view_selector_and_index(tmp_path: Path) -> None:
     payload, record = _dataset()
     registry = SessionScopeRegistry()
-    first = SessionCas(tmp_path, scope_registry=registry)
-    second = SessionCas(tmp_path, scope_registry=registry)
+    first = SessionCas(tmp_path / "state", scope_registry=registry)
+    second = SessionCas(tmp_path / "state", scope_registry=registry)
     reference = first.publish_dataset(payload, record)
     token = first.encode_cursor(reference, "preview", None, 17)
 
@@ -525,14 +526,12 @@ def test_cursor_is_bound_to_session_reference_view_selector_and_index(tmp_path: 
 
 
 def _private_file(path: Path, content: bytes) -> None:
-    path.write_bytes(content)
-    os.chmod(path, 0o600)
+    local_host_platform().secure_filesystem.create_private_file(path, content)
 
 
 def _orphan(state_root: Path, name: str, marker_mtime: float) -> Path:
     directory = state_root / f"session-{name}"
-    directory.mkdir(mode=0o700)
-    os.chmod(directory, 0o700)
+    local_host_platform().secure_filesystem.create_private_directory(directory)
     marker = directory / ".defined-quant-session-v1"
     _private_file(
         marker,
@@ -549,16 +548,18 @@ def test_orphan_cleanup_is_marked_owned_unlocked_and_strictly_older_than_24h(
     tmp_path: Path,
 ) -> None:
     now = 2_000_000_000.0
-    old = _orphan(tmp_path, "old", now - ORPHAN_SESSION_AGE_SECONDS - 1)
-    boundary = _orphan(tmp_path, "boundary", now - ORPHAN_SESSION_AGE_SECONDS)
-    unmarked = tmp_path / "session-unmarked"
-    unmarked.mkdir(mode=0o700)
-    os.chmod(unmarked, 0o700)
-    active = SessionCas(tmp_path)
+    state_root = tmp_path / "state"
+    secure = local_host_platform().secure_filesystem
+    secure.create_private_directory(state_root)
+    old = _orphan(state_root, "old", now - ORPHAN_SESSION_AGE_SECONDS - 1)
+    boundary = _orphan(state_root, "boundary", now - ORPHAN_SESSION_AGE_SECONDS)
+    unmarked = state_root / "session-unmarked"
+    secure.create_private_directory(unmarked)
+    active = SessionCas(state_root)
     marker = active.directory / ".defined-quant-session-v1"
     os.utime(marker, (now - ORPHAN_SESSION_AGE_SECONDS - 1, now - ORPHAN_SESSION_AGE_SECONDS - 1))
 
-    removed = cleanup_orphan_sessions(tmp_path, now=now)
+    removed = cleanup_orphan_sessions(state_root, now=now)
 
     assert removed == (old,)
     assert not old.exists()

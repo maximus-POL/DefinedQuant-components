@@ -20,8 +20,8 @@ from pydantic import ValidationError
 
 def test_formula_surfaces_match() -> None:
     component_dir = Path(__file__).parent
-    contract = json.loads((component_dir / "contract.yaml").read_text())
-    readme = (component_dir / "README.md").read_text()
+    contract = json.loads((component_dir / "contract.yaml").read_text(encoding="utf-8"))
+    readme = (component_dir / "README.md").read_text(encoding="utf-8")
     result = drawdown((100.0, 80.0), price_kind="adjusted")
 
     assert contract["display"]["formula"] == FORMULA

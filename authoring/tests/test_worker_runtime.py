@@ -153,7 +153,7 @@ _COMPONENT_SOURCE = dedent(
         if mode == "breakaway_probe":
             try:
                 child = subprocess.Popen(
-                    [sys.executable, "-c", "pass"],
+                    [sys.executable, "-c", "import time;time.sleep(30)"],
                     close_fds=True,
                     creationflags=0x01000000,
                     shell=False,
@@ -162,7 +162,8 @@ _COMPONENT_SOURCE = dedent(
                 breakaway = False
             else:
                 breakaway = True
-                child.wait(timeout=5)
+                _mark(marker, str(child.pid))
+                time.sleep(30)
         return Output(
             component_id=COMPONENT_ID,
             version=COMPONENT_VERSION,
@@ -328,7 +329,13 @@ def _assert_processes_stopped(pids: list[int]) -> None:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline and any(_process_is_running(pid) for pid in pids):
         time.sleep(0.02)
-    assert not [pid for pid in pids if _process_is_running(pid)]
+    survivors = [pid for pid in pids if _process_is_running(pid)]
+    for pid in survivors:
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            pass
+    assert not survivors
 
 
 def test_worker_uses_scratch_environment_and_does_not_import_component_in_controller(
@@ -512,15 +519,27 @@ def test_windows_job_prevents_child_breakaway(
     tmp_path: Path,
 ) -> None:
     catalog_root, reference = worker_component
-    controller = WorkerController(limits=WorkerLimits(wall_seconds=5))
-    _output, result = _run(
-        controller,
-        catalog_root,
-        reference,
-        tmp_path,
-        "breakaway_probe",
+    marker = tmp_path / "breakaway-child-pid"
+    controller = WorkerController(
+        limits=WorkerLimits(wall_seconds=1.5, grace_seconds=0.1)
     )
-    assert result["breakaway_succeeded"] is False
+    try:
+        _output, result = _run(
+            controller,
+            catalog_root,
+            reference,
+            tmp_path,
+            "breakaway_probe",
+            marker=os.fspath(marker),
+        )
+    except HostFailureException as exc:
+        assert exc.code is HostFailureCode.WORKER_TIMEOUT
+        assert marker.is_file()
+        _assert_processes_stopped(
+            [int(marker.read_text(encoding="ascii"))]
+        )
+    else:
+        assert result["breakaway_succeeded"] is False
     controller.close()
 
 
