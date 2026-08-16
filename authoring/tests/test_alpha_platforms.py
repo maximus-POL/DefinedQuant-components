@@ -210,6 +210,8 @@ def test_native_worker_mechanisms_live_behind_one_shared_lifecycle() -> None:
     assert "MAX_WORKER_STREAM_BYTES = 1024 * 1024" in shared_source
 
     assert "subprocess.Popen" in posix_source
+    assert '"defined_quant._posix_worker_entry"' in posix_source
+    assert '"-m"' in posix_source
     assert "start_new_session=True" in posix_source
     assert "close_fds=True" in posix_source
     assert "pass_fds=(control_write,)" in posix_source
@@ -221,6 +223,8 @@ def test_native_worker_mechanisms_live_behind_one_shared_lifecycle() -> None:
     assert "_JOB_OBJECT_LIMIT_JOB_MEMORY" in windows_source
     assert "_PROC_THREAD_ATTRIBUTE_HANDLE_LIST" in windows_source
     assert "CreateProcessW" in windows_source
+    assert '"defined_quant._windows_worker_entry"' in windows_source
+    assert '"-m"' in windows_source
     assign = windows_source.index("self._api.AssignProcessToJobObject(")
     resume = windows_source.index("self._api.ResumeThread(")
     assert assign < resume

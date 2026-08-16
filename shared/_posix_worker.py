@@ -67,6 +67,7 @@ class PosixWorkerProcessProvider:
             raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE)
         self._platform_id = platform_id
         self._entrypoint = Path(__file__).with_name("_posix_worker_entry.py")
+        self._entrypoint_module = "defined_quant._posix_worker_entry"
         if not self._entrypoint.is_file():
             raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE)
 
@@ -91,7 +92,8 @@ class PosixWorkerProcessProvider:
             process = subprocess.Popen(
                 [
                     os.fspath(executable),
-                    os.fspath(self._entrypoint),
+                    "-m",
+                    self._entrypoint_module,
                     "--control-fd",
                     str(control_write),
                     "--memory-limit",

@@ -263,6 +263,7 @@ class WindowsWorkerProcessProvider:
         try:
             self._api = _WindowsWorkerApi()
             self._entrypoint = Path(__file__).with_name("_windows_worker_entry.py")
+            self._entrypoint_module = "defined_quant._windows_worker_entry"
             if not self._entrypoint.is_file():
                 raise _failure(WorkerProcessErrorCode.CAPABILITY_UNAVAILABLE)
         except WorkerProcessError:
@@ -310,7 +311,6 @@ class WindowsWorkerProcessProvider:
         job = 0
         try:
             application = self._extended_local_path(executable)
-            entrypoint = self._extended_local_path(self._entrypoint)
             working_directory = self._extended_local_path(cwd)
             stdin_read, stdin_write = self._pipe(raw_handles, parent="write")
             stdout_read, stdout_write = self._pipe(raw_handles, parent="read")
@@ -333,7 +333,8 @@ class WindowsWorkerProcessProvider:
             command = subprocess.list2cmdline(
                 [
                     application,
-                    entrypoint,
+                    "-m",
+                    self._entrypoint_module,
                     "--control-handle",
                     str(control_write),
                     "--memory-limit",
