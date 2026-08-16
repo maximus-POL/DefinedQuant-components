@@ -364,12 +364,38 @@ def test_worker_uses_scratch_environment_and_does_not_import_component_in_contro
         controller, catalog_root, reference, tmp_path, "environment"
     )
     expected = COMMON_ENVIRONMENT | (
-        {"SYSTEMROOT", "USERPROFILE"} if sys.platform == "win32" else set()
+        {"SYSTEMROOT"} if sys.platform == "win32" else set()
     )
     assert set(result["environment_keys"]) == expected
     assert result["secret_present"] is False
     assert COMPONENT_MODULE not in sys.modules
     controller.close()
+
+
+def test_worker_scratch_uses_a_locked_cleanup_managed_state_root(
+    worker_component: tuple[Path, ComponentRef],
+    tmp_path: Path,
+) -> None:
+    catalog_root, reference = worker_component
+    controller = WorkerController(limits=WorkerLimits(wall_seconds=5))
+    _run(controller, catalog_root, reference, tmp_path, "normal")
+    controller.close()
+
+    state = tmp_path / ".defined-quant-worker-state-v1"
+    assert state.is_dir()
+    assert list(state.iterdir()) == []
+    assert [
+        path
+        for path in tmp_path.glob(".defined-quant-worker-*")
+        if path != state
+    ] == []
+
+
+def test_windows_worker_keeps_scratch_at_the_selected_output_parent(
+    tmp_path: Path,
+) -> None:
+    provider = local_host_platform().worker_processes
+    assert provider.work_root_parents(tmp_path) == (tmp_path,)
 
 
 @pytest.mark.parametrize("mode", ["stdout_overflow", "stderr_overflow", "python_output_overflow"])
@@ -618,6 +644,11 @@ def test_windows_job_prevents_child_breakaway(
 
 
 if sys.platform != "win32":
+    setattr(
+        test_windows_worker_keeps_scratch_at_the_selected_output_parent,
+        "__test__",
+        False,
+    )
     setattr(test_windows_worker_supports_unicode_and_long_local_paths, "__test__", False)
     setattr(test_windows_job_prevents_child_breakaway, "__test__", False)
 

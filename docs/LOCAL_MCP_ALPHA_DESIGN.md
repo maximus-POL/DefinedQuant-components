@@ -35,6 +35,7 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made any component stdout or stderr outside the typed control protocol a contract failure, and made Python warnings deterministic errors through the constructed worker environment. | Even small untyped output can disclose data or corrupt a future transport if accidentally forwarded; an explicit warning policy removes interpreter-default variability without exposing captured text. |
 | 2026-08-16 | this commit | Phase-4 remediation | §6 | Split invalid launch arguments, unavailable native host capabilities, and unexpected startup failures into distinct redacted audit outcomes and exit statuses while retaining only stable provider codes. | A missing native provider is an operator/platform condition rather than bad configuration, and no native message, path, SID, or exception representation is needed to diagnose that class safely. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.2 | Routed caller output-parent creation and CLI request-file reads through the secure-filesystem provider, including native handle-relative Windows traversal. | Unicode and long local paths must work without depending on the machine-wide `LongPathsEnabled` registry value or test setup that silently assumes it. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Removed the Windows home-directory staging dependency; placed every worker workspace inside a fixed owner-private, locked, orphan-cleaned session-state namespace on the selected output volume; limited Windows platform environment inheritance to validated `SYSTEMROOT`; and recorded the Windows bootstrap-current-directory mechanism. | A controller crash must not leave unmanaged home/drive-root litter, home paths do not belong in the worker allowlist, and long-path-safe same-volume publication must retain liveness-protected cleanup. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -1335,6 +1336,12 @@ subprocess with an import-safe entry point, not `multiprocessing`; Windows creat
 assigns it to the configured Job Object before user code can run, and then resumes it. Native
 acceptance must prove those mechanisms before release. The controller sends one strict typed
 request and receives one control response.
+Worker staging is never created directly as an unmanaged home-directory or drive-root entry. Each
+workspace is a child of a fixed owner-private worker-state namespace at the selected existing
+output parent, with the same marker, held lock, age check, atomic cleanup claim, and tombstone
+deletion protocol as other session state. Normal completion removes the live session; process
+loss leaves a locked-session orphan that a later controller can claim only after the frozen orphan
+age.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
 Any non-empty capture below that ceiling is still a `component_contract_error`: installed
@@ -1351,8 +1358,8 @@ private `TMPDIR`/`TEMP`/`TMP`, `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`,
 `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `PYTHONHASHSEED=0`, `NO_COLOR=1`, and `TZ=UTC`.
 It also sets `PYTHONWARNINGS=error` so warning behavior is explicit and independent of interpreter
 defaults.
-No platform environment is copied wholesale. Windows may additionally allow only the required
-`SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after validating them at startup. Home directories,
+No platform environment is copied wholesale. Windows additionally allows only the required
+`SYSTEMROOT` value after validating it at startup. Home directories,
 proxy settings, cloud and provider credentials, API keys, tokens,
 cookies, user-site settings, and unrelated variables are absent.
 
@@ -1360,6 +1367,13 @@ Windows process creation allowlists inherited handles as well as environment var
 exact worker control and redirected STDIO handles may be temporarily inheritable; session, root,
 record, lock, job, token, unrelated pipe, and controller handles are absent from the child. The
 controller retains the Job Object handle until every cleanup obligation is complete.
+
+POSIX starts the child with the private workspace as its current directory. Windows process
+creation uses the validated local `SYSTEMROOT` as its bootstrap current directory because the
+Win32 `lpCurrentDirectory` field retains a `MAX_PATH` ceiling even when all workspace I/O is
+handle-relative and long-path safe. Components have no supported relative-filesystem contract;
+their temporary paths are supplied through the constructed environment and operation publication
+uses absolute internal paths. This launcher mechanism difference cannot alter typed outputs.
 
 The launcher enforces the 512 MiB worker memory ceiling with a tested OS mechanism and an
 independent controller-side usage monitor; exceeding the memory or captured-stream ceiling kills

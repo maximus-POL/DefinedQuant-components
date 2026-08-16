@@ -29,6 +29,7 @@ from defined_quant.operation_runtime import (
     prepare_output_directory,
     verify_operation_bundle,
 )
+from defined_quant.session_cas import SessionCas
 from defined_quant.worker_limits import MAX_WORKER_CONTROL_BYTES, MAX_WORKER_REQUEST_BYTES
 from defined_quant.worker_process import (
     WorkerProcessError,
@@ -49,6 +50,7 @@ MAX_WORKER_STREAM_BYTES = 1024 * 1024
 MAX_WORKER_MEMORY_BYTES = 512 * 1024 * 1024
 MAX_CONCURRENT_WORKERS = 2
 _WORK_ROOT_PREFIX = ".defined-quant-worker-"
+_WORKER_STATE_ROOT = ".defined-quant-worker-state-v1"
 _FIELD_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 _RESULT_ADAPTER: TypeAdapter[OperationResult] = TypeAdapter(OperationResult)
 
@@ -171,6 +173,7 @@ class WorkerController:
             raise HostFailureException(HostFailureCode.WORKER_CAPACITY)
         active: _ActiveWorker | None = None
         work_root: Path | None = None
+        workspace: SessionCas | None = None
         try:
             with self._lock:
                 if self._closed:
@@ -184,7 +187,7 @@ class WorkerController:
                     component=validated.component,
                 )
                 output_parent = self._existing_parent(prepared.parent)
-                work_root = self._create_work_root(
+                workspace, work_root = self._create_work_root(
                     self._provider.work_root_parents(output_parent)
                 )
                 temporary = work_root / "tmp"
@@ -350,6 +353,11 @@ class WorkerController:
                     self._secure.remove_private_tree(work_root)
                 except Exception:
                     pass
+            if workspace is not None:
+                try:
+                    workspace.close()
+                except Exception:
+                    pass
             self._capacity.release()
 
     def inspect_component(
@@ -398,13 +406,16 @@ class WorkerController:
             raise HostFailureException(HostFailureCode.WORKER_CAPACITY)
         active: _ActiveWorker | None = None
         work_root: Path | None = None
+        workspace: SessionCas | None = None
         try:
             with self._lock:
                 if self._closed:
                     raise HostFailureException(HostFailureCode.WORKER_CANCELLED)
             try:
-                parent = self._existing_parent(Path(tempfile.gettempdir()).resolve())
-                work_root = self._create_work_root(
+                parent = self._existing_parent(
+                    Path(os.path.abspath(tempfile.gettempdir()))
+                )
+                workspace, work_root = self._create_work_root(
                     self._provider.work_root_parents(parent)
                 )
                 temporary = work_root / "tmp"
@@ -521,6 +532,11 @@ class WorkerController:
                     self._secure.remove_private_tree(work_root)
                 except Exception:
                     pass
+            if workspace is not None:
+                try:
+                    workspace.close()
+                except Exception:
+                    pass
             self._capacity.release()
 
     def close(self) -> None:
@@ -635,19 +651,34 @@ class WorkerController:
             if not self._active:
                 self._all_done.set()
 
-    def _create_work_root(self, parents: tuple[Path, ...]) -> Path:
+    def _create_work_root(self, parents: tuple[Path, ...]) -> tuple[SessionCas, Path]:
         for parent in parents:
-            for _attempt in range(100):
-                candidate = parent / f"{_WORK_ROOT_PREFIX}{secrets.token_hex(16)}"
-                try:
-                    self._secure.create_private_directory(candidate)
-                    return candidate
-                except Exception:
-                    if candidate.exists():
-                        continue
-                    if len(parents) == 1:
+            workspace: SessionCas | None = None
+            try:
+                workspace = SessionCas(parent / _WORKER_STATE_ROOT)
+                for _attempt in range(100):
+                    candidate = (
+                        workspace.directory
+                        / "staging"
+                        / f"{_WORK_ROOT_PREFIX}{secrets.token_hex(16)}"
+                    )
+                    try:
+                        self._secure.create_private_directory(candidate)
+                        return workspace, candidate
+                    except Exception:
+                        if candidate.exists():
+                            continue
                         raise
-                    break
+                raise OSError
+            except Exception:
+                if workspace is not None:
+                    try:
+                        workspace.close()
+                    except Exception:
+                        pass
+                if len(parents) == 1:
+                    raise OSError from None
+                continue
         raise OSError
 
     @staticmethod
