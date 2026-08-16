@@ -583,7 +583,14 @@ def _safe_output_directory(
             component=component,
         )
     output_dir = expanded.resolve()
-    if output_dir in {Path(output_dir.anchor), Path.home().resolve()}:
+    forbidden = {Path(output_dir.anchor)}
+    try:
+        forbidden.add(Path.home().resolve())
+    except RuntimeError:
+        # Scrubbed workers have no ambient home variable. Their internal output path was
+        # already validated by the controller and is inside owner-private workspace state.
+        pass
+    if output_dir in forbidden:
         raise OperationRuntimeError(
             OperationErrorCode.INVALID_OUTPUT_DIRECTORY,
             "Output directory must not be a filesystem root or the user home directory.",

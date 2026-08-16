@@ -201,6 +201,20 @@ def test_runtime_service_and_typed_cli_match_frozen_phase0_bytes(
         assert hashlib.sha256((cli_dir / member.path).read_bytes()).hexdigest() == member.sha256
 
 
+def test_internal_worker_output_validation_does_not_require_a_home_variable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing_home(_cls: type[Path]) -> Path:
+        raise RuntimeError
+
+    monkeypatch.setattr(Path, "home", classmethod(missing_home))
+    assert operation_runtime.prepare_output_directory(
+        tmp_path / "worker-bundle",
+        component=None,
+    ) == tmp_path / "worker-bundle"
+
+
 def test_legacy_cli_matches_frozen_phase0_bytes(tmp_path: Path) -> None:
     fixture = _fixture()["legacy_success"]
     input_path = tmp_path / "input.json"
