@@ -42,6 +42,60 @@ def _assert_installed(module: Any, checkout: Path) -> None:
         raise AssertionError(f"production import leaked from checkout: {module_path}")
 
 
+def _diagnose_execution_stage(request: OperationRequest, output_dir: Path) -> str:
+    """Return only a stable internal stage and exception type for a failed CI smoke."""
+
+    import defined_quant.operation_runtime as runtime
+
+    stage = "component_record"
+    try:
+        record = runtime.component_record_for_request(request, catalog_root=None)
+        stage = "component_models"
+        input_model, output_model = runtime.component_execution_models(
+            record,
+            component=request.component,
+        )
+        stage = "input_validation"
+        validated_input = runtime.validate_component_input(
+            record,
+            input_model,
+            request.input,
+            component=request.component,
+        )
+        stage = "input_bytes"
+        input_bytes = runtime._normalized_model_bytes(  # noqa: SLF001
+            validated_input,
+            component=request.component,
+            error_code=defined_quant_protocol.OperationErrorCode.INVALID_COMPONENT_INPUT,
+            message="diagnostic",
+        )
+        stage = "component_execution"
+        result = runtime.execute_validated_component(
+            record,
+            output_model,
+            validated_input,
+            component=request.component,
+        )
+        stage = "result_bytes"
+        result_bytes = runtime._normalized_model_bytes(  # noqa: SLF001
+            result,
+            component=request.component,
+            error_code=defined_quant_protocol.OperationErrorCode.OUTPUT_VALIDATION_FAILED,
+            message="diagnostic",
+        )
+        stage = "materialization"
+        runtime._materialize(  # noqa: SLF001
+            request,
+            result,
+            output_dir,
+            input_bytes=input_bytes,
+            result_bytes=result_bytes,
+        )
+    except Exception as exc:
+        return f"{stage}:{type(exc).__name__}"
+    return "not-reproduced"
+
+
 async def _mcp_smoke(state_root: Path) -> None:
     with TemporaryFile(mode="w+", encoding="utf-8") as audit:
         params = StdioServerParameters(
@@ -116,9 +170,13 @@ def main() -> int:
             if not isinstance(result, OperationSuccess):
                 assert isinstance(result, OperationFailure)
                 detail_type = result.error.details.get("type", "none")
+                diagnostic = _diagnose_execution_stage(
+                    request,
+                    root / "diagnostic-operation",
+                )
                 raise AssertionError(
                     "installed core execution smoke failed: "
-                    f"{result.error.code.value} ({detail_type})"
+                    f"{result.error.code.value} ({detail_type}; {diagnostic})"
                 )
             if result.manifest.request != request:
                 raise AssertionError("installed core execution request changed")
