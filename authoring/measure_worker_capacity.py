@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from textwrap import dedent
-from typing import Any
+from typing import Any, cast
 
 import defined_quant
 from defined_quant import invalidate_subject_cache, load_execution_policy, subject_hash
@@ -19,9 +19,12 @@ from defined_quant.worker_runtime import WorkerController
 from defined_quant_protocol import (
     CallerProvenance,
     ComponentRef,
+    InterpretationMethod,
     OperationFailure,
     OperationRequest,
+    SourceKind,
 )
+from pydantic import JsonValue
 
 _COMPONENT_ID = "dq.capacity_probe.matrix"
 _COMPONENT_VERSION = "1.0.0"
@@ -141,10 +144,10 @@ def _matrix_request(reference: ComponentRef, rows: int, columns: int) -> Operati
     values = [list(row) for _index in range(rows)]
     return OperationRequest(
         component=reference,
-        input={"values": values},
+        input={"values": cast(JsonValue, values)},
         provenance=CallerProvenance(
-            source_kind="synthetic",
-            interpretation_method="caller_structured",
+            source_kind=SourceKind.SYNTHETIC,
+            interpretation_method=InterpretationMethod.CALLER_STRUCTURED,
             label="Native worker capacity measurement.",
         ),
     )
@@ -154,10 +157,13 @@ def _simple_return_request(reference: ComponentRef, rows: int) -> OperationReque
     values = [100.0 + (index % 977) * 0.010203 for index in range(rows)]
     return OperationRequest(
         component=reference,
-        input={"prices": values, "price_kind": "adjusted"},
+        input={
+            "prices": cast(JsonValue, values),
+            "price_kind": "adjusted",
+        },
         provenance=CallerProvenance(
-            source_kind="synthetic",
-            interpretation_method="caller_structured",
+            source_kind=SourceKind.SYNTHETIC,
+            interpretation_method=InterpretationMethod.CALLER_STRUCTURED,
             label="Native worker capacity measurement.",
         ),
     )

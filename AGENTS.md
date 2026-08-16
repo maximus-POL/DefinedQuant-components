@@ -29,6 +29,7 @@ conflate them with these repository instructions.
 | `shared/_windows_local_host.py` | Native Windows secure-filesystem, private-state, locking, publication, and cleanup provider; protected |
 | `shared/worker_process.py` | Transport-neutral native worker-process contract; protected |
 | `shared/worker_runtime.py` | Shared bounded-worker lifecycle and atomic publication; protected |
+| `shared/worker_limits.py` | Stable worker request and control-channel byte ceilings; protected |
 | `shared/worker_entry.py` | Strict one-request subprocess entry point; protected |
 | `shared/worker_inspection.py` | Selected-subject inspection and port comparison inside the bounded worker; protected |
 | `shared/_posix_worker.py` | POSIX subprocess-group provider; protected |

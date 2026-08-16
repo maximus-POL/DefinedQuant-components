@@ -58,6 +58,7 @@ components/
 │   ├── validation.py            closed declarative constraint evaluator
 │   ├── worker_entry.py          strict one-request subprocess entry point
 │   ├── worker_inspection.py     selected-subject inspection inside the worker
+│   ├── worker_limits.py         stable worker channel byte ceilings
 │   ├── worker_process.py        transport-neutral native process contract
 │   └── worker_runtime.py        shared bounded-worker lifecycle and publication
 ├── protocol/
