@@ -19,7 +19,6 @@ WORKER_RUNTIME = ROOT / "shared" / "worker_runtime.py"
 WORKER_PROCESS = ROOT / "shared" / "worker_process.py"
 POSIX_WORKER = ROOT / "shared" / "_posix_worker.py"
 WINDOWS_WORKER = ROOT / "shared" / "_windows_worker.py"
-WINDOWS_WORKER_ENTRY = ROOT / "shared" / "_windows_worker_entry.py"
 
 _REQUIRED_PLATFORM_MARKER = re.compile(
     r"\*\*Required MCP alpha release platforms:\*\* (?P<platforms>[^.]+)\."
@@ -226,11 +225,8 @@ def test_native_worker_mechanisms_live_behind_one_shared_lifecycle() -> None:
     assert "CreateProcessW" in windows_source
     assert '"defined_quant._windows_worker_entry"' in windows_source
     assert '"-m"' in windows_source
-    assert '"--working-directory"' in windows_source
     assert "bootstrap_directory" in windows_source
-    assert "os.chdir(working_directory)" in WINDOWS_WORKER_ENTRY.read_text(
-        encoding="utf-8"
-    )
+    assert "del cwd" in windows_source
     assign = windows_source.index("self._api.AssignProcessToJobObject(")
     resume = windows_source.index("self._api.ResumeThread(")
     assert assign < resume

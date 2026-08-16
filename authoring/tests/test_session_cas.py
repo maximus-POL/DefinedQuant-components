@@ -308,7 +308,13 @@ def test_competing_equal_atomic_publication_reuses_verified_entry(
     store = SessionCas(tmp_path / "state")
 
     def competing_publish(stage: Path, destination: Path) -> None:
-        shutil_copytree(stage, destination)
+        secure = store._secure_filesystem
+        secure.create_private_directory(destination)
+        for member in stage.iterdir():
+            secure.create_private_file(
+                destination / member.name,
+                secure.read_private_file(member, maximum_bytes=16 * 1024 * 1024),
+            )
         raise SecureFilesystemError(SecureFilesystemErrorCode.ALREADY_EXISTS)
 
     monkeypatch.setattr(
@@ -320,15 +326,6 @@ def test_competing_equal_atomic_publication_reuses_verified_entry(
     assert store.load_dataset(record.reference).payload == payload
     assert not list((store.directory / "staging").iterdir())
     store.close()
-
-
-def shutil_copytree(source: Path, destination: Path) -> None:
-    """Copy a staged entry while retaining its owner-private modes for a race test."""
-
-    import shutil
-
-    shutil.copytree(source, destination)
-
 
 def test_operation_publication_reconciles_phase1_manifest_and_members(tmp_path: Path) -> None:
     result, bundle, binding = _phase1_operation(tmp_path)
