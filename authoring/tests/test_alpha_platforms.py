@@ -154,7 +154,7 @@ def test_native_only_suite_inventory_has_frozen_nonzero_counts() -> None:
     assert WINDOWS_LOCAL_HOST_FUNCTION_COUNT == 34
     assert WINDOWS_WORKER_FUNCTIONS == {
         "test_windows_job_prevents_child_breakaway",
-        "test_windows_worker_keeps_scratch_at_the_selected_output_parent",
+        "test_windows_worker_selects_short_managed_same_volume_parents",
         "test_windows_worker_supports_unicode_and_long_local_paths",
     }
     assert POSIX_SESSION_FUNCTIONS == {

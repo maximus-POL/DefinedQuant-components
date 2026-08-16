@@ -11,7 +11,7 @@ WINDOWS_LOCAL_HOST_FUNCTION_COUNT = 34
 WINDOWS_WORKER_FUNCTIONS = frozenset(
     {
         "test_windows_job_prevents_child_breakaway",
-        "test_windows_worker_keeps_scratch_at_the_selected_output_parent",
+        "test_windows_worker_selects_short_managed_same_volume_parents",
         "test_windows_worker_supports_unicode_and_long_local_paths",
     }
 )
