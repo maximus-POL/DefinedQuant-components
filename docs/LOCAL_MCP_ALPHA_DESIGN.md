@@ -38,6 +38,7 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Removed the Windows home-directory staging dependency; placed every worker workspace inside a fixed owner-private, locked, orphan-cleaned session-state namespace on the selected output volume; limited Windows platform environment inheritance to validated `SYSTEMROOT`; and recorded the Windows bootstrap-current-directory mechanism. | A controller crash must not leave unmanaged home/drive-root litter, home paths do not belong in the worker allowlist, and long-path-safe same-volume publication must retain liveness-protected cleanup. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made the native worker provider select inspection scratch roots and required POSIX to canonicalize the trusted system temporary root before the session store pins it. | macOS exposes `/var` as a symlink alias of `/private/var`; provider-owned canonical selection preserves strict symlink refusal for caller paths while allowing the session store to verify the actual local temporary root. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Required Windows worker state to use the deepest eligible non-home, non-volume-root same-volume ancestor whose path is at most 64 UTF-16 code units, while keeping the workspace inside the locked session namespace and publishing to long destinations with native handles. | CPython startup and library paths used by the child are not uniformly `MAX_PATH`-independent on a default Windows installation; bounding only the internal managed path preserves long caller-output support without machine-wide registry settings or unmanaged home/drive-root staging. |
+| 2026-08-16 | this commit | Phase-4 remediation | §4.2; §7.1; §7.3 | Replaced the unreachable 250,000-row/128 MiB dataset contract with conjunctive 40,000-row, 128-column, and 512 KiB canonical-payload ceilings; removed dataset-level `intraday`; and specified Linux `RLIMIT_AS`, Windows Job Object commit, and macOS controller-RSS enforcement. | Native production-wheel probes at 1, 8, and 128 columns found macOS to be tightest at 50,000 one-column rows succeeding and 60,000 reaching the 512 MiB resource limit; the lower ceiling retains measured headroom, keeps every accepted dataset beneath the worker channels, and states the macOS sampling-window risk truthfully. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -231,7 +232,7 @@ NormalizationEvent = {
         "csv_number_parsed" | "csv_integer_parsed" | "csv_boolean_parsed" |
         "timestamp_to_canonical_utc",
   field_id: SafeId,
-  count: integer[1..250000]
+  count: integer[1..40000]
 }
 
 TrustNotice = {
@@ -458,7 +459,7 @@ Failure example:
 
 ```text
 Source =
-  {kind:"inline_rows", rows: {[source_name:string[1..240 bytes]]:JsonValue}[1..250000]} |
+  {kind:"inline_rows", rows: {[source_name:string[1..240 bytes]]:JsonValue}[1..40000]} |
   {kind:"inline_json", text: string[1..524288 bytes]} |
   {kind:"local_file", path:string[1..4096 bytes], format:"csv",
    csv?: {delimiter?: ","|";"|"\t" = ",", header?:true = true} = {}} |
@@ -475,7 +476,7 @@ Column = {
 DatasetSemantics = {
   instrument?: {namespace: string[1..64 bytes], symbol: string[1..128 bytes]},
   currency?: string[1..32 bytes],
-  frequency?: "intraday"|"daily"|"weekly"|"monthly"|"quarterly"|"annual"|"irregular",
+  frequency?: "daily"|"weekly"|"monthly"|"quarterly"|"annual"|"irregular",
   timezone?: string[1..128 bytes],
   ordering: "preserve_source_order",
   price_kind?: "adjusted" | "unadjusted",
@@ -499,7 +500,7 @@ DatasetRegistrationData = {
   dataset_ref: DatasetRef,
   normalized_payload_sha256: Sha256,
   raw_source_sha256: Sha256,
-  row_count: integer[1..250000],
+  row_count: integer[1..40000],
   columns: {source_name: string[1..240 bytes], field_id: SafeId, data_type: string, role: string,
             semantic_port: SemanticPort|null}[1..128],
   semantics: DatasetSemantics,
@@ -1000,7 +1001,7 @@ DatasetPayloadV1 = {
   schema_version: 1,
   serialization: "dq-table-v1",
   columns: {field_id:SafeId, data_type:Column.data_type}[1..128],
-  rows: (CanonicalCell[1..128])[1..250000]
+  rows: (CanonicalCell[1..128])[1..40000]
 }
 
 DatasetRecordV1 = {
@@ -1019,7 +1020,7 @@ DatasetRecordV1 = {
   columns: {source_name:string, field_id:SafeId, data_type:Column.data_type,
             role:Column.role, semantic_port:SemanticPort|null}[1..128],
   semantics: DatasetSemantics,
-  row_count: integer[1..250000],
+  row_count: integer[1..40000],
   column_count: integer[1..128],
   observation_bounds: {first:string, last:string}|null,
   normalization_events: NormalizationEvent[0..768],
@@ -1185,9 +1186,9 @@ allowed by the failure fixture.
 | Inline JSON source | 512 KiB | 512 KiB |
 | Configured local-file roots | 8 | 8 |
 | Local CSV/JSON file | 64 MiB | 64 MiB |
-| Normalized dataset payload | 128 MiB | 128 MiB |
+| Normalized dataset payload | 512 KiB | 512 KiB |
 | CAS record document | 2 MiB | 2 MiB |
-| Dataset rows | 250,000 | 250,000 |
+| Dataset rows | 40,000 | 40,000 |
 | Dataset columns | 128 | 128 |
 | One decoded cell | 64 KiB | 64 KiB |
 | Indexed component records | current catalog: 7 | 10,000 |
@@ -1215,7 +1216,18 @@ allowed by the failure fixture.
 | Worker memory | 512 MiB | 512 MiB |
 | Orphan-session age before eligible cleanup | 24 hours | 24 hours |
 
-During registration, a normalized dataset payload above 128 MiB is
+The dataset row, column, and canonical-payload ceilings are conjunctive; the row and column maxima
+must not be multiplied while ignoring the byte ceiling. Native production-wheel probes on
+Windows, macOS, and Linux at Python 3.11 and 3.13 exercised 1, 8, and 128 columns through
+`WorkerController`. All platforms succeeded at 40,000 and 50,000 one-column rows; macOS reached
+`worker_resource_limit` at 60,000 while Windows and Linux succeeded there and reached a resource
+limit at 80,000. All platforms succeeded at 8 × 15,000 and 128 × 1,000; the next measured shapes
+crossed the fixed 2 MiB request ceiling. The 40,000-row and 512 KiB payload limits therefore retain
+headroom below the tightest measured memory boundary while keeping dense accepted shapes below the
+measured worker channel and memory boundaries. Dataset semantics do not advertise `intraday` in
+this alpha; component-level financial frequency enums remain independent.
+
+During registration, a normalized dataset payload above 512 KiB is
 `input_limit_exceeded` with `limit_name:"normalized_dataset_payload_bytes"`. A newly serialized
 dataset or operation CAS record above 2 MiB is `record_publication_failed` and no reference is
 published; an existing stored record above that ceiling is `record_corrupt`. Normalized result,
@@ -1386,11 +1398,16 @@ handle-relative and long-path safe. Components have no supported relative-filesy
 their temporary paths are supplied through the constructed environment and operation publication
 uses absolute internal paths. This launcher mechanism difference cannot alter typed outputs.
 
-The launcher enforces the 512 MiB worker memory ceiling with a tested OS mechanism and an
-independent controller-side usage monitor; exceeding the memory or captured-stream ceiling kills
-the process tree and is `worker_resource_limit`. The server fails startup on a platform where the
-memory ceiling or complete process-tree termination cannot be installed and tested; there is no
-unbounded fallback. Timeout, client cancellation, crash, captured-
+The 512 MiB worker memory ceiling has one stable controller outcome with platform-native
+mechanisms: Linux installs `RLIMIT_AS`, Windows installs the job-wide Job Object commit limit, and
+macOS relies on the controller's complete-process-group RSS measurement every 20 milliseconds.
+macOS can transiently overshoot between samples; the controller kills the process group as soon as
+the next sample observes the breach. The accepted dataset ceilings above retain headroom below the
+tightest native measurement, and every tested breach remains `worker_resource_limit`; the exact
+native accounting threshold is not a wire-level distinction. Startup still fails if the selected
+provider cannot supply its specified monitor/limit or complete process-tree termination; there is
+no unbounded fallback. Exceeding the memory or captured-stream ceiling kills the process tree.
+Timeout, client cancellation, crash, captured-
 stream overflow, memory overflow, and controller shutdown all follow
 the same cleanup sequence: stop accepting output, terminate the complete process tree, wait no
 more than five seconds, force kill survivors, close pipes, discard staging, release leases, then

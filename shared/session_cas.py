@@ -44,7 +44,7 @@ from defined_quant_protocol import OperationManifest
 from defined_quant_protocol.operation import portable_member_key
 from pydantic import ValidationError
 
-MAX_DATASET_PAYLOAD_BYTES: Final = 128 * 1024 * 1024
+MAX_DATASET_PAYLOAD_BYTES: Final = 512 * 1024
 MAX_OPERATION_BUNDLE_BYTES: Final = 128 * 1024 * 1024
 MAX_SESSION_BYTES: Final = 1024 * 1024 * 1024
 ORPHAN_SESSION_AGE_SECONDS: Final = 24 * 60 * 60

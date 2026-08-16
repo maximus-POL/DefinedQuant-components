@@ -234,7 +234,7 @@ def test_preview_pages_reserve_the_complete_success_result_envelope(tmp_path: Pa
         {
             "source": {
                 "kind": "inline_rows",
-                "rows": [{"label": "x" * 14_500} for _ in range(50)],
+                "rows": [{"label": "x" * 14_500} for _ in range(35)],
             },
             "columns": [
                 {
@@ -254,13 +254,13 @@ def test_preview_pages_reserve_the_complete_success_result_envelope(tmp_path: Pa
     )
 
     page = service.describe_dataset(
-        registration["dataset_ref"], view="preview", limit=50
+        registration["dataset_ref"], view="preview", limit=35
     )
     complete_result = _tool_result_bytes(
         page, trust=TrustLabel.UNVERIFIED_CALLER_DATA
     )
 
-    assert 0 < page["preview"]["returned"] < 50
+    assert 0 < page["preview"]["returned"] < 35
     assert page["preview"]["complete"] is False
     assert len(complete_result) <= 256 * 1024
     service.close()

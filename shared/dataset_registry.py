@@ -18,6 +18,7 @@ from threading import Lock, RLock
 from typing import Any, cast
 
 from defined_quant.data_records import (
+    MAX_DATASET_ROWS,
     DatasetPayloadV1,
     DatasetRecordV1,
     DatasetRegistrationRequest,
@@ -42,8 +43,7 @@ from pydantic import ValidationError
 MAX_CONFIGURED_ROOTS = 8
 MAX_INLINE_JSON_BYTES = 512 * 1024
 MAX_LOCAL_FILE_BYTES = 64 * 1024 * 1024
-MAX_NORMALIZED_PAYLOAD_BYTES = 128 * 1024 * 1024
-MAX_DATASET_ROWS = 250_000
+MAX_NORMALIZED_PAYLOAD_BYTES = 512 * 1024
 MAX_DATASET_COLUMNS = 128
 MAX_DECODED_CELL_BYTES = 64 * 1024
 

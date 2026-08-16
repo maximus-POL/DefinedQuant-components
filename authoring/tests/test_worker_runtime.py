@@ -16,7 +16,8 @@ from typing import Any
 import defined_quant
 import defined_quant.worker_runtime as worker_runtime
 import pytest
-from defined_quant import invalidate_subject_cache, subject_hash
+from defined_quant import invalidate_subject_cache, load_execution_policy, subject_hash
+from defined_quant.dataset_registry import MAX_DATASET_ROWS
 from defined_quant.host_failures import HostFailureCode, HostFailureException
 from defined_quant.local_host_platform import local_host_platform
 from defined_quant.service import DefinedQuantService
@@ -425,6 +426,32 @@ def test_inspection_worker_uses_provider_selected_managed_scratch() -> None:
         controller.close()
 
     assert result["component"]["id"] == "dq.market_data.simple_return"
+
+
+def test_worker_executes_at_the_portable_dataset_row_ceiling(tmp_path: Path) -> None:
+    reference = load_execution_policy("simple_return_csv_v1").components[0].component
+    request = OperationRequest(
+        component=reference,
+        input={
+            "prices": [
+                100.0 + (index % 977) * 0.010203
+                for index in range(MAX_DATASET_ROWS)
+            ],
+            "price_kind": "adjusted",
+        },
+        provenance=CallerProvenance(
+            source_kind="synthetic",
+            interpretation_method="caller_structured",
+            label="Measured portable dataset row boundary.",
+        ),
+    )
+    service = DefinedQuantService(session_state_root=tmp_path / "state")
+    try:
+        result = service.execute_operation(request, output_dir=tmp_path / "operation")
+    finally:
+        service.close()
+
+    assert isinstance(result, OperationSuccess)
 
 
 @pytest.mark.parametrize("mode", ["stdout_overflow", "stderr_overflow", "python_output_overflow"])

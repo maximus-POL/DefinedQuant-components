@@ -43,7 +43,7 @@ CAS_SERIALIZATION = "defined-quant-cas-json-v1"
 PRETTY_JSON_SERIALIZATION = "defined-quant-pretty-json-v1"
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
-MAX_DATASET_ROWS = 250_000
+MAX_DATASET_ROWS = 40_000
 MAX_DATASET_COLUMNS = 128
 MAX_CELL_BYTES = 64 * 1024
 MAX_INLINE_JSON_BYTES = 512 * 1024
@@ -391,7 +391,7 @@ class DatasetSemantics(_ClosedModel):
     instrument: DatasetInstrument | None = None
     currency: str | None = None
     frequency: Literal[
-        "intraday", "daily", "weekly", "monthly", "quarterly", "annual", "irregular"
+        "daily", "weekly", "monthly", "quarterly", "annual", "irregular"
     ] | None = None
     timezone: str | None = None
     ordering: Literal["preserve_source_order"]

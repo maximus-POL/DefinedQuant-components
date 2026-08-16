@@ -86,7 +86,7 @@ def _valid_details(code: HostFailureCode) -> dict[str, Any]:
     if code is HostFailureCode.INVALID_DATASET:
         return {"finding_codes": ["missing_value"]}
     if code is HostFailureCode.INPUT_LIMIT_EXCEEDED:
-        return {"limit_name": "dataset_rows", "maximum": 250_000, "actual": 250_001}
+        return {"limit_name": "dataset_rows", "maximum": 40_000, "actual": 40_001}
     if code is HostFailureCode.COMPONENT_CONTRACT_ERROR:
         return {}
     if code is HostFailureCode.RESULT_LIMIT_EXCEEDED:
