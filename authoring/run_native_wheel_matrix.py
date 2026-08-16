@@ -192,6 +192,15 @@ def main() -> int:
             ],
             environment=mcp_environment,
         )
+        if os.environ.get("DQ_MEASURE_WORKER_CAPACITY") == "1":
+            _run(
+                [
+                    os.fspath(python),
+                    os.fspath(ROOT / "authoring" / "measure_worker_capacity.py"),
+                ],
+                cwd=work,
+                environment=clean_environment,
+            )
     return 0
 
 

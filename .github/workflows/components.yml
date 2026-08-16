@@ -84,6 +84,7 @@ jobs:
       - name: Run complete native acceptance suite from installed wheels
         env:
           DQ_EXPECTED_PYTHON: ${{ matrix.python }}
+          DQ_MEASURE_WORKER_CAPACITY: "1"
           DQ_WHEEL_DIRECTORY: ${{ runner.temp }}/defined-quant-release-wheels
         run: uv run --no-project --python ${{ matrix.python }} python authoring/run_native_wheel_matrix.py
 
