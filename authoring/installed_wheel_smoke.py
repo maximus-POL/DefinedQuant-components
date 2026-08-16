@@ -96,6 +96,31 @@ def _diagnose_execution_stage(request: OperationRequest, output_dir: Path) -> st
     return "not-reproduced"
 
 
+def _diagnose_publication(root: Path) -> str:
+    """Exercise only the facade publication boundary for a failing CI smoke."""
+
+    from defined_quant.local_host_platform import (
+        SecureFilesystemError,
+        local_host_platform,
+    )
+
+    secure = local_host_platform().secure_filesystem
+    source = root / "diagnostic-publication-source"
+    destination = root / "diagnostic-publication-destination"
+    try:
+        secure.create_private_directory(source)
+        secure.create_private_file(source / "member.bin", b"complete")
+        secure.publish_directory_no_replace(source, destination)
+    except SecureFilesystemError as exc:
+        native = 0
+        if sys.platform == "win32":
+            import ctypes
+
+            native = ctypes.get_last_error()  # type: ignore[attr-defined]
+        return f"{exc.code.value}:native-{native}"
+    return "not-reproduced"
+
+
 async def _mcp_smoke(state_root: Path) -> None:
     with TemporaryFile(mode="w+", encoding="utf-8") as audit:
         params = StdioServerParameters(
@@ -174,9 +199,11 @@ def main() -> int:
                     request,
                     root / "diagnostic-operation",
                 )
+                publication = _diagnose_publication(root)
                 raise AssertionError(
                     "installed core execution smoke failed: "
-                    f"{result.error.code.value} ({detail_type}; {diagnostic})"
+                    f"{result.error.code.value} "
+                    f"({detail_type}; {diagnostic}; publication={publication})"
                 )
             if result.manifest.request != request:
                 raise AssertionError("installed core execution request changed")
