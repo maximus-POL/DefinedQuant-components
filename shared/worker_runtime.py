@@ -18,7 +18,11 @@ from typing import BinaryIO
 from defined_quant.data_records import cas_json_bytes, strict_cas_json_loads
 from defined_quant.host_failures import HostFailure as HostFailureEnvelope
 from defined_quant.host_failures import HostFailureCode, HostFailureException
-from defined_quant.local_host_platform import SecureFilesystem, local_host_platform
+from defined_quant.local_host_platform import (
+    SecureFilesystem,
+    SecureFilesystemError,
+    local_host_platform,
+)
 from defined_quant.operation_runtime import (
     OperationRuntimeError,
     operation_failure,
@@ -321,7 +325,7 @@ class WorkerController:
                             raise HostFailureException(HostFailureCode.WORKER_CANCELLED)
                         # Publication is the linearization point: shutdown cannot begin
                         # between the final cancellation check and the no-replace rename.
-                        prepared.parent.mkdir(parents=True, exist_ok=True)
+                        self._secure.ensure_directory_path(prepared.parent)
                         self._secure.publish_directory_no_replace(bundle, prepared)
                 except HostFailureException:
                     raise
@@ -671,17 +675,18 @@ class WorkerController:
                 },
             )
 
-    @staticmethod
-    def _existing_parent(candidate: Path) -> Path:
+    def _existing_parent(self, candidate: Path) -> Path:
         current = candidate
-        while not current.exists():
+        while True:
+            try:
+                self._secure.verify_directory_path(current)
+                return current
+            except SecureFilesystemError:
+                pass
             parent = current.parent
             if parent == current:
                 raise OSError
             current = parent
-        if not current.is_dir():
-            raise OSError
-        return current
 
     def _environment(self, temporary: Path) -> dict[str, str]:
         value = os.fspath(temporary)

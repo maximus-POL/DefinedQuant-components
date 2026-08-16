@@ -19,6 +19,7 @@ import pytest
 from defined_quant.local_host_platform import (
     SecureFilesystemError,
     SecureFilesystemErrorCode,
+    local_host_platform,
 )
 from defined_quant.operation_runtime import (
     OperationRuntimeError,
@@ -341,10 +342,27 @@ def test_cli_supports_unicode_and_long_local_paths(
     if path_kind == "long":
         while len(os.fspath(parent)) < 280:
             parent /= "long-cli-path-segment"
-    parent.mkdir(parents=True)
+    secure = local_host_platform().secure_filesystem
+    secure.ensure_directory_path(parent)
     request_path = parent / "żądanie.json"
     output_dir = parent / "wynik"
-    completed = _run_typed_cli(_typed_request(), request_path, output_dir)
+    secure.create_private_file(
+        request_path,
+        json.dumps(_typed_request().model_dump(mode="json")).encode("utf-8"),
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--request",
+            str(request_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+    )
 
     assert completed.returncode == 0
     assert completed.stderr == b""
@@ -352,7 +370,10 @@ def test_cli_supports_unicode_and_long_local_paths(
         completed.stdout,
         _fixture()["typed_success"]["surfaces"]["stdout"],
     )
-    assert (output_dir / "manifest.json").is_file()
+    assert secure.read_regular_file(
+        output_dir / "manifest.json",
+        maximum_bytes=2 * 1024 * 1024,
+    )
 
 
 @pytest.mark.parametrize(

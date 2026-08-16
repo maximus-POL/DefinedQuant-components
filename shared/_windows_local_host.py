@@ -1353,6 +1353,39 @@ class WindowsSecureFilesystem:
             self._close(created)
             self._close(parent)
 
+    def ensure_directory_path(self, path: Path) -> None:
+        handle = 0
+        try:
+            drive, parts = _absolute_drive_parts(path, reject_archive=False)
+            if not parts:
+                raise _failure(SecureFilesystemErrorCode.UNSAFE_PATH)
+            self._ensure_private_parent(drive, parts)
+            handle, _root_identity = self._open_private_directory_path(
+                drive,
+                parts,
+                writable_final=True,
+            )
+            self._verify_directory(handle)
+        except SecureFilesystemError:
+            raise
+        except Exception:
+            raise _failure(SecureFilesystemErrorCode.ACCESS_DENIED) from None
+        finally:
+            self._close(handle)
+
+    def verify_directory_path(self, path: Path) -> None:
+        handle = 0
+        try:
+            drive, parts = _absolute_drive_parts(path, reject_archive=False)
+            handle, _root_identity = self._open_directory_path(drive, parts)
+            self._verify_directory(handle)
+        except SecureFilesystemError:
+            raise
+        except Exception:
+            raise _failure(SecureFilesystemErrorCode.UNSAFE_PATH) from None
+        finally:
+            self._close(handle)
+
     def verify_private_directory(self, path: Path) -> None:
         handle = 0
         try:

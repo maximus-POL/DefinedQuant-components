@@ -74,6 +74,10 @@ class SecureFilesystem(Protocol):
 
     def read_regular_file(self, path: Path, *, maximum_bytes: int) -> bytes: ...
 
+    def ensure_directory_path(self, path: Path) -> None: ...
+
+    def verify_directory_path(self, path: Path) -> None: ...
+
     def create_private_directory(
         self,
         path: Path,

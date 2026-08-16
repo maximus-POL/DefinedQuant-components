@@ -757,7 +757,7 @@ def _materialize(
     _assert_flat_members(members)
 
     try:
-        output_dir.parent.mkdir(parents=True, exist_ok=True)
+        local_host_platform().secure_filesystem.ensure_directory_path(output_dir.parent)
         _assert_output_available(output_dir, component=request.component)
         staging_dir = _new_operation_stage(output_dir.parent)
     except OperationRuntimeError:

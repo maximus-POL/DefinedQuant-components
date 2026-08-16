@@ -26,6 +26,8 @@ SECURE_FILESYSTEM_SURFACE = {
     "close_pinned_root",
     "read_file_beneath",
     "read_regular_file",
+    "ensure_directory_path",
+    "verify_directory_path",
     "create_private_directory",
     "verify_private_directory",
     "create_private_file",

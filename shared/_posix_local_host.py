@@ -257,6 +257,27 @@ class PosixSecureFilesystem:
         except (OSError, ValueError):
             raise _failure(SecureFilesystemErrorCode.ACCESS_DENIED) from None
 
+    def ensure_directory_path(self, path: Path) -> None:
+        try:
+            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            metadata = path.lstat()
+            if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+                raise _failure(SecureFilesystemErrorCode.UNSAFE_PATH)
+        except SecureFilesystemError:
+            raise
+        except (OSError, ValueError):
+            raise _failure(SecureFilesystemErrorCode.ACCESS_DENIED) from None
+
+    def verify_directory_path(self, path: Path) -> None:
+        try:
+            metadata = path.lstat()
+            if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+                raise _failure(SecureFilesystemErrorCode.UNSAFE_PATH)
+        except SecureFilesystemError:
+            raise
+        except (OSError, ValueError):
+            raise _failure(SecureFilesystemErrorCode.UNSAFE_PATH) from None
+
     def verify_private_directory(self, path: Path) -> None:
         try:
             metadata = path.lstat()

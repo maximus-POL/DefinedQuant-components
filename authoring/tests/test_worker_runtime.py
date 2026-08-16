@@ -18,6 +18,7 @@ import defined_quant.worker_runtime as worker_runtime
 import pytest
 from defined_quant import invalidate_subject_cache, subject_hash
 from defined_quant.host_failures import HostFailureCode, HostFailureException
+from defined_quant.local_host_platform import local_host_platform
 from defined_quant.service import DefinedQuantService
 from defined_quant.worker_runtime import WorkerController, WorkerLimits
 from defined_quant_protocol import (
@@ -570,7 +571,8 @@ def test_windows_worker_supports_unicode_and_long_local_paths(
     parent = tmp_path / "zażółć-gęślą-jaźń"
     while len(os.fspath(parent)) < 280:
         parent /= "long-local-worker-segment"
-    parent.mkdir(parents=True)
+    secure = local_host_platform().secure_filesystem
+    secure.ensure_directory_path(parent)
     output = parent / "operation"
     controller = WorkerController(limits=WorkerLimits(wall_seconds=10))
     execution = controller.execute_operation(
@@ -579,7 +581,10 @@ def test_windows_worker_supports_unicode_and_long_local_paths(
         catalog_root=catalog_root,
     )
     assert isinstance(execution.result, OperationSuccess)
-    assert (output / "manifest.json").is_file()
+    assert secure.read_regular_file(
+        output / "manifest.json",
+        maximum_bytes=2 * 1024 * 1024,
+    )
     controller.close()
 
 

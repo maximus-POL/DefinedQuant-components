@@ -13,6 +13,10 @@ from _source_runtime import activate_source_runtime
 
 activate_source_runtime()
 
+from defined_quant.local_host_platform import (  # noqa: E402
+    SecureFilesystemError,
+    local_host_platform,
+)
 from defined_quant.operation_runtime import (  # noqa: E402
     OperationRuntimeError,
     operation_failure,
@@ -123,7 +127,10 @@ def _read_json(path: str, *, purpose: str) -> Any:
                 errors="strict",
             )
         else:
-            content = Path(path).expanduser().read_bytes().decode(
+            content = local_host_platform().secure_filesystem.read_regular_file(
+                Path(path).expanduser(),
+                maximum_bytes=2 * 1024 * 1024,
+            ).decode(
                 "utf-8",
                 errors="strict",
             )
@@ -150,7 +157,7 @@ def _read_json(path: str, *, purpose: str) -> Any:
             f"{purpose} could not be read.",
             details={"type": type(exc).__name__},
         ) from exc
-    except OSError as exc:
+    except (OSError, SecureFilesystemError) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.INVALID_OPERATION_REQUEST,
             f"{purpose} could not be read.",
