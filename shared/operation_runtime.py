@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import ctypes
-import errno
 import hashlib
 import json
 import os
 import re
-import shutil
-import sys
-import tempfile
-from collections.abc import Callable, Mapping
-from contextlib import redirect_stderr, redirect_stdout
+import secrets
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any, TypeVar, cast
 
 from defined_quant import __version__
@@ -25,7 +22,12 @@ from defined_quant.catalog import (
     load_component,
     verify_subject,
 )
-from defined_quant.charts import save_svg, visualization_hash
+from defined_quant.charts import render_svg, visualization_hash
+from defined_quant.local_host_platform import (
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+    local_host_platform,
+)
 from defined_quant.types import (
     AmbiguousInput,
     ComponentContractError,
@@ -51,14 +53,14 @@ from defined_quant_protocol import (
     RunnerIdentity,
     SvgArtifact,
 )
+from defined_quant_protocol.operation import portable_member_key
 from pydantic import BaseModel, ValidationError
 
 _RUNNER_NAME = "use_defined_quant"
 _RUNNER_VERSION = "0.1.0"
 _MANIFEST_MEMBER = "manifest.json"
-_AT_FDCWD = -100
-_RENAME_NOREPLACE = 0x00000001
-_RENAME_EXCL = 0x00000004
+_STAGING_PREFIX = ".defined-quant-operation-stage-"
+_MAX_OPERATION_BUNDLE_BYTES = 128 * 1024 * 1024
 _T = TypeVar("_T")
 
 
@@ -75,10 +77,18 @@ class _NoiseCapture:
 
     def __init__(self) -> None:
         self.emitted = False
+        self._bytes = 0
+        self._lock = Lock()
 
     def write(self, value: str) -> int:
         if value:
-            self.emitted = True
+            with self._lock:
+                self.emitted = True
+                limit = _WORKER_STREAM_LIMIT
+                if limit is not None:
+                    self._bytes += len(value.encode("utf-8", errors="replace"))
+                    if self._bytes > limit:
+                        raise _WorkerStreamOverflow
         return len(value)
 
     def flush(self) -> None:
@@ -101,6 +111,34 @@ class OperationRuntimeError(Exception):
         self.message = message
         self.component = component
         self.details = details or {}
+
+
+class WorkerStreamLimitExceeded(Exception):
+    """Internal worker signal translated only to the closed host resource failure."""
+
+
+class _WorkerStreamOverflow(BaseException):
+    pass
+
+
+_WORKER_STREAM_LIMIT: int | None = None
+
+
+@contextmanager
+def worker_output_limit(maximum_bytes: int) -> Iterator[None]:
+    """Apply the subprocess-only per-stream component-output ceiling."""
+
+    if maximum_bytes <= 0:
+        raise ValueError("worker output limit must be positive")
+    global _WORKER_STREAM_LIMIT
+    previous = _WORKER_STREAM_LIMIT
+    _WORKER_STREAM_LIMIT = maximum_bytes
+    try:
+        yield
+    except _WorkerStreamOverflow:
+        raise WorkerStreamLimitExceeded from None
+    finally:
+        _WORKER_STREAM_LIMIT = previous
 
 
 def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
@@ -545,7 +583,14 @@ def _safe_output_directory(
             component=component,
         )
     output_dir = expanded.resolve()
-    if output_dir in {Path(output_dir.anchor), Path.home().resolve()}:
+    forbidden = {Path(output_dir.anchor)}
+    try:
+        forbidden.add(Path.home().resolve())
+    except RuntimeError:
+        # Scrubbed workers have no ambient home variable. Their internal output path was
+        # already validated by the controller and is inside owner-private workspace state.
+        pass
+    if output_dir in forbidden:
         raise OperationRuntimeError(
             OperationErrorCode.INVALID_OUTPUT_DIRECTORY,
             "Output directory must not be a filesystem root or the user home directory.",
@@ -585,61 +630,20 @@ def _assert_output_available(
 
 
 def _assert_flat_members(members: tuple[str, ...]) -> None:
-    if any(
-        "/" in member
-        or "\\" in member
-        or Path(member).name != member
-        or member in {".", ".."}
-        for member in members
+    try:
+        portable_keys = tuple(portable_member_key(member) for member in members)
+    except ValueError as exc:
+        raise OperationRuntimeError(
+            OperationErrorCode.ARTIFACT_WRITE_FAILED,
+            "The runner generated a non-flat output member path.",
+        ) from exc
+    if any("/" in member for member in members) or len(set(portable_keys)) != len(
+        portable_keys
     ):
         raise OperationRuntimeError(
             OperationErrorCode.ARTIFACT_WRITE_FAILED,
             "The runner generated a non-flat output member path.",
         )
-
-
-def _atomic_rename_no_replace(staging_dir: Path, output_dir: Path) -> None:
-    """Atomically rename a directory while refusing every existing destination entry."""
-
-    source = os.fsencode(staging_dir)
-    destination = os.fsencode(output_dir)
-    if sys.platform == "linux":
-        libc = ctypes.CDLL(None, use_errno=True)
-        renameat2 = getattr(libc, "renameat2", None)
-        if renameat2 is None:
-            raise OSError(errno.ENOTSUP, "renameat2 is unavailable")
-        renameat2.argtypes = (
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
-        )
-        renameat2.restype = ctypes.c_int
-        result = renameat2(
-            _AT_FDCWD,
-            source,
-            _AT_FDCWD,
-            destination,
-            _RENAME_NOREPLACE,
-        )
-    elif sys.platform == "darwin":
-        libc = ctypes.CDLL(None, use_errno=True)
-        renamex_np = getattr(libc, "renamex_np", None)
-        if renamex_np is None:
-            raise OSError(errno.ENOTSUP, "renamex_np is unavailable")
-        renamex_np.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
-        renamex_np.restype = ctypes.c_int
-        result = renamex_np(source, destination, _RENAME_EXCL)
-    elif os.name == "nt":
-        os.rename(staging_dir, output_dir)
-        return
-    else:
-        raise OSError(errno.ENOTSUP, "atomic no-replace directory publication is unavailable")
-
-    if result != 0:
-        error_number = ctypes.get_errno()
-        raise OSError(error_number, os.strerror(error_number), os.fspath(output_dir))
 
 
 def _publish_staged_directory(
@@ -654,15 +658,34 @@ def _publish_staged_directory(
     _assert_flat_members(members)
     _assert_output_available(output_dir, component=component)
     try:
-        _atomic_rename_no_replace(staging_dir, output_dir)
-    except OSError as exc:
-        if exc.errno in {errno.EEXIST, errno.ENOTEMPTY} or os.path.lexists(output_dir):
+        local_host_platform().secure_filesystem.publish_directory_no_replace(
+            staging_dir,
+            output_dir,
+        )
+    except SecureFilesystemError as exc:
+        if (
+            exc.code is SecureFilesystemErrorCode.ALREADY_EXISTS
+            or os.path.lexists(output_dir)
+        ):
             raise OperationRuntimeError(
                 OperationErrorCode.OUTPUT_EXISTS,
                 "Output directory appeared before publication completed; choose a new directory.",
                 component=component,
             ) from exc
         raise
+
+
+def _new_operation_stage(parent: Path) -> Path:
+    secure_filesystem = local_host_platform().secure_filesystem
+    for _attempt in range(100):
+        stage = parent / f"{_STAGING_PREFIX}{secrets.token_hex(8)}"
+        try:
+            secure_filesystem.create_private_directory(stage)
+            return stage
+        except SecureFilesystemError as exc:
+            if exc.code is not SecureFilesystemErrorCode.ALREADY_EXISTS:
+                raise
+    raise SecureFilesystemError(SecureFilesystemErrorCode.ALREADY_EXISTS)
 
 
 def verify_operation_bundle(
@@ -676,27 +699,41 @@ def verify_operation_bundle(
         manifest.result,
         *manifest.artifacts,
     )
-    expected_names = {member.path for member in declared} | {_MANIFEST_MEMBER}
     try:
+        secure_filesystem = local_host_platform().secure_filesystem
+        secure_filesystem.verify_private_directory(directory)
+        expected_names = tuple(member.path for member in declared) + (_MANIFEST_MEMBER,)
+        expected_keys = tuple(portable_member_key(name) for name in expected_names)
         entries = tuple(directory.iterdir())
+        actual_names = tuple(entry.name for entry in entries)
+        actual_keys = tuple(portable_member_key(name) for name in actual_names)
         if (
-            {entry.name for entry in entries} != expected_names
+            len(set(expected_keys)) != len(expected_keys)
+            or len(set(actual_keys)) != len(actual_keys)
+            or set(actual_names) != set(expected_names)
             or any(entry.is_symlink() or not entry.is_file() for entry in entries)
         ):
             raise ValueError("operation bundle members do not match the manifest")
 
-        manifest_bytes = (directory / _MANIFEST_MEMBER).read_bytes()
+        manifest_bytes = secure_filesystem.read_private_file(
+            directory / _MANIFEST_MEMBER,
+            maximum_bytes=_MAX_OPERATION_BUNDLE_BYTES,
+        )
         if manifest_bytes != _pretty_json_bytes(manifest.model_dump(mode="json")):
             raise ValueError("operation manifest bytes are not canonical")
         if OperationManifest.model_validate_json(manifest_bytes) != manifest:
             raise ValueError("operation manifest does not round-trip exactly")
 
         for member in declared:
-            if _sha256((directory / member.path).read_bytes()) != member.sha256:
+            member_bytes = secure_filesystem.read_private_file(
+                directory / member.path,
+                maximum_bytes=_MAX_OPERATION_BUNDLE_BYTES,
+            )
+            if _sha256(member_bytes) != member.sha256:
                 raise ValueError("operation bundle member digest does not match")
     except OperationRuntimeError:
         raise
-    except (OSError, ValidationError, ValueError) as exc:
+    except (OSError, SecureFilesystemError, ValidationError, ValueError) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.ARTIFACT_WRITE_FAILED,
             "The staged operation bundle failed deterministic reconciliation.",
@@ -727,14 +764,12 @@ def _materialize(
     _assert_flat_members(members)
 
     try:
-        output_dir.parent.mkdir(parents=True, exist_ok=True)
+        local_host_platform().secure_filesystem.ensure_directory_path(output_dir.parent)
         _assert_output_available(output_dir, component=request.component)
-        staging_dir = Path(
-            tempfile.mkdtemp(prefix=f".{output_dir.name}.dq-stage-", dir=output_dir.parent)
-        )
+        staging_dir = _new_operation_stage(output_dir.parent)
     except OperationRuntimeError:
         raise
-    except OSError as exc:
+    except (OSError, SecureFilesystemError) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.ARTIFACT_WRITE_FAILED,
             "Could not prepare the operation output directory.",
@@ -744,8 +779,9 @@ def _materialize(
 
     published = False
     try:
-        (staging_dir / input_member).write_bytes(input_bytes)
-        (staging_dir / result_member).write_bytes(result_bytes)
+        secure_filesystem = local_host_platform().secure_filesystem
+        secure_filesystem.create_private_file(staging_dir / input_member, input_bytes)
+        secure_filesystem.create_private_file(staging_dir / result_member, result_bytes)
 
         artifacts: list[SvgArtifact] = []
         requested_visualizations = (
@@ -753,8 +789,8 @@ def _materialize(
         )
         for spec, member in zip(requested_visualizations, artifact_members, strict=True):
             artifact_path = staging_dir / member
-            save_svg(spec, artifact_path)
-            artifact_bytes = artifact_path.read_bytes()
+            artifact_bytes = render_svg(spec).encode("utf-8")
+            secure_filesystem.create_private_file(artifact_path, artifact_bytes)
             artifacts.append(
                 SvgArtifact(
                     path=member,
@@ -778,8 +814,9 @@ def _materialize(
             result=FileDigest(path=result_member, sha256=_sha256(result_bytes)),
             artifacts=tuple(artifacts),
         )
-        (staging_dir / _MANIFEST_MEMBER).write_bytes(
-            _pretty_json_bytes(manifest.model_dump(mode="json"))
+        secure_filesystem.create_private_file(
+            staging_dir / _MANIFEST_MEMBER,
+            _pretty_json_bytes(manifest.model_dump(mode="json")),
         )
         verify_operation_bundle(staging_dir, manifest)
         _publish_staged_directory(
@@ -792,7 +829,7 @@ def _materialize(
         return manifest
     except OperationRuntimeError:
         raise
-    except (OSError, ValidationError, ValueError) as exc:
+    except (OSError, SecureFilesystemError, ValidationError, ValueError) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.ARTIFACT_WRITE_FAILED,
             "The component completed, but its portable artifacts could not be materialized.",
@@ -801,7 +838,10 @@ def _materialize(
         ) from exc
     finally:
         if not published and staging_dir.exists():
-            shutil.rmtree(staging_dir)
+            try:
+                local_host_platform().secure_filesystem.remove_private_tree(staging_dir)
+            except SecureFilesystemError:
+                pass
 
 
 def _execute_operation_success(
@@ -939,6 +979,7 @@ def execute_resolved_operation(
 __all__ = [
     "ExecutedComponent",
     "OperationRuntimeError",
+    "WorkerStreamLimitExceeded",
     "component_execution_models",
     "component_record_for_request",
     "component_reference",
@@ -951,4 +992,5 @@ __all__ = [
     "resolve_component",
     "validate_component_input",
     "verify_operation_bundle",
+    "worker_output_limit",
 ]

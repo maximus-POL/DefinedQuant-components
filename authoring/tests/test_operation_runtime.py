@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import ast
-import errno
 import hashlib
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tomllib
@@ -15,6 +16,11 @@ from typing import Any
 
 import defined_quant.operation_runtime as operation_runtime
 import pytest
+from defined_quant.local_host_platform import (
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+    local_host_platform,
+)
 from defined_quant.operation_runtime import (
     OperationRuntimeError,
     execute_operation,
@@ -24,11 +30,13 @@ from defined_quant.service import DefinedQuantService
 from defined_quant_protocol import (
     CallerProvenance,
     ComponentRef,
+    OperationErrorCode,
     OperationFailure,
     OperationRequest,
     OperationSuccess,
     SvgArtifactRequest,
 )
+from defined_quant_protocol.operation import portable_member_key
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = (
@@ -40,6 +48,14 @@ RUNNER = (
     / "run_component.py"
 )
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "operation_runtime_phase0.v1.json"
+WINDOWS_DEVICE_NAMES = (
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+)
 
 
 def _fixture() -> dict[str, Any]:
@@ -79,6 +95,35 @@ def _run_typed_cli(
             str(output_dir),
         ],
         cwd=ROOT,
+        check=False,
+        capture_output=True,
+    )
+
+
+def _run_stdin_cli(
+    request: OperationRequest,
+    output_dir: Path,
+    *,
+    line_ending: bytes = b"\n",
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    request_bytes = json.dumps(
+        request.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--request",
+            "-",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=ROOT,
+        env=environment,
+        input=request_bytes + line_ending,
         check=False,
         capture_output=True,
     )
@@ -137,6 +182,13 @@ def test_runtime_service_and_typed_cli_match_frozen_phase0_bytes(
     service_response = _serialized_result(service_result)
     assert runtime_response == service_response == completed.stdout
     assert _bundle_bytes(runtime_dir) == _bundle_bytes(service_dir) == _bundle_bytes(cli_dir)
+    if sys.platform != "win32":
+        for directory in (runtime_dir, service_dir, cli_dir):
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+            assert all(
+                stat.S_IMODE(member.stat().st_mode) == 0o600
+                for member in directory.iterdir()
+            )
 
     for member, expected in fixture["surfaces"].items():
         content = completed.stdout if member == "stdout" else (cli_dir / member).read_bytes()
@@ -147,6 +199,20 @@ def test_runtime_service_and_typed_cli_match_frozen_phase0_bytes(
     assert manifest.runner.model_dump() == {"name": "use_defined_quant", "version": "0.1.0"}
     for member in (manifest.input, manifest.result, *manifest.artifacts):
         assert hashlib.sha256((cli_dir / member.path).read_bytes()).hexdigest() == member.sha256
+
+
+def test_internal_worker_output_validation_does_not_require_a_home_variable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing_home(_cls: type[Path]) -> Path:
+        raise RuntimeError
+
+    monkeypatch.setattr(Path, "home", classmethod(missing_home))
+    assert operation_runtime.prepare_output_directory(
+        tmp_path / "worker-bundle",
+        component=None,
+    ) == tmp_path / "worker-bundle"
 
 
 def test_legacy_cli_matches_frozen_phase0_bytes(tmp_path: Path) -> None:
@@ -187,6 +253,141 @@ def test_legacy_cli_matches_frozen_phase0_bytes(tmp_path: Path) -> None:
     for member, expected in fixture["surfaces"].items():
         content = completed.stdout if member == "stdout" else (output_dir / member).read_bytes()
         _assert_surface(content, expected)
+
+
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"])
+def test_binary_stdin_cli_matches_frozen_golden_bytes(
+    tmp_path: Path,
+    line_ending: bytes,
+) -> None:
+    fixture = _fixture()["typed_success"]
+    completed = _run_stdin_cli(
+        _typed_request(),
+        tmp_path / ("lf" if line_ending == b"\n" else "crlf"),
+        line_ending=line_ending,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stderr == b""
+    assert b"\r" not in completed.stdout
+    _assert_surface(completed.stdout, fixture["surfaces"]["stdout"])
+
+
+def test_binary_stdin_cli_rejects_invalid_utf8_and_ctrl_z_as_data(
+    tmp_path: Path,
+) -> None:
+    arguments = [
+        sys.executable,
+        str(RUNNER),
+        "--request",
+        "-",
+        "--output-dir",
+        str(tmp_path / "output"),
+    ]
+    invalid = subprocess.run(
+        arguments,
+        cwd=ROOT,
+        input=b'{"schema_version":1,"label":"\xff"}\n',
+        check=False,
+        capture_output=True,
+    )
+    request_bytes = json.dumps(
+        _typed_request().model_dump(mode="json"),
+        separators=(",", ":"),
+    ).encode("utf-8")
+    ctrl_z = subprocess.run(
+        arguments,
+        cwd=ROOT,
+        input=request_bytes + b"\x1a",
+        check=False,
+        capture_output=True,
+    )
+
+    assert invalid.returncode == ctrl_z.returncode == 2
+    assert invalid.stdout == ctrl_z.stdout == b""
+    invalid_failure = OperationFailure.model_validate_json(invalid.stderr)
+    ctrl_z_failure = OperationFailure.model_validate_json(ctrl_z.stderr)
+    assert invalid_failure.error.code is OperationErrorCode.INVALID_JSON
+    assert invalid_failure.error.message == "Operation request is not valid UTF-8."
+    assert ctrl_z_failure.error.code is OperationErrorCode.INVALID_JSON
+    assert ctrl_z_failure.error.message == "Operation request is not valid JSON."
+    assert not (tmp_path / "output").exists()
+
+
+def test_cli_bytes_ignore_locale_codepage_and_unicode_input(
+    tmp_path: Path,
+) -> None:
+    request = _typed_request().model_copy(
+        update={
+            "provenance": CallerProvenance(
+                source_kind="synthetic",
+                interpretation_method="caller_structured",
+                label="Zażółć gęślą jaźń — €.",
+            )
+        }
+    )
+    baseline_dir = tmp_path / "baseline"
+    altered_dir = tmp_path / "altered"
+    baseline = _run_stdin_cli(request, baseline_dir)
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PYTHONIOENCODING": "cp1252:strict",
+            "PYTHONUTF8": "0",
+        }
+    )
+    altered = _run_stdin_cli(request, altered_dir, environment=environment)
+
+    assert baseline.returncode == altered.returncode == 0
+    assert baseline.stderr == altered.stderr == b""
+    assert altered.stdout == baseline.stdout
+    assert _bundle_bytes(altered_dir) == _bundle_bytes(baseline_dir)
+    assert b"\r" not in altered.stdout
+
+
+@pytest.mark.parametrize("path_kind", ["unicode", "long"])
+def test_cli_supports_unicode_and_long_local_paths(
+    tmp_path: Path,
+    path_kind: str,
+) -> None:
+    parent = tmp_path / "zażółć-gęślą-jaźń"
+    if path_kind == "long":
+        while len(os.fspath(parent)) < 280:
+            parent /= "long-cli-path-segment"
+    secure = local_host_platform().secure_filesystem
+    secure.ensure_directory_path(parent)
+    request_path = parent / "żądanie.json"
+    output_dir = parent / "wynik"
+    secure.create_private_file(
+        request_path,
+        json.dumps(_typed_request().model_dump(mode="json")).encode("utf-8"),
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--request",
+            str(request_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stderr == b""
+    _assert_surface(
+        completed.stdout,
+        _fixture()["typed_success"]["surfaces"]["stdout"],
+    )
+    assert secure.read_regular_file(
+        output_dir / "manifest.json",
+        maximum_bytes=2 * 1024 * 1024,
+    )
 
 
 @pytest.mark.parametrize(
@@ -275,6 +476,58 @@ def test_bundle_verifier_refuses_every_corrupted_surface(tmp_path: Path) -> None
         assert raised.value.code.value == "artifact_write_failed"
 
 
+def test_bundle_verifier_refuses_a_case_colliding_disk_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "original"
+    result = execute_operation(_typed_request(), output_dir=output_dir)
+    assert isinstance(result, OperationSuccess)
+    real_iterdir = Path.iterdir
+
+    def aliased_iterdir(path: Path) -> Any:
+        entries = tuple(real_iterdir(path))
+        if path == output_dir:
+            return iter((*entries, path / "RESULT.JSON"))
+        return iter(entries)
+
+    monkeypatch.setattr(Path, "iterdir", aliased_iterdir)
+    with pytest.raises(OperationRuntimeError) as raised:
+        verify_operation_bundle(output_dir, result.manifest)
+    assert raised.value.code.value == "artifact_write_failed"
+    assert raised.value.message == (
+        "The staged operation bundle failed deterministic reconciliation."
+    )
+
+
+@pytest.mark.parametrize(
+    "members",
+    [
+        ("result.json", "RESULT.JSON"),
+        ("manifest.json", "MANIFEST.JSON"),
+        ("CON.txt",),
+        ("result.json:stream",),
+        ("result.json ",),
+        ("result\\json",),
+        ("PROGRA~1.json",),
+    ],
+)
+def test_runtime_publication_refuses_nonportable_or_colliding_members(
+    members: tuple[str, ...],
+) -> None:
+    with pytest.raises(OperationRuntimeError) as raised:
+        operation_runtime._assert_flat_members(members)
+    assert raised.value.code.value == "artifact_write_failed"
+    assert raised.value.message == "The runner generated a non-flat output member path."
+
+
+@pytest.mark.parametrize("device_name", WINDOWS_DEVICE_NAMES)
+def test_numeric_artifact_prefix_protects_every_reserved_safe_id(device_name: str) -> None:
+    member = f"01-{operation_runtime._safe_stem(device_name)}.svg"
+
+    assert portable_member_key(member) == member
+
+
 def test_runtime_revalidates_mutated_nested_request_data(tmp_path: Path) -> None:
     request = _typed_request()
     mutable_input: Any = request.input
@@ -294,17 +547,16 @@ def test_artifact_failure_cleans_staging_and_publishes_nothing(
 ) -> None:
     output_dir = tmp_path / "output"
 
-    def fail_after_partial_write(_spec: Any, path: Path) -> None:
-        path.write_bytes(b"partial")
-        raise OSError(errno.EIO, "synthetic artifact failure")
+    def fail_render(_spec: Any) -> str:
+        raise OSError("synthetic artifact failure")
 
-    monkeypatch.setattr(operation_runtime, "save_svg", fail_after_partial_write)
+    monkeypatch.setattr(operation_runtime, "render_svg", fail_render)
     result = execute_operation(_typed_request(), output_dir=output_dir)
 
     assert isinstance(result, OperationFailure)
     assert result.error.code.value == "artifact_write_failed"
     assert not output_dir.exists()
-    assert not list(tmp_path.glob(".output.dq-stage-*"))
+    assert not list(tmp_path.glob(".defined-quant-operation-stage-*"))
 
 
 def test_publication_race_leaves_no_partial_operation(
@@ -312,20 +564,21 @@ def test_publication_race_leaves_no_partial_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output_dir = tmp_path / "output"
-    atomic_rename = operation_runtime._atomic_rename_no_replace
+    secure_filesystem = operation_runtime.local_host_platform().secure_filesystem
+    atomic_publish = secure_filesystem.publish_directory_no_replace
 
     def race(staging: Path, destination: Path) -> None:
         destination.mkdir()
-        atomic_rename(staging, destination)
+        atomic_publish(staging, destination)
 
-    monkeypatch.setattr(operation_runtime, "_atomic_rename_no_replace", race)
+    monkeypatch.setattr(secure_filesystem, "publish_directory_no_replace", race)
     result = execute_operation(_typed_request(), output_dir=output_dir)
 
     assert isinstance(result, OperationFailure)
     assert result.error.code.value == "output_exists"
     assert output_dir.is_dir()
     assert list(output_dir.iterdir()) == []
-    assert not list(tmp_path.glob(".output.dq-stage-*"))
+    assert not list(tmp_path.glob(".defined-quant-operation-stage-*"))
 
 
 def test_no_atomic_rename_support_fails_closed_without_fallback(
@@ -335,15 +588,16 @@ def test_no_atomic_rename_support_fails_closed_without_fallback(
     output_dir = tmp_path / "output"
 
     def unavailable(_staging: Path, _destination: Path) -> None:
-        raise OSError(errno.ENOTSUP, "synthetic unsupported primitive")
+        raise SecureFilesystemError(SecureFilesystemErrorCode.CAPABILITY_UNAVAILABLE)
 
-    monkeypatch.setattr(operation_runtime, "_atomic_rename_no_replace", unavailable)
+    secure_filesystem = operation_runtime.local_host_platform().secure_filesystem
+    monkeypatch.setattr(secure_filesystem, "publish_directory_no_replace", unavailable)
     result = execute_operation(_typed_request(), output_dir=output_dir)
 
     assert isinstance(result, OperationFailure)
     assert result.error.code.value == "artifact_write_failed"
     assert not output_dir.exists()
-    assert not list(tmp_path.glob(".output.dq-stage-*"))
+    assert not list(tmp_path.glob(".defined-quant-operation-stage-*"))
 
 
 def test_phase1_runtime_has_no_mcp_import_or_dependency() -> None:

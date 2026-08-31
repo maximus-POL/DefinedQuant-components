@@ -8,6 +8,34 @@ from pathlib import Path
 from types import ModuleType
 
 
+def _resolve_checkout_root(runtime_file: str | Path = __file__) -> Path:
+    """Resolve the exact checkout encoded by the canonical skill-script layout."""
+
+    runtime = Path(runtime_file).resolve()
+    try:
+        project_root = runtime.parents[4]
+    except IndexError:
+        raise RuntimeError("source-runtime checkout layout is incomplete") from None
+    expected_runtime = (
+        project_root
+        / ".agents"
+        / "skills"
+        / "use-defined-quant"
+        / "scripts"
+        / "_source_runtime.py"
+    )
+    required = (
+        project_root / "shared" / "__init__.py",
+        project_root / "categories",
+        project_root / "protocol" / "__init__.py",
+    )
+    if runtime != expected_runtime.resolve() or any(not path.exists() for path in required):
+        raise RuntimeError(
+            f"source-runtime checkout layout mismatch: expected {project_root}; actual {runtime}"
+        )
+    return project_root
+
+
 def _activate_package(
     package_name: str,
     initializer: Path,
@@ -90,7 +118,7 @@ def _assert_package_checkout(
 def activate_source_runtime() -> None:
     """Prefer this checkout over stale installed Defined Quant packages."""
 
-    project_root = Path(__file__).resolve().parents[4]
+    project_root = _resolve_checkout_root()
     shared_root = project_root / "shared"
     categories_root = project_root / "categories"
     protocol_root = project_root / "protocol"

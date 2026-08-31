@@ -347,6 +347,7 @@ _INPUT_LIMIT_NAMES = frozenset(
         "inline_json_source_bytes",
         "local_file_bytes",
         "normalized_dataset_payload_bytes",
+        "worker_request_bytes",
         "dataset_rows",
         "dataset_columns",
         "decoded_cell_bytes",
@@ -365,6 +366,7 @@ _RESULT_LIMIT_NAMES = frozenset(
         "result_top_level_fields",
         "operation_artifacts",
         "operation_bundle_bytes",
+        "worker_control_response_bytes",
     }
 )
 

@@ -1,0 +1,46 @@
+[project]
+name = "defined-quant-mcp"
+version = "0.1.0a1"
+description = "Local STDIO MCP transport for deterministic Defined Quant components."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+dependencies = [
+  "defined-quant==0.1.3",
+  "mcp==2.0.0",
+]
+
+[project.scripts]
+defined-quant-mcp = "defined_quant_mcp.server:main"
+
+[dependency-groups]
+dev = [
+  "mypy",
+  "pytest",
+  "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/defined_quant_mcp"]
+
+[tool.uv.sources]
+defined-quant = { path = "..", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

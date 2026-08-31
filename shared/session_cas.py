@@ -3,20 +3,15 @@
 from __future__ import annotations
 
 import base64
-import ctypes
-import errno
 import hashlib
 import hmac
 import json
 import os
 import re
 import secrets
-import shutil
-import stat
-import sys
-import tempfile
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -37,11 +32,19 @@ from defined_quant.host_failures import (
     HostFailureCode,
     HostFailureException,
 )
+from defined_quant.local_host_platform import (
+    SecureFilesystem,
+    SecureFilesystemError,
+    SecureFilesystemErrorCode,
+    SessionLockHandle,
+    local_host_platform,
+)
 from defined_quant.operation_records import reconcile_operation_record
 from defined_quant_protocol import OperationManifest
+from defined_quant_protocol.operation import portable_member_key
 from pydantic import ValidationError
 
-MAX_DATASET_PAYLOAD_BYTES: Final = 128 * 1024 * 1024
+MAX_DATASET_PAYLOAD_BYTES: Final = 512 * 1024
 MAX_OPERATION_BUNDLE_BYTES: Final = 128 * 1024 * 1024
 MAX_SESSION_BYTES: Final = 1024 * 1024 * 1024
 ORPHAN_SESSION_AGE_SECONDS: Final = 24 * 60 * 60
@@ -56,13 +59,6 @@ _MARKER_VALUE = {
 }
 _REFERENCE_PATTERN = re.compile(r"^(dqds|dqop):v([0-9]{1,3}):([0-9a-f]{64})$")
 _CURSOR_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,512}$")
-_MEMBER_PATH_PATTERN = re.compile(
-    r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*"
-    r"(?:/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*$"
-)
-_AT_FDCWD = -100
-_RENAME_NOREPLACE = 0x00000001
-_RENAME_EXCL = 0x00000004
 _CURSOR_SELECTOR_DOMAIN = b"defined-quant-cursor-selector-v1\x00"
 
 
@@ -144,162 +140,30 @@ def _fail(
     return HostFailureException(code, details=cast(Any, details))
 
 
-def _owner_matches(info: os.stat_result) -> bool:
-    getuid = getattr(os, "getuid", None)
-    return getuid is not None and info.st_uid == getuid()
-
-
-def _private_mode(info: os.stat_result, *, directory: bool) -> bool:
-    if os.name != "posix":
-        return False
-    expected_type = stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)
-    return expected_type and info.st_mode & 0o077 == 0
-
-
-def _validate_owned_directory(path: Path, *, private: bool) -> os.stat_result:
+def _validate_owned_directory(path: Path, *, private: bool) -> None:
+    if not private:
+        raise ValueError("non-private session directories are not supported")
     try:
-        info = path.lstat()
-    except OSError as exc:
-        raise ValueError("session directory is unavailable") from exc
-    if path.is_symlink() or not stat.S_ISDIR(info.st_mode) or not _owner_matches(info):
-        raise ValueError("session directory is not a correctly owned real directory")
-    if private and not _private_mode(info, directory=True):
-        raise ValueError("session directory is not owner-private")
-    return info
+        local_host_platform().secure_filesystem.verify_private_directory(path)
+    except SecureFilesystemError as exc:
+        raise ValueError("session directory is not owner-private") from exc
 
 
 def _write_private(path: Path, content: bytes) -> None:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags | nofollow, 0o600)
     try:
-        view = memoryview(content)
-        while view:
-            written = os.write(descriptor, view)
-            if written <= 0:
-                raise OSError(errno.EIO, "short CAS write")
-            view = view[written:]
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+        local_host_platform().secure_filesystem.create_private_file(path, content)
+    except SecureFilesystemError as exc:
+        raise ValueError("CAS member could not be created privately") from exc
 
 
 def _read_private(path: Path, *, maximum_bytes: int) -> bytes:
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    nonblocking = getattr(os, "O_NONBLOCK", 0)
-    descriptor = os.open(path, os.O_RDONLY | nofollow | nonblocking)
     try:
-        info = os.fstat(descriptor)
-        if not _owner_matches(info) or not _private_mode(info, directory=False):
-            raise ValueError("CAS member is not an owner-private regular file")
-        if info.st_size > maximum_bytes:
-            raise ValueError("CAS member exceeds its byte ceiling")
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            chunk = os.read(descriptor, min(1024 * 1024, maximum_bytes + 1 - total))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > maximum_bytes:
-                raise ValueError("CAS member exceeds its byte ceiling")
-        after = os.fstat(descriptor)
-        if (
-            after.st_dev != info.st_dev
-            or after.st_ino != info.st_ino
-            or after.st_size != info.st_size
-            or total != info.st_size
-        ):
-            raise ValueError("CAS member changed while it was read")
-        return b"".join(chunks)
-    finally:
-        os.close(descriptor)
-
-
-def _atomic_rename_no_replace(source: Path, destination: Path) -> None:
-    source_bytes = os.fsencode(source)
-    destination_bytes = os.fsencode(destination)
-    if sys.platform == "linux":
-        libc = ctypes.CDLL(None, use_errno=True)
-        renameat2 = getattr(libc, "renameat2", None)
-        if renameat2 is None:
-            raise OSError(errno.ENOTSUP, "renameat2 is unavailable")
-        renameat2.argtypes = (
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
+        return local_host_platform().secure_filesystem.read_private_file(
+            path,
+            maximum_bytes=maximum_bytes,
         )
-        renameat2.restype = ctypes.c_int
-        result = renameat2(
-            _AT_FDCWD,
-            source_bytes,
-            _AT_FDCWD,
-            destination_bytes,
-            _RENAME_NOREPLACE,
-        )
-    elif sys.platform == "darwin":
-        libc = ctypes.CDLL(None, use_errno=True)
-        renamex_np = getattr(libc, "renamex_np", None)
-        if renamex_np is None:
-            raise OSError(errno.ENOTSUP, "renamex_np is unavailable")
-        renamex_np.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
-        renamex_np.restype = ctypes.c_int
-        result = renamex_np(source_bytes, destination_bytes, _RENAME_EXCL)
-    elif os.name == "nt":
-        os.rename(source, destination)
-        return
-    else:
-        raise OSError(errno.ENOTSUP, "atomic no-replace publication is unavailable")
-    if result != 0:
-        number = ctypes.get_errno()
-        raise OSError(number, os.strerror(number), os.fspath(destination))
-
-
-def _lock_file(descriptor: int, *, blocking: bool) -> bool:
-    if os.name == "nt":  # pragma: no cover - reserved for a future tested Windows boundary
-        import msvcrt
-
-        mode = (
-            msvcrt.LK_LOCK  # type: ignore[attr-defined]
-            if blocking
-            else msvcrt.LK_NBLCK  # type: ignore[attr-defined]
-        )
-        try:
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            msvcrt.locking(descriptor, mode, 1)  # type: ignore[attr-defined]
-            return True
-        except OSError:
-            return False
-    import fcntl
-
-    flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-    try:
-        fcntl.flock(descriptor, flags)
-        return True
-    except BlockingIOError:
-        return False
-
-
-def _unlock_file(descriptor: int) -> None:
-    if os.name == "nt":  # pragma: no cover - reserved for a future tested Windows boundary
-        import msvcrt
-
-        try:
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            msvcrt.locking(  # type: ignore[attr-defined]
-                descriptor,
-                msvcrt.LK_UNLCK,  # type: ignore[attr-defined]
-                1,
-            )
-        except OSError:
-            pass
-        return
-    import fcntl
-
-    fcntl.flock(descriptor, fcntl.LOCK_UN)
+    except SecureFilesystemError as exc:
+        raise ValueError("CAS member could not be read safely") from exc
 
 
 def _reference_parts(
@@ -334,18 +198,10 @@ def _cursor_selector_binding(selector: object) -> str | None:
 
 
 def _entry_size(path: Path) -> int:
-    total = 0
-    for root, directories, files in os.walk(path, followlinks=False):
-        for name in (*directories, *files):
-            candidate = Path(root) / name
-            info = candidate.lstat()
-            if stat.S_ISLNK(info.st_mode) or not _owner_matches(info):
-                raise ValueError("CAS entry contains an unsafe member")
-            if stat.S_ISREG(info.st_mode):
-                total += info.st_size
-            elif not stat.S_ISDIR(info.st_mode):
-                raise ValueError("CAS entry contains a non-regular member")
-    return total
+    try:
+        return local_host_platform().secure_filesystem.private_tree_size(path)
+    except SecureFilesystemError as exc:
+        raise ValueError("CAS entry contains an unsafe member") from exc
 
 
 class SessionCas:
@@ -358,8 +214,12 @@ class SessionCas:
         scope_registry: SessionScopeRegistry | None = None,
         limits: CasLimits = CasLimits(),
     ) -> None:
-        if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
-            raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED)
+        try:
+            self._secure_filesystem: SecureFilesystem = (
+                local_host_platform().secure_filesystem
+            )
+        except SecureFilesystemError as exc:
+            raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
         self._mutex = RLock()
         self._scope_registry = scope_registry or _DEFAULT_SCOPE_REGISTRY
         self._limits = limits
@@ -369,32 +229,34 @@ class SessionCas:
         self._corrupt_references: set[str] = set()
         self._used_bytes = 0
         self._closed = False
-        self._lock_descriptor = -1
+        self._lock_handle: SessionLockHandle | None = None
 
         self._state_root = Path(state_root)
         self._prepare_state_root()
         cleanup_orphan_sessions(self._state_root)
         self._directory = self._state_root / f"{_SESSION_PREFIX}{self._session_id}"
         try:
-            self._directory.mkdir(mode=0o700)
-            os.chmod(self._directory, 0o700)
+            self._secure_filesystem.create_private_directory(self._directory)
             for name in ("datasets", "operations", "staging", "quarantine"):
                 child = self._directory / name
-                child.mkdir(mode=0o700)
-                os.chmod(child, 0o700)
+                self._secure_filesystem.create_private_directory(child)
             _write_private(self._directory / _MARKER_NAME, cas_json_bytes(_MARKER_VALUE))
             _write_private(self._directory / _LOCK_NAME, b"0")
-            self._lock_descriptor = os.open(
+            self._lock_handle = self._secure_filesystem.acquire_session_lock(
                 self._directory / _LOCK_NAME,
-                os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+                blocking=True,
             )
-            if not _lock_file(self._lock_descriptor, blocking=True):
-                raise OSError(errno.EBUSY, "could not lock session directory")
+            if self._lock_handle is None:
+                raise SecureFilesystemError(SecureFilesystemErrorCode.LOCK_UNAVAILABLE)
         except Exception as exc:
-            if self._lock_descriptor >= 0:
-                os.close(self._lock_descriptor)
+            if self._lock_handle is not None:
+                self._secure_filesystem.release_session_lock(self._lock_handle)
+                self._lock_handle = None
             if self._directory.exists() and not self._directory.is_symlink():
-                shutil.rmtree(self._directory, ignore_errors=True)
+                try:
+                    self._secure_filesystem.remove_private_tree(self._directory)
+                except SecureFilesystemError:
+                    pass
             raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
 
     @property
@@ -423,14 +285,13 @@ class SessionCas:
             if self._state_root.exists():
                 if self._state_root.resolve(strict=True) != self._state_root:
                     raise ValueError("session-state root must not traverse symbolic links")
-                _validate_owned_directory(self._state_root, private=True)
+                self._secure_filesystem.verify_private_directory(self._state_root)
             else:
                 if self._state_root.parent.resolve(strict=True) != self._state_root.parent:
                     raise ValueError("session-state root parent must not traverse symbolic links")
-                self._state_root.mkdir(mode=0o700)
-                os.chmod(self._state_root, 0o700)
-                _validate_owned_directory(self._state_root, private=True)
-        except (OSError, ValueError) as exc:
+                self._secure_filesystem.create_private_directory(self._state_root)
+                self._secure_filesystem.verify_private_directory(self._state_root)
+        except (OSError, SecureFilesystemError, ValueError) as exc:
             raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
 
     def _require_open(self) -> None:
@@ -520,7 +381,10 @@ class SessionCas:
                 raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
             finally:
                 if stage.exists():
-                    shutil.rmtree(stage, ignore_errors=True)
+                    try:
+                        self._secure_filesystem.remove_private_tree(stage)
+                    except SecureFilesystemError:
+                        pass
 
     def load_dataset(self, reference: str) -> StoredDataset:
         """Return a dataset only after complete schema, digest, and cross-record verification."""
@@ -615,13 +479,15 @@ class SessionCas:
             try:
                 _write_private(stage / "record.json", record_bytes)
                 bundle_root = stage / "bundle"
-                bundle_root.mkdir(mode=0o700)
-                os.chmod(bundle_root, 0o700)
+                self._secure_filesystem.create_private_directory(bundle_root)
                 _write_private(bundle_root / "manifest.json", manifest_bytes)
                 for name, content in member_copy.items():
                     destination_member = bundle_root.joinpath(*name.split("/"))
-                    destination_member.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                    os.chmod(destination_member.parent, 0o700)
+                    self._secure_filesystem.create_private_directory(
+                        destination_member.parent,
+                        parents=True,
+                        exist_ok=True,
+                    )
                     _write_private(destination_member, content)
                 self._load_operation_directory(stage, reference)
                 if destination.exists():
@@ -647,7 +513,10 @@ class SessionCas:
                 raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
             finally:
                 if stage.exists():
-                    shutil.rmtree(stage, ignore_errors=True)
+                    try:
+                        self._secure_filesystem.remove_private_tree(stage)
+                    except SecureFilesystemError:
+                        pass
 
     def load_operation(self, reference: str) -> StoredOperation:
         """Return an operation only after complete record, manifest, and member verification."""
@@ -664,6 +533,22 @@ class SessionCas:
             except Exception as exc:
                 self._quarantine(destination, reference)
                 raise _fail(HostFailureCode.RECORD_CORRUPT) from exc
+
+    @contextmanager
+    def temporary_operation_output(self) -> Iterator[Path]:
+        """Yield one owner-private unpublished bundle destination and remove it afterward."""
+
+        with self._mutex:
+            self._require_open()
+            stage = self._new_stage("operation")
+        try:
+            yield stage / "bundle"
+        finally:
+            if stage.exists():
+                try:
+                    self._secure_filesystem.remove_private_tree(stage)
+                except SecureFilesystemError:
+                    pass
 
     def _load_operation_directory(self, directory: Path, reference: str) -> StoredOperation:
         _validate_owned_directory(directory, private=True)
@@ -697,6 +582,7 @@ class SessionCas:
         manifest_bytes = _read_private(bundle_root / "manifest.json", maximum_bytes=remaining)
         remaining -= len(manifest_bytes)
         paths: list[str] = []
+        portable_keys = {portable_member_key("manifest.json")}
         for root, directories, files in os.walk(bundle_root, followlinks=False):
             directories.sort(key=lambda item: item.encode("utf-8"))
             files.sort(key=lambda item: item.encode("utf-8"))
@@ -705,12 +591,17 @@ class SessionCas:
             for name in files:
                 path = Path(root) / name
                 relative = path.relative_to(bundle_root).as_posix()
+                try:
+                    portable_key = portable_member_key(relative)
+                except ValueError as exc:
+                    raise ValueError("operation member path is unsafe") from exc
                 if relative == "manifest.json":
                     continue
-                if _MEMBER_PATH_PATTERN.fullmatch(relative) is None or len(relative.encode()) > 512:
-                    raise ValueError("operation member path is unsafe")
+                if portable_key in portable_keys:
+                    raise ValueError("operation bundle has an invalid member count")
+                portable_keys.add(portable_key)
                 paths.append(relative)
-        if not 2 <= len(paths) <= 130 or len(set(paths)) != len(paths):
+        if not 2 <= len(paths) <= 130:
             raise ValueError("operation bundle has an invalid member count")
         members: dict[str, bytes] = {}
         for relative in sorted(paths, key=str.encode):
@@ -750,21 +641,30 @@ class SessionCas:
         if not 2 <= len(members) <= 130:
             raise ValueError("operation bundle has an invalid member count")
         result: dict[str, bytes] = {}
+        portable_keys = {portable_member_key("manifest.json")}
         for name, content in members.items():
-            if (
-                not isinstance(name, str)
-                or _MEMBER_PATH_PATTERN.fullmatch(name) is None
-                or len(name.encode("utf-8")) > 512
-                or not isinstance(content, bytes)
-            ):
+            if not isinstance(name, str) or not isinstance(content, bytes):
                 raise ValueError("operation member mapping is invalid")
+            try:
+                portable_key = portable_member_key(name)
+            except ValueError as exc:
+                raise ValueError("operation member mapping is invalid") from exc
+            if portable_key in portable_keys:
+                raise ValueError("operation member mapping is invalid")
+            portable_keys.add(portable_key)
             result[name] = bytes(content)
         return result
 
-    def _new_stage(self, kind: str) -> Path:
-        stage = Path(tempfile.mkdtemp(prefix=f"{kind}-", dir=self._directory / "staging"))
-        os.chmod(stage, 0o700)
-        return stage
+    def _new_stage(self, kind: Literal["dataset", "operation"]) -> Path:
+        for _attempt in range(100):
+            stage = self._directory / "staging" / f"{kind}-{secrets.token_hex(8)}"
+            try:
+                self._secure_filesystem.create_private_directory(stage)
+                return stage
+            except SecureFilesystemError as exc:
+                if exc.code is not SecureFilesystemErrorCode.ALREADY_EXISTS:
+                    raise
+        raise SecureFilesystemError(SecureFilesystemErrorCode.ALREADY_EXISTS)
 
     def _publish_stage(
         self,
@@ -774,10 +674,13 @@ class SessionCas:
         kind: Literal["dataset", "operation"],
     ) -> None:
         try:
-            _atomic_rename_no_replace(stage, destination)
+            self._secure_filesystem.publish_directory_no_replace(stage, destination)
             return
-        except OSError as exc:
-            if exc.errno not in {errno.EEXIST, errno.ENOTEMPTY} and not destination.exists():
+        except SecureFilesystemError as exc:
+            if (
+                exc.code is not SecureFilesystemErrorCode.ALREADY_EXISTS
+                and not destination.exists()
+            ):
                 raise
         if kind == "dataset":
             try:
@@ -800,8 +703,8 @@ class SessionCas:
             f"{destination.parent.name}-{destination.name}-{secrets.token_hex(8)}"
         )
         try:
-            os.rename(destination, target)
-        except OSError:
+            self._secure_filesystem.publish_directory_no_replace(destination, target)
+        except SecureFilesystemError:
             pass
 
     def encode_cursor(
@@ -941,25 +844,35 @@ class SessionCas:
             try:
                 marker = self._directory / _MARKER_NAME
                 if self._directory.exists() and self._valid_marker(marker):
-                    if os.name == "nt" and self._lock_descriptor >= 0:
-                        _unlock_file(self._lock_descriptor)
-                        os.close(self._lock_descriptor)
-                        self._lock_descriptor = -1
-                    shutil.rmtree(self._directory)
-            except OSError as exc:
+                    if self._lock_handle is None:
+                        self._secure_filesystem.remove_private_tree(self._directory)
+                    else:
+                        lock_handle = self._lock_handle
+                        self._lock_handle = None
+                        self._secure_filesystem.remove_locked_session_tree(
+                            self._directory,
+                            lock_handle,
+                        )
+            except (OSError, SecureFilesystemError) as exc:
                 raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
             finally:
-                if self._lock_descriptor >= 0:
-                    _unlock_file(self._lock_descriptor)
-                    os.close(self._lock_descriptor)
-                    self._lock_descriptor = -1
+                if self._lock_handle is not None:
+                    self._secure_filesystem.release_session_lock(self._lock_handle)
+                    self._lock_handle = None
 
     @staticmethod
     def _valid_marker(marker: Path) -> bool:
         try:
             content = _read_private(marker, maximum_bytes=1024)
-            return bool(strict_cas_json_loads(content, maximum_bytes=1024) == _MARKER_VALUE)
+            return SessionCas._valid_marker_content(content)
         except (OSError, TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _valid_marker_content(content: bytes) -> bool:
+        try:
+            return bool(strict_cas_json_loads(content, maximum_bytes=1024) == _MARKER_VALUE)
+        except (TypeError, ValueError):
             return False
 
     def __enter__(self) -> SessionCas:
@@ -967,21 +880,6 @@ class SessionCas:
 
     def __exit__(self, _type: object, _value: object, _traceback: object) -> None:
         self.close()
-
-
-def _safe_orphan_tree(directory: Path) -> bool:
-    try:
-        _validate_owned_directory(directory, private=True)
-        for root, directories, files in os.walk(directory, followlinks=False):
-            for name in (*directories, *files):
-                info = (Path(root) / name).lstat()
-                if stat.S_ISLNK(info.st_mode) or not _owner_matches(info):
-                    return False
-                if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
-                    return False
-        return True
-    except (OSError, ValueError):
-        return False
 
 
 def cleanup_orphan_sessions(
@@ -993,61 +891,18 @@ def cleanup_orphan_sessions(
 
     root = Path(state_root)
     try:
-        if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
-            raise ValueError("owner-private CAS is not implemented on this platform")
-        if not root.is_absolute() or Path(os.path.abspath(root)) != root:
-            raise ValueError("session-state root is not a normalized absolute path")
-        if root in {Path(root.anchor), Path.home().resolve()}:
-            raise ValueError("session-state root is too broad")
-        if root.resolve(strict=True) != root:
-            raise ValueError("session-state root must not traverse symbolic links")
-        _validate_owned_directory(root, private=True)
-    except (OSError, ValueError) as exc:
+        removed_names = local_host_platform().secure_filesystem.cleanup_orphan_sessions(
+            root,
+            session_prefix=_SESSION_PREFIX,
+            marker_name=_MARKER_NAME,
+            lock_name=_LOCK_NAME,
+            minimum_age_seconds=ORPHAN_SESSION_AGE_SECONDS,
+            now=time.time() if now is None else now,
+            marker_validator=SessionCas._valid_marker_content,
+        )
+    except SecureFilesystemError as exc:
         raise _fail(HostFailureCode.RECORD_PUBLICATION_FAILED) from exc
-    current_time = time.time() if now is None else now
-    removed: list[Path] = []
-    for candidate in sorted(root.iterdir(), key=lambda item: item.name.encode("utf-8")):
-        if not candidate.name.startswith(_SESSION_PREFIX) or not _safe_orphan_tree(candidate):
-            continue
-        marker = candidate / _MARKER_NAME
-        lock_path = candidate / _LOCK_NAME
-        try:
-            marker_info = marker.lstat()
-            if current_time - marker_info.st_mtime <= ORPHAN_SESSION_AGE_SECONDS:
-                continue
-            if not SessionCas._valid_marker(marker):
-                continue
-            descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
-        except OSError:
-            continue
-        locked = False
-        try:
-            locked = _lock_file(descriptor, blocking=False)
-            if not locked:
-                continue
-            before = candidate.lstat()
-            if not _safe_orphan_tree(candidate):
-                continue
-            after = candidate.lstat()
-            if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
-                continue
-            if os.name == "nt":  # Windows refuses deletion while its lock file is open.
-                _unlock_file(descriptor)
-                os.close(descriptor)
-                descriptor = -1
-                locked = False
-                if not _safe_orphan_tree(candidate):
-                    continue
-            shutil.rmtree(candidate)
-            removed.append(candidate)
-        except OSError:
-            continue
-        finally:
-            if locked:
-                _unlock_file(descriptor)
-            if descriptor >= 0:
-                os.close(descriptor)
-    return tuple(removed)
+    return tuple(root / name for name in removed_names)
 
 
 __all__ = [

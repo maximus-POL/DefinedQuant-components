@@ -14,14 +14,84 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Verify / ${{ matrix.os }} / Python ${{ matrix.python }}
+  build-release-wheels:
+    name: Build exact release wheels
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install locked uv and build Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Verify core lock
+        run: uv lock --check
+
+      - name: Verify MCP lock
+        run: uv lock --project mcp_server --check
+
+      - name: Build and fingerprint core and MCP wheels once
+        env:
+          DQ_WHEEL_DIRECTORY: ${{ runner.temp }}/defined-quant-release-wheels
+        run: uv run --no-project --python 3.13 python authoring/build_release_wheels.py
+
+      - name: Upload exact wheel artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: defined-quant-release-wheels-${{ github.sha }}
+          path: ${{ runner.temp }}/defined-quant-release-wheels
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-native:
+    name: Native / ${{ matrix.os }} / Python ${{ matrix.python }}
+    needs: build-release-wheels
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
+        os: [windows-2025, macos-15, ubuntu-24.04]
         python: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install locked uv and matrix Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Download exact release wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: defined-quant-release-wheels-${{ github.sha }}
+          path: ${{ runner.temp }}/defined-quant-release-wheels
+
+      - name: Run complete native acceptance suite from installed wheels
+        env:
+          DQ_EXPECTED_PYTHON: ${{ matrix.python }}
+          DQ_MEASURE_WORKER_CAPACITY: "1"
+          DQ_WHEEL_DIRECTORY: ${{ runner.temp }}/defined-quant-release-wheels
+        run: uv run --no-project --python ${{ matrix.python }} python authoring/run_native_wheel_matrix.py
+
+  static-analysis:
+    name: Static analysis
+    needs: build-release-wheels
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -34,183 +104,68 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           version: "0.11.16"
-          python-version: ${{ matrix.python }}
+          python-version: "3.13"
           enable-cache: true
 
-      - name: Install locked project
+      - name: Install locked core development environment
         run: uv sync --locked
 
-      - name: Check contracts and evidence
-        run: uv run python authoring/check_component.py
+      - name: Install locked MCP development environment
+        run: uv sync --project mcp_server --locked
 
-      - name: Run component tests
-        run: uv run pytest
+      - name: Download exact release wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: defined-quant-release-wheels-${{ github.sha }}
+          path: ${{ runner.temp }}/defined-quant-release-wheels
 
-      - name: Lint
-        run: |
-          uv run ruff check protocol shared categories authoring \
-            .agents/skills/use-defined-quant/scripts \
-            .agents/skills/use-defined-quant/tests
+      - name: Lint core, protocol, components, authoring, and adapter
+        run: uv run ruff check protocol shared categories authoring .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
 
-      - name: Type-check installed package projection
-        run: |
-          uv run --no-editable mypy shared categories authoring/*.py
-          uv run --no-editable mypy -p defined_quant_protocol
+      - name: Lint MCP transport
+        run: uv run --project mcp_server ruff check mcp_server/src mcp_server/tests
 
-      - name: Build wheel and source archive
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.13'
-        run: uv build
+      - name: Type-check all installed projections
+        env:
+          DQ_WHEEL_DIRECTORY: ${{ runner.temp }}/defined-quant-release-wheels
+        run: uv run python authoring/run_static_type_checks.py
 
-      - name: Verify installed wheel
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.13'
-        run: |
-          uv venv .wheel-check
-          uv pip install --python .wheel-check/bin/python dist/*.whl
-          .wheel-check/bin/python - <<'PY'
-          import sys
-          from math import isclose
-          from pathlib import Path
-          from tempfile import TemporaryDirectory
+      - name: Check patch whitespace
+        run: git diff --check
 
-          from defined_quant import iter_components, load_execution_policy
-          from defined_quant.service import DefinedQuantService
+  publish-release-extras:
+    name: Assemble source archives and catalog
+    needs: [build-release-wheels, verify-native, static-analysis]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
-          service = DefinedQuantService()
-          assert len(service.contract_index) == 7
-          assert tuple(service.contract_index.by_component_id) == (
-              "dq.market_data.log_return",
-              "dq.market_data.monthly_return_matrix",
-              "dq.market_data.rebased_price_index",
-              "dq.market_data.simple_return",
-              "dq.performance.drawdown",
-              "dq.volatility.historical_volatility",
-              "dq.volatility.rolling_historical_volatility",
-          )
-          discovery = service.search_components("calculate period price changes", limit=5)
-          assert discovery.hits[0].record.component_id == "dq.market_data.simple_return"
-          assert service.contract_index is service.contract_index
-          assert not any(name.endswith(".component") for name in sys.modules)
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
-          from defined_quant.market_data.log_return.component import (
-              Output as LogReturnOutput,
-              log_return,
-          )
-          from defined_quant.market_data.simple_return.component import simple_return
-          from defined_quant.volatility.historical_volatility.component import (
-              Inputs as HistoricalVolatilityInputs,
-              historical_volatility,
-          )
-          from defined_quant_protocol import (
-              PROTOCOL_VERSION,
-              CallerProvenance,
-              OperationRequest,
-              OperationSuccess,
-              require_compatible_ports,
-          )
+      - name: Install locked uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          python-version: "3.13"
+          enable-cache: true
 
-          assert PROTOCOL_VERSION == "0.4.0"
-          assert [item.component_id for item in iter_components()] == [
-              "dq.market_data.log_return",
-              "dq.market_data.monthly_return_matrix",
-              "dq.market_data.rebased_price_index",
-              "dq.market_data.simple_return",
-              "dq.performance.drawdown",
-              "dq.volatility.historical_volatility",
-              "dq.volatility.rolling_historical_volatility",
-          ]
-          policy = load_execution_policy("simple_return_csv_v1")
-          ref = policy.components[0].component
-          assert (ref.id, ref.version, ref.subject_hash) == (
-              "dq.market_data.simple_return",
-              "0.3.4",
-              "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a",
-          )
-          request = OperationRequest(
-              component=ref,
-              input={"prices": [100, 101], "price_kind": "adjusted"},
-              provenance=CallerProvenance(
-                  source_kind="synthetic",
-                  interpretation_method="caller_structured",
-                  label="Installed-wheel shared-runtime smoke test.",
-              ),
-          )
-          with TemporaryDirectory(prefix="defined-quant-wheel-runtime-") as temporary:
-              operation = service.execute_operation(
-                  request,
-                  output_dir=Path(temporary) / "operation",
-              )
-              assert isinstance(operation, OperationSuccess)
-              assert operation.manifest.request == request
-              phase3 = DefinedQuantService(
-                  session_state_root=Path(temporary) / "phase3-state"
-              )
-              registration = phase3.register_dataset(
-                  {
-                      "source": {
-                          "kind": "inline_rows",
-                          "rows": [{"value": 1.25}],
-                      },
-                      "columns": [
-                          {
-                              "source_name": "value",
-                              "field_id": "value",
-                              "data_type": "number",
-                              "role": "value",
-                          }
-                      ],
-                      "semantics": {"ordering": "preserve_source_order"},
-                      "provenance": {
-                          "source_kind": "synthetic",
-                          "interpretation_method": "caller_structured",
-                          "label": "Installed-wheel Phase-3 smoke test.",
-                      },
-                  }
-              )
-              assert registration["dataset_ref"].startswith("dqds:v1:")
-              preview = phase3.describe_dataset(
-                  registration["dataset_ref"], view="preview", limit=1
-              )
-              assert preview["preview"]["rows"] == [{"value": 1.25}]
-              phase3.close()
-          simple = simple_return(prices=[100, 101], price_kind="adjusted")
-          assert len(simple.returns) == len(simple.derivations) == 1
-          assert simple.disclosures
-          assert isclose(simple.returns[0], 0.01, rel_tol=0.0, abs_tol=1e-15)
-          large = simple_return(prices=[100.0] * 502, price_kind="adjusted")
-          assert len(large.returns) == 501
-          assert large.visualizations[0].series[0].values == large.returns
-          require_compatible_ports(
-              LogReturnOutput,
-              "returns",
-              HistoricalVolatilityInputs,
-              "returns",
-          )
-          logarithmic = log_return(prices=[100, 101, 99], price_kind="adjusted")
-          volatility = historical_volatility(
-              logarithmic.returns,
-              return_kind=logarithmic.return_kind,
-              annualization_factor=252.0,
-          )
-          assert volatility.sample_size == 2
-          assert len(volatility.derivations) == 2
-          PY
+      - name: Install locked catalog environment
+        run: uv sync --locked
 
-      - name: Export static catalog for this commit
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.13'
-        run: |
-          uv run python authoring/export_catalog.py \
-            --commit-sha "${GITHUB_SHA}" \
-            --release-version "0.1.3" \
-            --release-label "Experimental Technical Preview"
+      - name: Build source archives and export exact-commit catalog
+        env:
+          DQ_COMMIT_SHA: ${{ github.sha }}
+        run: uv run python authoring/prepare_release_extras.py
 
-      - name: Upload exact-SHA public artifacts
-        if: matrix.os == 'ubuntu-24.04' && matrix.python == '3.13'
+      - name: Upload exact-SHA source and catalog artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: defined-quant-components-${{ github.sha }}
+          name: defined-quant-sources-catalog-${{ github.sha }}
           path: |
-            dist/*.whl
-            dist/*.tar.gz
+            dist/source
             dist/catalog/catalog.json
           if-no-files-found: error
           retention-days: 14

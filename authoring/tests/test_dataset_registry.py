@@ -10,15 +10,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from defined_quant.data_records import MAX_DATASET_ROWS as RECORD_MAX_DATASET_ROWS
 from defined_quant.data_records import DatasetRegistrationRequest
 from defined_quant.dataset_registry import (
+    MAX_DATASET_ROWS,
     MAX_DECODED_CELL_BYTES,
+    MAX_NORMALIZED_PAYLOAD_BYTES,
     ConfiguredFileRoots,
     DatasetRegistryError,
     normalize_dataset,
     resolve_dataset_fields,
 )
 from defined_quant.host_failures import HostFailureException
+from defined_quant.session_cas import MAX_DATASET_PAYLOAD_BYTES
 from defined_quant_protocol import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -490,6 +494,92 @@ def test_request_count_and_inline_byte_limits_precede_model_validation() -> None
         "maximum": 128,
         "actual": 129,
     }
+
+
+def test_portable_dataset_limits_are_closed_at_the_measured_worker_boundary() -> None:
+    assert RECORD_MAX_DATASET_ROWS == MAX_DATASET_ROWS == 40_000
+    assert MAX_NORMALIZED_PAYLOAD_BYTES == MAX_DATASET_PAYLOAD_BYTES == 512 * 1024
+
+    request = {
+        "source": {
+            "kind": "inline_rows",
+            "rows": [{"price": 100 + index % 977} for index in range(MAX_DATASET_ROWS)],
+        },
+        "columns": [
+            {
+                "source_name": "price",
+                "field_id": "price",
+                "data_type": "number",
+                "role": "value",
+            }
+        ],
+        "semantics": {
+            "ordering": "preserve_source_order",
+            "price_kind": "adjusted",
+        },
+        "provenance": {
+            "source_kind": "synthetic",
+            "interpretation_method": "caller_structured",
+            "label": "Measured portable dataset row boundary.",
+        },
+    }
+    normalized = normalize_dataset(request)
+    assert normalized.record.row_count == MAX_DATASET_ROWS
+
+    request["source"]["rows"].append({"price": 100})
+    with pytest.raises(HostFailureException) as row_limit:
+        normalize_dataset(request)
+    assert row_limit.value.code == "input_limit_exceeded"
+    assert row_limit.value.failure.error.details == {
+        "limit_name": "dataset_rows",
+        "maximum": MAX_DATASET_ROWS,
+        "actual": MAX_DATASET_ROWS + 1,
+    }
+
+
+def test_normalized_payload_and_intraday_semantics_fail_closed() -> None:
+    payload_request = {
+        "source": {
+            "kind": "inline_rows",
+            "rows": [
+                {"label": "x" * MAX_DECODED_CELL_BYTES}
+                for _index in range(8)
+            ],
+        },
+        "columns": [
+            {
+                "source_name": "label",
+                "field_id": "label",
+                "data_type": "string",
+                "role": "label",
+            }
+        ],
+        "semantics": {"ordering": "preserve_source_order"},
+        "provenance": {
+            "source_kind": "synthetic",
+            "interpretation_method": "caller_structured",
+            "label": "Normalized payload byte boundary.",
+        },
+    }
+    with pytest.raises(HostFailureException) as payload_limit:
+        normalize_dataset(payload_request)
+    assert payload_limit.value.code == "input_limit_exceeded"
+    assert payload_limit.value.failure.error.details["limit_name"] == (
+        "normalized_dataset_payload_bytes"
+    )
+    assert payload_limit.value.failure.error.details["maximum"] == 512 * 1024
+    assert payload_limit.value.failure.error.details["actual"] > 512 * 1024
+
+    intraday = _request(
+        {
+            "kind": "inline_rows",
+            "rows": [{"timestamp": "2024-01-02T00:00:00Z", "price": 100}],
+        }
+    )
+    intraday["semantics"]["frequency"] = "intraday"
+    with pytest.raises(HostFailureException) as unsupported_frequency:
+        normalize_dataset(intraday)
+    assert unsupported_frequency.value.code == "invalid_tool_request"
 
 
 def test_whole_column_mapping_is_ordered_transform_free_and_collision_safe() -> None:

@@ -22,6 +22,7 @@ from defined_quant.host_failures import (
 )
 from defined_quant.operation_runtime import execute_operation as execute_phase1_operation
 from defined_quant.service import DefinedQuantService
+from defined_quant.worker_runtime import WorkerExecution
 from defined_quant_protocol import (
     CallerProvenance,
     ComponentRef,
@@ -84,16 +85,16 @@ def _evaluation_component() -> dict[str, Any]:
 
 
 def _execute_with_result_updates(
-    service: DefinedQuantService,
     request: OperationRequest,
     *,
     output_dir: Path,
+    catalog_root: Path | None,
     updates: dict[str, Any],
 ) -> OperationSuccess:
     outcome = execute_phase1_operation(
         request,
         output_dir=output_dir,
-        catalog_root=service.catalog_root,
+        catalog_root=catalog_root,
     )
     assert isinstance(outcome, OperationSuccess)
     result_path = output_dir / outcome.manifest.result.path
@@ -114,6 +115,34 @@ def _execute_with_result_updates(
         pretty_json_bytes(manifest.model_dump(mode="json"))
     )
     return OperationSuccess(manifest=manifest)
+
+
+class _ResultUpdatingWorker:
+    def __init__(self, updates: dict[str, Any]) -> None:
+        self._updates = updates
+
+    def execute_operation(
+        self,
+        request: OperationRequest,
+        *,
+        output_dir: Path,
+        catalog_root: Path | None,
+        cancel_event: object = None,
+    ) -> WorkerExecution:
+        del cancel_event
+        result = _execute_with_result_updates(
+            request,
+            output_dir=output_dir,
+            catalog_root=catalog_root,
+            updates=self._updates,
+        )
+        return WorkerExecution(
+            result=result,
+            component_input_fields=("prices", "timestamps", "price_kind"),
+        )
+
+    def close(self) -> None:
+        return None
 
 
 def _tool_result_bytes(data: dict[str, Any], *, trust: TrustLabel) -> bytes:
@@ -205,7 +234,7 @@ def test_preview_pages_reserve_the_complete_success_result_envelope(tmp_path: Pa
         {
             "source": {
                 "kind": "inline_rows",
-                "rows": [{"label": "x" * 14_500} for _ in range(50)],
+                "rows": [{"label": "x" * 14_500} for _ in range(35)],
             },
             "columns": [
                 {
@@ -225,13 +254,13 @@ def test_preview_pages_reserve_the_complete_success_result_envelope(tmp_path: Pa
     )
 
     page = service.describe_dataset(
-        registration["dataset_ref"], view="preview", limit=50
+        registration["dataset_ref"], view="preview", limit=35
     )
     complete_result = _tool_result_bytes(
         page, trust=TrustLabel.UNVERIFIED_CALLER_DATA
     )
 
-    assert 0 < page["preview"]["returned"] < 50
+    assert 0 < page["preview"]["returned"] < 35
     assert page["preview"]["complete"] is False
     assert len(complete_result) <= 256 * 1024
     service.close()
@@ -381,23 +410,13 @@ def test_runtime_refusal_uses_exhaustive_transport_neutral_mapping(tmp_path: Pat
 
 def test_summary_overflow_refuses_before_operation_cas_publication(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def execute_with_large_scalar(
-        service: DefinedQuantService,
-        request: OperationRequest,
-        *,
-        output_dir: Path,
-    ) -> OperationSuccess:
-        return _execute_with_result_updates(
-            service,
-            request,
-            output_dir=output_dir,
-            updates={"oversized_scalar": "x" * (300 * 1024)},
-        )
-
-    monkeypatch.setattr(DefinedQuantService, "execute_operation", execute_with_large_scalar)
-    service = DefinedQuantService(session_state_root=tmp_path / "state")
+    service = DefinedQuantService(
+        session_state_root=tmp_path / "state",
+        worker_controller=_ResultUpdatingWorker(
+            {"oversized_scalar": "x" * (300 * 1024)}
+        ),
+    )
 
     with pytest.raises(HostFailureException) as limited:
         service.execute_recorded_operation(
@@ -422,25 +441,14 @@ def test_summary_overflow_refuses_before_operation_cas_publication(
 
 def test_prepublication_summary_cursor_becomes_live_after_publication(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     messages = [f"Disclosure {index}." for index in range(21)]
-
-    def execute_with_many_messages(
-        service: DefinedQuantService,
-        request: OperationRequest,
-        *,
-        output_dir: Path,
-    ) -> OperationSuccess:
-        return _execute_with_result_updates(
-            service,
-            request,
-            output_dir=output_dir,
-            updates={"warnings": [], "disclosures": messages},
-        )
-
-    monkeypatch.setattr(DefinedQuantService, "execute_operation", execute_with_many_messages)
-    service = DefinedQuantService(session_state_root=tmp_path / "state")
+    service = DefinedQuantService(
+        session_state_root=tmp_path / "state",
+        worker_controller=_ResultUpdatingWorker(
+            {"warnings": [], "disclosures": messages}
+        ),
+    )
     summary = service.execute_recorded_operation(
         _evaluation_component(),
         output_dir=tmp_path / "message-operation",

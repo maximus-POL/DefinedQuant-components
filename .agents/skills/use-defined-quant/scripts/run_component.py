@@ -13,14 +13,23 @@ from _source_runtime import activate_source_runtime
 
 activate_source_runtime()
 
+from defined_quant.local_host_platform import (  # noqa: E402
+    SecureFilesystemError,
+    local_host_platform,
+)
 from defined_quant.operation_runtime import (  # noqa: E402
     OperationRuntimeError,
-    execute_resolved_operation,
     operation_failure,
     prepare_output_directory,
     resolve_component,
 )
 from defined_quant.service import DefinedQuantService  # noqa: E402
+from defined_quant.stdio_framing import (  # noqa: E402
+    BinaryFrameError,
+    configure_binary_descriptors,
+    read_binary_to_eof,
+    write_binary_bytes,
+)
 from defined_quant_protocol import (  # noqa: E402
     CallerProvenance,
     OperationErrorCode,
@@ -102,9 +111,9 @@ def _reject_json_constant(value: str) -> None:
     raise InvalidJsonConstant
 
 
-def _load_json(handle: Any) -> Any:
-    return json.load(
-        handle,
+def _load_json_text(content: str) -> Any:
+    return json.loads(
+        content,
         object_pairs_hook=_reject_duplicate_keys,
         parse_constant=_reject_json_constant,
     )
@@ -113,9 +122,19 @@ def _load_json(handle: Any) -> Any:
 def _read_json(path: str, *, purpose: str) -> Any:
     try:
         if path == "-":
-            return _load_json(sys.stdin)
-        with Path(path).expanduser().open(encoding="utf-8") as handle:
-            return _load_json(handle)
+            content = read_binary_to_eof(sys.stdin.fileno()).decode(
+                "utf-8",
+                errors="strict",
+            )
+        else:
+            content = local_host_platform().secure_filesystem.read_regular_file(
+                Path(path).expanduser(),
+                maximum_bytes=2 * 1024 * 1024,
+            ).decode(
+                "utf-8",
+                errors="strict",
+            )
+        return _load_json_text(content)
     except (DuplicateJsonKey, InvalidJsonConstant) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.INVALID_JSON,
@@ -127,7 +146,18 @@ def _read_json(path: str, *, purpose: str) -> Any:
             f"{purpose} is not valid JSON.",
             details={"line": exc.lineno, "column": exc.colno},
         ) from exc
-    except OSError as exc:
+    except UnicodeDecodeError as exc:
+        raise OperationRuntimeError(
+            OperationErrorCode.INVALID_JSON,
+            f"{purpose} is not valid UTF-8.",
+        ) from exc
+    except BinaryFrameError as exc:
+        raise OperationRuntimeError(
+            OperationErrorCode.INVALID_OPERATION_REQUEST,
+            f"{purpose} could not be read.",
+            details={"type": type(exc).__name__},
+        ) from exc
+    except (OSError, SecureFilesystemError) as exc:
         raise OperationRuntimeError(
             OperationErrorCode.INVALID_OPERATION_REQUEST,
             f"{purpose} could not be read.",
@@ -175,7 +205,9 @@ def _legacy_operation(args: argparse.Namespace) -> OperationResult:
         ),
         artifacts=SvgArtifactRequest(),
     )
-    return execute_resolved_operation(request, record, output_dir=output_dir)
+    catalog_root = record.path.parents[1]
+    with DefinedQuantService(catalog_root=catalog_root) as service:
+        return service.execute_operation(request, output_dir=output_dir)
 
 
 def _serialize_operation_result(result: OperationResult) -> tuple[bytes, bool]:
@@ -199,6 +231,11 @@ def _serialize_operation_result(result: OperationResult) -> tuple[bytes, bool]:
 def main() -> int:
     request: OperationRequest | None = None
     try:
+        configure_binary_descriptors(
+            sys.stdin.fileno(),
+            sys.stdout.fileno(),
+            sys.stderr.fileno(),
+        )
         args = _parser().parse_args()
         if args.request is not None:
             if args.input is not None:
@@ -207,12 +244,11 @@ def main() -> int:
                     "--input is only valid with the legacy --component interface.",
                 )
             request = _read_operation_request(args.request)
-            response = DefinedQuantService(
-                catalog_root=args.catalog_root
-            ).execute_operation(
-                request,
-                output_dir=args.output_dir,
-            )
+            with DefinedQuantService(catalog_root=args.catalog_root) as service:
+                response = service.execute_operation(
+                    request,
+                    output_dir=args.output_dir,
+                )
         else:
             if args.input is None:
                 raise OperationRuntimeError(
@@ -225,9 +261,9 @@ def main() -> int:
 
     payload, serialized = _serialize_operation_result(response)
     if response.status == "succeeded":
-        sys.stdout.buffer.write(payload)
+        write_binary_bytes(sys.stdout.fileno(), payload)
         return 0 if serialized else 2
-    sys.stderr.buffer.write(payload)
+    write_binary_bytes(sys.stderr.fileno(), payload)
     return 2
 
 

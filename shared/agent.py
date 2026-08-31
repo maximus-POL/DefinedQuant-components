@@ -27,6 +27,7 @@ from defined_quant_protocol import (
     operation_hash,
     operation_protocol_schema,
 )
+from defined_quant_protocol.operation import portable_member_key
 
 __all__ = [
     "CANONICALIZATION_ID",
@@ -54,4 +55,5 @@ __all__ = [
     "canonical_json_bytes",
     "operation_hash",
     "operation_protocol_schema",
+    "portable_member_key",
 ]

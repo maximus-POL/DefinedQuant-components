@@ -3,8 +3,9 @@
 **Status:** frozen implementation contract from PR0. Phase 1 now supplies the shared operation
 runtime and `DefinedQuantService`; Phase 2 supplies its immutable import-free contract index;
 Phase 3 supplies the canonical dataset/operation records, strict normalizer, bounded projections,
-and scoped ephemeral CAS. The repository still does not contain an MCP package, server, worker,
-SDK dependency, or protocol-0.5 implementation.
+and scoped ephemeral CAS. Phase 4 now supplies the subprocess worker, native platform providers,
+and separate `defined-quant-mcp` STDIO transport. Native six-cell release validation remains
+mandatory; the repository still does not contain the deferred protocol-0.5 implementation.
 
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:
@@ -27,6 +28,17 @@ commit's actual diff.
 | 2026-08-15 | `c7e5ca8` | Phase 3 / Phase-4 readiness | §7.3; §8; §10 | Scoped the whole MCP alpha, including its worker, SDK-client matrix, and packaging target, to macOS and Linux and made Windows a separate future workstream. | The alpha depends on tested POSIX containment, ownership, locking, cleanup, and process controls for which no Windows equivalent yet exists. |
 | 2026-08-15 | `9fcd648` | Phase-4 planning | §3; §10 | Explicitly excluded Phase 4B from Phase 4, froze the no-4B release targets, and made later protocol-0.5 composition a separately reviewed change with its required compatibility and hash tests. | Prevent optional provenance and composition work from expanding the initial transport implementation mid-phase. |
 | 2026-08-15 | `8efa80a` | Phase-4 readiness | §7.1 | Added the 10,000-record construction cap, specified but deferred the 500-candidate query cap, and recorded controller memory and timing observations without adding a deadline. | Bound long-lived controller indexing deterministically while preserving frozen search projections and avoiding machine-dependent outcomes. |
+| 2026-08-15 | this commit | Phase-4 planning | §7.1; §7.2; §7.3; §8; §10 | Restored Windows as a required alpha release target; froze the cross-platform byte-identity contract, platform-abstraction boundary, local-path policy, and native Windows filesystem, session-store, worker, STDIO, official-client, CI, and packaging acceptance gates. | Platform breadth and deterministic outputs are product requirements; the current fail-closed Windows behavior is unfinished implementation rather than a reason to narrow the alpha. |
+| 2026-08-16 | this commit | Phase 4 | Status; §10 | Recorded the in-tree Windows, macOS, and Linux providers, subprocess worker, and separate locked MCP STDIO distribution while retaining native six-cell validation as a release gate. | Keep implementation status truthful without turning unexecuted native validation into a release-support claim. |
+| 2026-08-16 | this commit | Phase 4 / release handoff | §7.2; §7.3; §8; §10 | Replaced obsolete future-Windows and uncommitted-spike descriptions with the implemented secure-filesystem, session-state, Job Object, binary-STDIO, SDK-isolated server, exact-wheel, and installation state; marked native six-cell validation as the remaining release gate. | Make the frozen plan directly usable for MCP completion and review without misdescribing landed Windows mechanisms or overstating unexecuted native validation. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.1 | Added the 2 MiB resolved worker-request and 4 MiB worker-control-response ceilings and required their controller-side overflow mappings to remain distinct from worker crashes. | Legal size refusal must occur before worker launch and oversized typed results must retain the closed input/result limit failures rather than collapsing to a retryable crash. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made any component stdout or stderr outside the typed control protocol a contract failure, and made Python warnings deterministic errors through the constructed worker environment. | Even small untyped output can disclose data or corrupt a future transport if accidentally forwarded; an explicit warning policy removes interpreter-default variability without exposing captured text. |
+| 2026-08-16 | this commit | Phase-4 remediation | §6 | Split invalid launch arguments, unavailable native host capabilities, and unexpected startup failures into distinct redacted audit outcomes and exit statuses while retaining only stable provider codes. | A missing native provider is an operator/platform condition rather than bad configuration, and no native message, path, SID, or exception representation is needed to diagnose that class safely. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.2 | Routed caller output-parent creation and CLI request-file reads through the secure-filesystem provider, including native handle-relative Windows traversal. | Unicode and long local paths must work without depending on the machine-wide `LongPathsEnabled` registry value or test setup that silently assumes it. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Removed the Windows home-directory staging dependency; placed every worker workspace inside a fixed owner-private, locked, orphan-cleaned session-state namespace on the selected output volume; limited Windows platform environment inheritance to validated `SYSTEMROOT`; and recorded the Windows bootstrap-current-directory mechanism. | A controller crash must not leave unmanaged home/drive-root litter, home paths do not belong in the worker allowlist, and long-path-safe same-volume publication must retain liveness-protected cleanup. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made the native worker provider select inspection scratch roots and required POSIX to canonicalize the trusted system temporary root before the session store pins it. | macOS exposes `/var` as a symlink alias of `/private/var`; provider-owned canonical selection preserves strict symlink refusal for caller paths while allowing the session store to verify the actual local temporary root. |
+| 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Required Windows worker state to use the deepest eligible non-home, non-volume-root same-volume ancestor whose path is at most 64 UTF-16 code units, while keeping the workspace inside the locked session namespace and publishing to long destinations with native handles. | CPython startup and library paths used by the child are not uniformly `MAX_PATH`-independent on a default Windows installation; bounding only the internal managed path preserves long caller-output support without machine-wide registry settings or unmanaged home/drive-root staging. |
+| 2026-08-16 | this commit | Phase-4 remediation | §4.2; §7.1; §7.3 | Replaced the unreachable 250,000-row/128 MiB dataset contract with conjunctive 40,000-row, 128-column, and 512 KiB canonical-payload ceilings; removed dataset-level `intraday`; and specified Linux `RLIMIT_AS`, Windows Job Object commit, and macOS controller-RSS enforcement. | Native production-wheel probes at 1, 8, and 128 columns found macOS to be tightest at 50,000 one-column rows succeeding and 60,000 reaching the 512 MiB resource limit; the lower ceiling retains measured headroom, keeps every accepted dataset beneath the worker channels, and states the macOS sampling-window risk truthfully. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -220,7 +232,7 @@ NormalizationEvent = {
         "csv_number_parsed" | "csv_integer_parsed" | "csv_boolean_parsed" |
         "timestamp_to_canonical_utc",
   field_id: SafeId,
-  count: integer[1..250000]
+  count: integer[1..40000]
 }
 
 TrustNotice = {
@@ -447,7 +459,7 @@ Failure example:
 
 ```text
 Source =
-  {kind:"inline_rows", rows: {[source_name:string[1..240 bytes]]:JsonValue}[1..250000]} |
+  {kind:"inline_rows", rows: {[source_name:string[1..240 bytes]]:JsonValue}[1..40000]} |
   {kind:"inline_json", text: string[1..524288 bytes]} |
   {kind:"local_file", path:string[1..4096 bytes], format:"csv",
    csv?: {delimiter?: ","|";"|"\t" = ",", header?:true = true} = {}} |
@@ -464,7 +476,7 @@ Column = {
 DatasetSemantics = {
   instrument?: {namespace: string[1..64 bytes], symbol: string[1..128 bytes]},
   currency?: string[1..32 bytes],
-  frequency?: "intraday"|"daily"|"weekly"|"monthly"|"quarterly"|"annual"|"irregular",
+  frequency?: "daily"|"weekly"|"monthly"|"quarterly"|"annual"|"irregular",
   timezone?: string[1..128 bytes],
   ordering: "preserve_source_order",
   price_kind?: "adjusted" | "unadjusted",
@@ -488,7 +500,7 @@ DatasetRegistrationData = {
   dataset_ref: DatasetRef,
   normalized_payload_sha256: Sha256,
   raw_source_sha256: Sha256,
-  row_count: integer[1..250000],
+  row_count: integer[1..40000],
   columns: {source_name: string[1..240 bytes], field_id: SafeId, data_type: string, role: string,
             semantic_port: SemanticPort|null}[1..128],
   semantics: DatasetSemantics,
@@ -989,7 +1001,7 @@ DatasetPayloadV1 = {
   schema_version: 1,
   serialization: "dq-table-v1",
   columns: {field_id:SafeId, data_type:Column.data_type}[1..128],
-  rows: (CanonicalCell[1..128])[1..250000]
+  rows: (CanonicalCell[1..128])[1..40000]
 }
 
 DatasetRecordV1 = {
@@ -1008,7 +1020,7 @@ DatasetRecordV1 = {
   columns: {source_name:string, field_id:SafeId, data_type:Column.data_type,
             role:Column.role, semantic_port:SemanticPort|null}[1..128],
   semantics: DatasetSemantics,
-  row_count: integer[1..250000],
+  row_count: integer[1..40000],
   column_count: integer[1..128],
   observation_bounds: {first:string, last:string}|null,
   normalization_events: NormalizationEvent[0..768],
@@ -1169,12 +1181,14 @@ allowed by the failure fixture.
 |---|---:|---:|
 | Raw STDIO request frame, including LF | 2 MiB | 2 MiB |
 | Tool arguments | 1 MiB | 1 MiB |
+| Resolved worker request | 2 MiB | 2 MiB |
+| Worker control response | 4 MiB | 4 MiB |
 | Inline JSON source | 512 KiB | 512 KiB |
 | Configured local-file roots | 8 | 8 |
 | Local CSV/JSON file | 64 MiB | 64 MiB |
-| Normalized dataset payload | 128 MiB | 128 MiB |
+| Normalized dataset payload | 512 KiB | 512 KiB |
 | CAS record document | 2 MiB | 2 MiB |
-| Dataset rows | 250,000 | 250,000 |
+| Dataset rows | 40,000 | 40,000 |
 | Dataset columns | 128 | 128 |
 | One decoded cell | 64 KiB | 64 KiB |
 | Indexed component records | current catalog: 7 | 10,000 |
@@ -1202,19 +1216,53 @@ allowed by the failure fixture.
 | Worker memory | 512 MiB | 512 MiB |
 | Orphan-session age before eligible cleanup | 24 hours | 24 hours |
 
-During registration, a normalized dataset payload above 128 MiB is
+The dataset row, column, and canonical-payload ceilings are conjunctive; the row and column maxima
+must not be multiplied while ignoring the byte ceiling. Native production-wheel probes on
+Windows, macOS, and Linux at Python 3.11 and 3.13 exercised 1, 8, and 128 columns through
+`WorkerController`. All platforms succeeded at 40,000 and 50,000 one-column rows; macOS reached
+`worker_resource_limit` at 60,000 while Windows and Linux succeeded there and reached a resource
+limit at 80,000. All platforms succeeded at 8 × 15,000 and 128 × 1,000; the next measured shapes
+crossed the fixed 2 MiB request ceiling. The 40,000-row and 512 KiB payload limits therefore retain
+headroom below the tightest measured memory boundary while keeping dense accepted shapes below the
+measured worker channel and memory boundaries. Dataset semantics do not advertise `intraday` in
+this alpha; component-level financial frequency enums remain independent.
+
+During registration, a normalized dataset payload above 512 KiB is
 `input_limit_exceeded` with `limit_name:"normalized_dataset_payload_bytes"`. A newly serialized
 dataset or operation CAS record above 2 MiB is `record_publication_failed` and no reference is
 published; an existing stored record above that ceiling is `record_corrupt`. Normalized result,
 artifact, complete-bundle, and structured-response overflow is `result_limit_exceeded` with the
 corresponding stable `limit_name`. Session quota exhaustion remains `cache_full`, and captured-
 stream overflow remains `worker_resource_limit`. These byte checks precede publication.
+The controller checks a resolved worker request before process launch; a request above 2 MiB is
+`input_limit_exceeded` with `limit_name:"worker_request_bytes"`. The child repeats that ceiling as
+defence in depth. A worker control response above 4 MiB is `result_limit_exceeded` with
+`limit_name:"worker_control_response_bytes"`; it is never reported as `worker_crashed` merely
+because the complete typed response could not fit the bounded channel.
 The only permitted input/result `limit_name` values are the enums in
 `host_failures.v1.json`; the field is not free-form. Tool-argument bytes are counted before the
 closed request model runs, so every tool surface can return `input_limit_exceeded` for that one
 pre-validation boundary.
 Initialization and list payloads are serialized and checked before the server advertises
 readiness; exceeding their static frame ceiling fails startup with no partial STDIO session.
+
+Every byte ceiling is measured over the same explicitly encoded or raw byte sequence on Windows,
+macOS, and Linux. STDIO byte counts include the received LF and occur before text decoding; no
+platform newline translation, locale encoding, console code page, or filesystem encoding may alter
+a counted or hashed value. For the same request, fixed catalog, fixed session secret where a cursor
+is present, and identical source bytes, all three platforms must produce byte-identical canonical
+dataset payloads, dataset records, operation records, normalized inputs, normalized results,
+manifests, rendered artifacts, CAS records, hashes, digests, references, cursors, failure codes,
+failure messages and details, trust wording, response envelopes, resource projections, and CLI
+STDOUT/STDERR. In particular, every vector in `hash_vectors.v1.json` and every surface in
+`operation_runtime_phase0.v1.json` must reproduce exactly on all three platforms.
+
+Platform mechanisms may differ only behind one transport-neutral host abstraction. POSIX modes and
+Windows DACLs, `openat` containment and Windows handle containment, `flock` and `LockFileEx`, native
+atomic no-replace publication primitives, and POSIX process groups and Windows Job Objects may use
+different system calls. They must expose the same success conditions, stable closed failures, and
+cleanup outcome without leaking native paths, error text, numeric OS errors, security identifiers,
+or platform names into a canonical value or public response.
 
 The indexed-record ceiling is enforced once, while constructing the immutable process-lifetime
 snapshot; an oversized catalog fails startup before a session exists and never fails midway
@@ -1246,11 +1294,19 @@ absolute root. Roots, catalog location, and session-state base directory are lau
 never be tool arguments. The server refuses `~`, environment or glob expansion, relative paths,
 `..`, archives, devices, sockets, FIFOs, and symlinked or reparse-point intermediate or final path
 components. It accepts a regular CSV/JSON file only after handle-based containment checks against
-an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`;
-Windows will open reparse points without following them and validate the final handle path and
-type once that boundary is implemented and tested. Phase 3 enables local-file registration and
-session CAS only on tested POSIX hosts with `O_NOFOLLOW`; other platforms fail startup closed until
-equivalent owner-only ACL, reparse-point, handle-containment, locking, and cleanup behavior exists.
+an opened configured root. POSIX uses `openat`/`O_NOFOLLOW`-equivalent traversal plus `fstat`.
+Windows uses native handles to refuse every intermediate and final reparse point, validate the
+final handle path, volume identity, and regular-file type beneath the pinned root, and prevent
+handle inheritance. Windows path checks use Unicode native APIs and support Unicode local paths and
+local paths longer than 260 characters without locale, code-page, short-name, or separator changes
+to semantic or hashed values. UNC paths, device namespaces, mapped network drives, and other remote
+or network filesystem roots fail startup closed for the alpha; they are not silently normalized to
+or treated as local configured roots or session-state locations.
+The transport-neutral facade now routes configured-root reads, private session state, locking,
+atomic no-replace publication, and cleanup through the selected Windows, macOS, or Linux provider.
+The in-tree Windows provider implements the owner-only DACL, reparse-point, handle-containment,
+locking, atomic-publication, and tombstone-cleanup mechanisms below. This implementation status is
+not release support; native Windows acceptance and the complete six-cell matrix remain mandatory.
 
 Files are hashed and size-limited while streaming. The dedicated `Source.local_file.path` value
 never enters canonical records, responses, resource URIs, or logs. This is not generic free-text
@@ -1259,22 +1315,63 @@ explicit manifest view, so callers must not put secrets, credentials, or local p
 bytes are discarded after normalization.
 
 The session directory is created beneath a fixed application temporary root with `0700`
-directories and `0600` files. A future non-POSIX implementation requires the platform-equivalent
-owner-only ACL before it may enable this store. It refuses a symlinked, reparse-point, wrongly
+directories and `0600` files. Windows creates and verifies a protected, non-inheriting, owner-only
+DACL for the corresponding application root, session root, directories, records, members, staging
+files, lock files, quarantine entries, and cleanup markers before exposing any of them. The owner
+must be the current token's user SID; a wrong owner, inherited ACE, additional principal, replaced
+descriptor, or reparse point fails closed. The store refuses a symlinked, reparse-point, wrongly
 owned, or group/world-accessible root. Quota is checked before and during staged writes. A full store
 returns `cache_full` and never evicts a live reference. Clean shutdown removes only the exact
 active marked directory. Startup cleanup may remove only marker-bearing, correctly owned,
 unlocked application session directories older than 24 hours; it never recursively cleans a
 caller-supplied path.
 
+Record and bundle publication is atomic and no-replace under concurrent writers. The Windows
+implementation uses a handle-based same-volume NTFS operation with replacement disabled and proves
+by native contention and forced-termination tests that a destination is either absent or complete;
+`MoveFileEx` replacement, `ReplaceFile`, copy/delete, and overwrite fallbacks are forbidden.
+Portable member paths reject case-fold collisions, reserved Windows device segments, alternate data
+streams, trailing dots, and trailing spaces on every platform before touching disk.
+
+Live-session locking on Windows uses a `LockFileEx`-compatible exclusive byte-range lock held for
+the complete live interval. Cleanup acquires the same lock non-blockingly and atomically claims an
+eligible tree before deletion. Windows open-file rename/delete behavior must not require releasing
+the cleanup claim before the tree is made unreachable. Concurrent startup, shutdown, publication,
+and cleanup tests must prove that a live, foreign, replaced, or newly locked session is never
+removed.
+
 ### 7.3 Worker boundary
 
-On the supported alpha platforms, every selected inspection or execution starts in a separate
-POSIX process group, with unrelated file descriptors closed and a private working/staging
-directory. A Windows Job Object boundary belongs to the separate future Windows workstream. The
-controller sends one strict typed request and receives one control response.
+Every selected inspection or execution starts in a bounded native process tree with unrelated
+descriptors or handles closed and a private working/staging directory. macOS and Linux use a POSIX
+process group. Windows uses an in-tree kill-on-close Job Object provider with job-wide memory,
+timeout, cancellation, descendant, and forced-cleanup controls. The worker mechanism is a
+subprocess with an import-safe entry point, not `multiprocessing`; Windows creates it suspended,
+assigns it to the configured Job Object before user code can run, and then resumes it. Native
+acceptance must prove those mechanisms before release. The controller sends one strict typed
+request and receives one control response.
+Worker staging is never created directly as an unmanaged home-directory or drive-root entry. Each
+workspace is a child of a fixed owner-private worker-state namespace at a provider-selected
+existing same-volume parent, with the same marker, held lock, age check, atomic cleanup claim, and
+tombstone deletion protocol as other session state. Normal completion removes the live session; process
+loss leaves a locked-session orphan that a later controller can claim only after the frozen orphan
+age.
+On Windows, the provider selects the deepest eligible existing ancestor on the output volume that
+is neither the user home nor the volume root and is at most 64 UTF-16 code units. The fixed
+worker-state namespace is created there with the Windows private-session descriptor before use.
+This bounds only internal CPython workspace paths; the caller's Unicode or longer-than-260 output
+path remains unchanged and publication reaches it through the handle-based no-replace provider.
+Inspection workspaces use the same managed session-state protocol. Their parent is selected by the
+native worker provider; on POSIX the trusted system temporary root is canonicalized before the
+session store pins and verifies it, so macOS's `/var` alias cannot be mistaken for a caller-supplied
+symlink path. This mechanism does not relax symlink or reparse-point refusal for caller paths.
 Component stdout and stderr are captured separately, capped, and never enter the MCP wire. Either
 capture exceeding 1 MiB terminates the worker and returns `worker_resource_limit`.
+Any non-empty capture below that ceiling is still a `component_contract_error`: installed
+components may communicate results, warnings, and disclosures only through their typed output.
+Captured text is discarded and is never attached to a response or audit record. The constructed
+environment sets `PYTHONWARNINGS=error`, so interpreter warning-filter defaults cannot turn the
+same component into success on one host and untyped stderr on another.
 Worker admission uses a non-blocking semaphore at the configured concurrency value; there is no
 hidden server-side queue. A request above that limit returns `worker_capacity` before a process or
 staging directory is created.
@@ -1282,16 +1379,35 @@ staging directory is created.
 The controller creates the environment from an allowlist instead of copying the parent. It sets a
 private `TMPDIR`/`TEMP`/`TMP`, `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`,
 `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `PYTHONHASHSEED=0`, `NO_COLOR=1`, and `TZ=UTC`.
-No platform environment is copied wholesale. A future Windows implementation may additionally
-allow only required `SYSTEMROOT`, `WINDIR`, and `COMSPEC` values after its boundary is implemented
-and tested. Home directories, proxy settings, cloud and provider credentials, API keys, tokens,
+It also sets `PYTHONWARNINGS=error` so warning behavior is explicit and independent of interpreter
+defaults.
+No platform environment is copied wholesale. Windows additionally allows only the required
+`SYSTEMROOT` value after validating it at startup. Home directories,
+proxy settings, cloud and provider credentials, API keys, tokens,
 cookies, user-site settings, and unrelated variables are absent.
 
-The launcher enforces the 512 MiB worker memory ceiling with a tested OS mechanism and an
-independent controller-side usage monitor; exceeding the memory or captured-stream ceiling kills
-the process tree and is `worker_resource_limit`. The server fails startup on a platform where the
-memory ceiling or complete process-tree termination cannot be installed and tested; there is no
-unbounded fallback. Timeout, client cancellation, crash, captured-
+Windows process creation allowlists inherited handles as well as environment variables. Only the
+exact worker control and redirected STDIO handles may be temporarily inheritable; session, root,
+record, lock, job, token, unrelated pipe, and controller handles are absent from the child. The
+controller retains the Job Object handle until every cleanup obligation is complete.
+
+POSIX starts the child with the private workspace as its current directory. Windows process
+creation uses the validated local `SYSTEMROOT` as its bootstrap current directory because the
+Win32 `lpCurrentDirectory` field retains a `MAX_PATH` ceiling even when all workspace I/O is
+handle-relative and long-path safe. Components have no supported relative-filesystem contract;
+their temporary paths are supplied through the constructed environment and operation publication
+uses absolute internal paths. This launcher mechanism difference cannot alter typed outputs.
+
+The 512 MiB worker memory ceiling has one stable controller outcome with platform-native
+mechanisms: Linux installs `RLIMIT_AS`, Windows installs the job-wide Job Object commit limit, and
+macOS relies on the controller's complete-process-group RSS measurement every 20 milliseconds.
+macOS can transiently overshoot between samples; the controller kills the process group as soon as
+the next sample observes the breach. The accepted dataset ceilings above retain headroom below the
+tightest native measurement, and every tested breach remains `worker_resource_limit`; the exact
+native accounting threshold is not a wire-level distinction. Startup still fails if the selected
+provider cannot supply its specified monitor/limit or complete process-tree termination; there is
+no unbounded fallback. Exceeding the memory or captured-stream ceiling kills the process tree.
+Timeout, client cancellation, crash, captured-
 stream overflow, memory overflow, and controller shutdown all follow
 the same cleanup sequence: stop accepting output, terminate the complete process tree, wait no
 more than five seconds, force kill survivors, close pipes, discard staging, release leases, then
@@ -1316,7 +1432,7 @@ log record is emitted.
 client/model context. Metadata is the default; dataset previews, result pages, and artifacts
 require explicit calls and remain bounded. Raw source bytes are never returned.
 
-## 8. Official Python MCP SDK spike
+## 8. Official Python MCP SDK and transport
 
 Phase 4 selects the official Python SDK distribution `mcp==2.0.0`, the latest stable release at
 the spike date (2026-08-14). It is MIT-licensed, requires Python `>=3.10`, and classifies Python
@@ -1351,14 +1467,16 @@ The exploratory server spike used the high-level `MCPServer` API; the client use
 [server run documentation](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/run/index.md)
 and [client transport documentation](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/client/transports.md).
 
-The minimal uncommitted interoperability spike ran the official client against a real subprocess
-STDIO server with `mcp==2.0.0` on macOS arm64 and Python 3.13.13. It negotiated protocol
+Before transport implementation, a minimal uncommitted interoperability spike ran the official
+client against a real subprocess STDIO server with `mcp==2.0.0` on macOS arm64 and Python 3.13.13.
+It negotiated protocol
 `2026-07-28`; listed the synthetic annotated tool; returned structured
 `{"value":"alpha"}` with `is_error == false`; read a deterministic `dqop://` resource; exited 0;
 and cleaned up the subprocess. No repository file or dependency was changed.
 
-Phase 4 uses the official low-level `mcp.server.lowlevel.Server`, not high-level decorators. The
-constructor registers exactly `on_list_tools`, `on_call_tool`, `on_list_resources`,
+The committed Phase-4 transport replaces that spike and uses the official low-level
+`mcp.server.lowlevel.Server`, not high-level decorators. The constructor registers exactly
+`on_list_tools`, `on_call_tool`, `on_list_resources`,
 `on_list_resource_templates`, and `on_read_resource`. `on_list_resources` returns an empty list;
 it is still required because v2.0.0 advertises the resources capability only when that handler is
 present. The other list handlers return exactly the seven frozen tools and one resource template.
@@ -1376,6 +1494,12 @@ exceeds the ceiling, or any overlong frame terminates the session without a resp
 ID is not parsed), emits only a fixed redacted transport code, and runs normal worker/store
 cleanup. This is the ingress ceiling before SDK JSON parsing; it is independent of the stricter
 1 MiB compact `arguments` ceiling.
+
+On Windows the server places STDIN, STDOUT, and STDERR in binary mode before the first read or
+write. LF and CRLF request framing must parse independently without CRT newline conversion; output
+uses exact UTF-8 bytes and LF only, and byte `0x1a` is never treated as end-of-file. Native tests
+cover split UTF-8 code points, invalid UTF-8, exact and over-limit raw frames, controller shutdown,
+and the rule that STDOUT contains MCP frames only.
 
 The advertised tool input schemas do not validate `CallToolRequestParams.arguments`. After SDK
 JSON-RPC parsing and before service dispatch, `server.py` rejects an unknown tool name first, then
@@ -1396,17 +1520,33 @@ The private middleware import and this pin-specific assertion remain isolated in
 the official [telemetry opt-out](https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/v2.0.0/docs/run/opentelemetry.md).
 
 All imports and conversions involving `mcp`, `mcp.types`, low-level handlers, MCP annotations and
-content/resource types, telemetry opt-out, and STDIO startup stay in `server.py`. Phase 4 pins
-exactly `mcp==2.0.0` in the separate MCP package and commits its platform-complete hashed lock; it
+content/resource types, telemetry opt-out, and STDIO startup stay in `server.py`. The separate MCP
+package pins exactly `mcp==2.0.0` and commits its platform-complete hashed lock; it
 does not declare `mcp-types` separately.
 An SDK upgrade is a dedicated dependency change that updates pin and lock together, reviews the
 full platform-marked dependency/licence/hash diff, and reruns official-client tool, resource,
-failure, annotation, cancellation, and cleanup tests on macOS and Linux across Python 3.11–3.13.
-Windows support is a separate future workstream requiring tested reparse-point, owner-only ACL,
-handle-containment, locking, and cleanup boundaries before it can enter the client test matrix.
-Automatic major upgrades are forbidden. PR0 adds no SDK dependency or lock.
+failure, annotation, cancellation, and cleanup tests on Windows, macOS, and Linux at Python 3.11
+and 3.13. All three platforms are required lanes; Windows is neither allowed to fail nor permitted
+to skip the public-service product story, filesystem/session-store boundary, worker cleanup, or
+official-client interoperability cases.
+Automatic major upgrades are forbidden. The original PR0 added no SDK dependency or lock; the
+separate Phase-4 distribution now owns both without changing the core dependency boundary.
 Supported-line decisions also follow the official
 [security policy](https://github.com/modelcontextprotocol/python-sdk/security).
+
+Windows acceptance uses native Windows tests, including owner and replacement DACL cases; every
+intermediate and final reparse-point position and swap race; handle-contained Unicode and long
+local paths; fail-closed UNC and network roots; case-insensitive member collisions and reserved
+names; concurrent atomic no-replace directory publication; `LockFileEx` contention and cleanup;
+Job Object descendant, memory, timeout, cancellation, and controller-exit cleanup; inherited-handle
+and environment allowlists; binary STDIO; exact hash and byte fixtures; installed core and MCP
+wheels; and the official client's complete tool, resource, failure, cancellation, and cleanup
+story. POSIX emulation is not Windows validation, and no required case may skip, xfail,
+`continue-on-error`, or use an unbounded fallback.
+
+WSL2 is an unsupported convenience for running the Linux build under Linux semantics. It is not a
+Windows release path and never counts as validation of Windows paths, DACLs, reparse points,
+locking, publication, Job Objects, STDIO, wheels, or official-client behavior.
 
 ## 9. Frozen evaluation cases
 
@@ -1425,31 +1565,44 @@ not commit 10,000 component directories.
 
 ## 10. Implementation order and non-goals
 
-**Supported MCP alpha platforms:** macOS and Linux. Windows is not an alpha release target.
+**Required MCP alpha release platforms:** Windows, macOS, and Linux. Native verification of the
+equivalent Windows boundary remains a release blocker before the alpha is described as supported.
 
-Implementation order is fixed so transport work cannot create a second runtime:
+**Currently implemented MCP alpha platform providers:** Windows, macOS, and Linux. This status
+describes the in-tree host mechanisms, not release support. The existing public release-support
+wording must not be changed until the native tests, six-cell CI matrix, official-client story, and
+exact-wheel installation all pass.
 
-1. **Phase 1 — shared runtime extraction and CLI parity.** Add `operation_runtime` and
-   `DefinedQuantService`; move CLI and evidence execution onto the runtime; preserve public bytes,
-   identity, failure, and real subprocess behavior. No MCP dependency.
-2. **Phase 2 — indexed discovery.** Build one immutable process-lifetime contract index and stable
-   ID map; prove parity with current ranking, boundary explanations, filters, and facets; add the
+The implementation and release order remains fixed so transport work cannot create a second
+runtime. Status below describes this working tree; only the native release gate remains open:
+
+1. **Phase 1 — shared runtime extraction and CLI parity: complete.** `operation_runtime` and
+   `DefinedQuantService` own the shared runtime; CLI and evidence execution preserve the public
+   bytes, identity, failures, and subprocess behavior without an MCP dependency.
+2. **Phase 2 — indexed discovery: complete.** One immutable process-lifetime contract index and
+   stable-ID map preserve ranking, boundary explanations, filters, and facets and include the
    generated 10,000-record bounded functional case. Local timings are diagnostic only: the frozen
    fixture defines no portable wall-clock acceptance threshold, so CI must not invent one.
-3. **Phase 3 — dataset registry and session store.** Implement the canonical records, fixed hash
-   vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits.
-4. **Phase 4 — STDIO MCP server and worker.** Add the optional package, isolate SDK code in
-   `server.py`, expose the seven tools and one resource, and add official-client and process-cleanup
-   tests. Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for
-   every operation source exactly as section 4.2 specifies.
+3. **Phase 3 — dataset registry and session store: complete.** Canonical records, fixed hash
+   vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits are
+   implemented behind the transport-neutral platform facade.
+4. **Phase 4 — STDIO MCP server and worker: implemented, native validation pending.** The optional
+   package isolates SDK code in `server.py`, exposes the seven tools and one resource, and includes
+   official-client and process-cleanup tests. The Windows filesystem, session-store, Job Object,
+   environment, locking, cleanup, and binary-STDIO providers are in-tree; the six native CI cells
+   must prove them before Phase 4 is declared release-complete.
+   Phase 4 ships without Phase 4B: `execute_component` returns `unsupported_binding` for every
+   operation source exactly as section 4.2 specifies.
 5. **Phase 4B — deferred protocol 0.5 provenance and one-hop composition.** Phase 4B is explicitly
    excluded from Phase 4 and from the initial MCP alpha release. Adopting it later is its own
    change: it must complete the lockstep version work in section 3 and add the required descriptor,
    compatibility, default, downgrade, and hash tests before permitting one exact compatible
    operation source. It still adds no managed plan execution.
-6. **Phase 5 — packaging and user documentation.** Build and test exact compatible core and MCP
-   wheels together for macOS and Linux. Document local installation, STDIO registration, privacy,
-   trust, platform scope, and rollback. Windows remains a separate future workstream.
+6. **Phase 5 — packaging and user documentation: harness and docs in-tree; release versioning and
+   native validation pending.** CI builds one exact compatible core/MCP wheel pair and installs it
+   in every Windows, macOS, and Linux cell. The package README documents local installation, launch
+   configuration, privacy, trust, platform scope, WSL2, and the exact-wheel rule. Publication
+   remains blocked until the target version pair is applied and all six cells pass.
 
 For this no-4B release, Phase 5 follows Phase 4 directly. The release targets are
 `defined-quant` `0.2.0`, `defined_quant_protocol` unchanged at `0.4.0`, and
@@ -1460,7 +1613,8 @@ members, Phase 3 publishes their `OperationRecordV1` and `dqop:v1` reference, an
 only bounded projections. No phase in the alpha adds a separate calculation-receipt model or a
 portable reproduction bundle.
 
-PR0 must not add shared runtime code; the MCP package or dependency; server or worker code;
+The original PR0 was intentionally limited and did not add shared runtime code; the MCP package or
+dependency; server or worker code;
 storage or ingestion code; protocol implementation changes; component, contract, version, or
 evidence changes; provider/network code; persistent or managed execution; or generated schemas
 presented as production models.

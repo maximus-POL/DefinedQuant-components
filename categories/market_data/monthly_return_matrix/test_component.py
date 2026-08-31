@@ -21,8 +21,8 @@ from pydantic import ValidationError
 
 def test_formula_surfaces_match() -> None:
     component_dir = Path(__file__).parent
-    contract = json.loads((component_dir / "contract.yaml").read_text())
-    readme = (component_dir / "README.md").read_text()
+    contract = json.loads((component_dir / "contract.yaml").read_text(encoding="utf-8"))
+    readme = (component_dir / "README.md").read_text(encoding="utf-8")
     result = monthly_return_matrix(
         (100.0, 110.0),
         ("2023-01", "2023-02"),

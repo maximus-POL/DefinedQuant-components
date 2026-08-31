@@ -66,6 +66,7 @@ from .operation import (  # noqa: E402
     VerificationStatus,
     operation_hash,
     operation_protocol_schema,
+    portable_member_key,
 )
 from .plan import (  # noqa: E402
     ANALYSIS_PLAN_HASH_DOMAIN,
@@ -201,6 +202,7 @@ __all__ = [
     "managed_authorization_protocol_schema",
     "operation_hash",
     "operation_protocol_schema",
+    "portable_member_key",
     "require_compatible_ports",
     "semantic_port_metadata",
     "validation_receipt_hash",

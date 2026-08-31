@@ -43,6 +43,7 @@ components/
 ├── categories/             browseable financial topics and components
 ├── shared/                 types, discovery, execution, records, and host services
 ├── protocol/               closed typed records installed as defined_quant_protocol
+├── mcp_server/             separate optional STDIO MCP transport distribution
 ├── authoring/              one template, two schemas, and explicit Python tools
 ├── docs/                   durable technical designs and machine-readable fixtures
 ├── .agents/                optional repository-wide agent integration
@@ -52,9 +53,10 @@ components/
 ```
 
 `categories` and `shared` are source folders. Packaging projects them into the installed Python
-namespace `defined_quant`. The same wheel installs the separately versioned
-`defined_quant_protocol` namespace from `protocol/`. This keeps the typed transport boundary
-independent from component implementations without introducing a second distribution yet.
+namespace `defined_quant`. The same core wheel installs the separately versioned
+`defined_quant_protocol` namespace from `protocol/`. The optional `defined-quant-mcp`
+distribution lives under `mcp_server/`, pins the exact compatible core version, and contains every
+MCP SDK dependency and import. The core distribution continues to depend only on Pydantic.
 
 `.agents/` is integration metadata for agent hosts such as Codex. It is not a financial category
 and it does not implement a calculation. Its single catalog-wide skill discovers, inspects, and
@@ -107,8 +109,28 @@ manifest is an internally reconciled record, not a signed or independent executi
 It does not prove that caller-supplied data is true, authorize an analysis, create an approved
 `AnalysisPlan`, or produce a portable `ResearchBundle`.
 
-**Supported MCP alpha platforms:** macOS and Linux. Windows support is a separate future
-workstream and is not part of the alpha.
+**Required MCP alpha release platforms:** Windows, macOS, and Linux. In-tree providers are not a
+release-support claim: the complete native six-cell filesystem, worker, installed-wheel, and
+official-client matrix must pass before the MCP alpha ships.
+
+## Local MCP alpha
+
+The in-tree Phase-4 implementation is a local STDIO server that dispatches exclusively through
+`DefinedQuantService`. From a source checkout, install the two locked development environments and
+start the transport without relying on a platform-specific virtual-environment path:
+
+```text
+uv sync --locked
+uv sync --project mcp_server --locked
+uv run --project mcp_server defined-quant-mcp
+```
+
+Release installation must use the exact compatible core and MCP wheel pair produced once by CI;
+source-checkout imports and mixing independently built wheels are not supported validation paths.
+The server is not advertised as release-supported until all six native cells pass. UNC and network
+roots fail closed. WSL2 may run the Linux build as an unsupported convenience, but never counts as
+native Windows validation. See [`mcp_server/README.md`](mcp_server/README.md) for launch settings,
+privacy, installation, and support details.
 
 Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
 atomic managed-authorization foundation introduced in 0.2.0. Its packaged

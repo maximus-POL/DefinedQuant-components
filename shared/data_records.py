@@ -31,6 +31,7 @@ from defined_quant_protocol import (
     canonical_hash,
     canonical_json_bytes,
 )
+from defined_quant_protocol.operation import portable_member_key
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 DATASET_PAYLOAD_HASH_DOMAIN = "mcp.dataset.payload.v1"
@@ -42,7 +43,7 @@ CAS_SERIALIZATION = "defined-quant-cas-json-v1"
 PRETTY_JSON_SERIALIZATION = "defined-quant-pretty-json-v1"
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
-MAX_DATASET_ROWS = 250_000
+MAX_DATASET_ROWS = 40_000
 MAX_DATASET_COLUMNS = 128
 MAX_CELL_BYTES = 64 * 1024
 MAX_INLINE_JSON_BYTES = 512 * 1024
@@ -390,7 +391,7 @@ class DatasetSemantics(_ClosedModel):
     instrument: DatasetInstrument | None = None
     currency: str | None = None
     frequency: Literal[
-        "intraday", "daily", "weekly", "monthly", "quarterly", "annual", "irregular"
+        "daily", "weekly", "monthly", "quarterly", "annual", "irregular"
     ] | None = None
     timezone: str | None = None
     ordering: Literal["preserve_source_order"]
@@ -982,7 +983,11 @@ class OperationRecordV1(_ClosedModel):
         if kinds.count("artifact") > MAX_OPERATION_ARTIFACTS:
             raise ValueError("operation record contains too many artifacts")
         paths = [member.path for member in self.members]
-        if len(set(paths)) != len(paths):
+        portable_keys = [portable_member_key(path) for path in paths]
+        if (
+            len(set(portable_keys)) != len(portable_keys)
+            or portable_member_key("manifest.json") in portable_keys
+        ):
             raise ValueError("operation member paths must be unique")
         expected_members = sorted(
             self.members,

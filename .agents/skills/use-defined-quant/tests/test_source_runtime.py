@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
+import os
+import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +14,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 CATALOG = SKILL_ROOT / "scripts" / "catalog.py"
 SCRIPTS = SKILL_ROOT / "scripts"
 SOURCE_RUNTIME = SCRIPTS / "_source_runtime.py"
+
+
+def _subprocess_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    return environment
 
 
 def test_catalog_script_activates_both_current_checkout_packages() -> None:
@@ -30,7 +41,7 @@ def test_catalog_script_activates_both_current_checkout_packages() -> None:
             str(SCRIPTS),
         ],
         cwd=PROJECT_ROOT,
-        env={"PATH": "/usr/bin:/bin"},
+        env=_subprocess_environment(),
         check=False,
         capture_output=True,
         text=True,
@@ -46,7 +57,7 @@ def test_catalog_script_activates_both_current_checkout_packages() -> None:
     completed = subprocess.run(
         [sys.executable, str(CATALOG), "show", "dq.market_data.simple_return"],
         cwd=PROJECT_ROOT,
-        env={"PATH": "/usr/bin:/bin"},
+        env=_subprocess_environment(),
         check=False,
         capture_output=True,
         text=True,
@@ -73,13 +84,8 @@ def test_extracted_checkout_activation_never_silently_loads_another_checkout(
         capture_output=True,
     )
     assert archive.returncode == 0, archive.stderr.decode("utf-8", errors="replace")
-    extracted = subprocess.run(
-        ["tar", "-x", "-C", str(checkout)],
-        input=archive.stdout,
-        check=False,
-        capture_output=True,
-    )
-    assert extracted.returncode == 0, extracted.stderr.decode("utf-8", errors="replace")
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as archived:
+        archived.extractall(checkout, filter="data")
 
     extracted_runtime = (
         checkout
@@ -115,7 +121,7 @@ def test_extracted_checkout_activation_never_silently_loads_another_checkout(
             str(extracted_scripts),
         ],
         cwd=PROJECT_ROOT,
-        env={"PATH": "/usr/bin:/bin"},
+        env=_subprocess_environment(),
         check=False,
         capture_output=True,
         text=True,
@@ -131,3 +137,69 @@ def test_extracted_checkout_activation_never_silently_loads_another_checkout(
         assert "expected" in outcome["message"]
         assert "actual" in outcome["message"]
         assert str(checkout.resolve()) in outcome["message"]
+
+
+def test_checkout_resolution_handles_unicode_and_long_paths(tmp_path: Path) -> None:
+    checkout = tmp_path / "zażółć-gęślą-jaźń"
+    while len(os.fspath(checkout)) < 280:
+        checkout /= "long-source-runtime-segment"
+    runtime = (
+        checkout
+        / ".agents"
+        / "skills"
+        / "use-defined-quant"
+        / "scripts"
+        / "_source_runtime.py"
+    )
+    runtime.parent.mkdir(parents=True)
+    shutil.copyfile(SOURCE_RUNTIME, runtime)
+    (checkout / "shared").mkdir()
+    (checkout / "shared" / "__init__.py").write_bytes(b"")
+    (checkout / "categories").mkdir()
+    (checkout / "protocol").mkdir()
+    (checkout / "protocol" / "__init__.py").write_bytes(b"")
+
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; sys.path.insert(0,sys.argv[1]); "
+                "from _source_runtime import _resolve_checkout_root; "
+                "sys.stdout.buffer.write(str(_resolve_checkout_root()).encode('utf-8'))"
+            ),
+            str(runtime.parent),
+        ],
+        cwd=tmp_path,
+        env=_subprocess_environment(),
+        check=False,
+        capture_output=True,
+    )
+
+    assert probe.returncode == 0, probe.stderr.decode("utf-8", errors="replace")
+    assert Path(probe.stdout.decode("utf-8").strip()).resolve() == checkout.resolve()
+
+
+def test_checkout_resolution_rejects_noncanonical_script_layout(tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "_source_runtime.py"
+    script.parent.mkdir()
+    shutil.copyfile(SOURCE_RUNTIME, script)
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; sys.path.insert(0,sys.argv[1]); "
+                "from _source_runtime import _resolve_checkout_root; "
+                "_resolve_checkout_root()"
+            ),
+            str(script.parent),
+        ],
+        cwd=tmp_path,
+        env=_subprocess_environment(),
+        check=False,
+        capture_output=True,
+    )
+
+    assert probe.returncode != 0
+    assert b"source-runtime checkout layout" in probe.stderr
