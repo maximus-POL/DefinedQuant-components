@@ -86,6 +86,7 @@ def main() -> int:
                             "register_dataset",
                             "describe_dataset",
                             "compare_ports",
+                            "compile_plan",
                             "execute_component",
                             "get_operation",
                         ]

@@ -34,21 +34,36 @@ from defined_quant.host_failures import (
     map_operation_failure,
 )
 from defined_quant.local_host_platform import local_host_platform
+from defined_quant.method_registry import GovernedRegistry, project_component_inspection
 from defined_quant.operation_records import (
     build_operation_record,
     reconciled_bundle_bytes,
 )
+from defined_quant.plan_compiler import compile_plan as compile_governed_plan
 from defined_quant.record_views import describe_dataset, get_operation, operation_summary
 from defined_quant.session_cas import SessionCas, StoredOperation
 from defined_quant.worker_runtime import WorkerController
 from defined_quant_protocol import (
+    AvailabilityReason,
+    AvailabilitySnapshotV1,
+    AvailabilityStatus,
     CallerProvenance,
+    CapabilityResolutionRuleV1,
     ComponentRef,
+    GovernanceOutcomeV1,
+    ImplementationAvailabilityV1,
+    ImplementationTransport,
     OperationFailure,
     OperationRequest,
     OperationResult,
     OperationSuccess,
+    PlanProposalV1,
+    PlanRefusalCode,
+    PlanRefusalV1,
+    PolicyImplementationV1,
+    ResolutionPolicyV1,
     SvgArtifactRequest,
+    TrustDimension,
 )
 from pydantic import ValidationError
 
@@ -70,6 +85,9 @@ class DefinedQuantService:
         "_configured_roots",
         "_contract_index",
         "_contract_index_lock",
+        "_governed_registry",
+        "_governed_availability",
+        "_governed_policy",
         "_session_cas",
         "_session_lock",
         "_session_state_root",
@@ -85,12 +103,18 @@ class DefinedQuantService:
         session_state_root: Path | None = None,
         session_cas: SessionCas | None = None,
         worker_controller: WorkerController | None = None,
+        governed_registry: GovernedRegistry | None = None,
+        governed_policy: ResolutionPolicyV1 | None = None,
+        governed_availability: AvailabilitySnapshotV1 | None = None,
     ) -> None:
         if catalog_root is not None and contract_index is not None:
             raise ValueError("catalog_root cannot be combined with contract_index")
         self._catalog_root = catalog_root
         self._contract_index = contract_index
         self._contract_index_lock = Lock()
+        self._governed_registry = governed_registry
+        self._governed_policy = governed_policy
+        self._governed_availability = governed_availability
         self._configured_roots = ConfiguredFileRoots(data_roots)
         self._session_state_root = (
             session_state_root
@@ -192,6 +216,139 @@ class DefinedQuantService:
             cancel_event=cancel_event,
         )
 
+    def compile_plan(
+        self,
+        proposal: PlanProposalV1 | Mapping[str, Any],
+        *,
+        cancel_event: Event | None = None,
+    ) -> GovernanceOutcomeV1:
+        """Compile one structured proposal without executing or probing an implementation."""
+
+        validated = (
+            proposal
+            if isinstance(proposal, PlanProposalV1)
+            else PlanProposalV1.model_validate(proposal)
+        )
+        registry = self._governed_registry
+        projected = registry is None
+        if registry is None:
+            try:
+                inspection = self.inspect_component(
+                    validated.method_id,
+                    expected_version=validated.method_version,
+                    view="governance",
+                    cancel_event=cancel_event,
+                )
+            except HostFailureException as exc:
+                if exc.code == HostFailureCode.COMPONENT_NOT_FOUND:
+                    return PlanRefusalV1(
+                        proposal=validated,
+                        code=PlanRefusalCode.METHOD_NOT_FOUND,
+                        message="The requested method is not present in the active catalog.",
+                    )
+                if exc.code == HostFailureCode.COMPONENT_IDENTITY_MISMATCH:
+                    return PlanRefusalV1(
+                        proposal=validated,
+                        code=PlanRefusalCode.METHOD_IDENTITY_MISMATCH,
+                        message=(
+                            "The requested method version does not match the active catalog."
+                        ),
+                    )
+                raise
+            registry = project_component_inspection(inspection)
+        method = registry.method(validated.method_id, validated.method_version)
+        if method is None:
+            # An injected registry has no ambient catalog fallback by design.
+            return PlanRefusalV1(
+                proposal=validated,
+                code=PlanRefusalCode.METHOD_NOT_FOUND,
+                message="The exact method is not present in the configured governed registry.",
+            )
+
+        policy = self._governed_policy
+        if policy is None and not projected:
+            return PlanRefusalV1(
+                proposal=validated,
+                code=PlanRefusalCode.NO_APPROVED_IMPLEMENTATION,
+                message="An injected governed registry requires an explicit resolution policy.",
+            )
+        if policy is None:
+            rules: list[CapabilityResolutionRuleV1] = []
+            for capability in registry.capabilities:
+                if capability.ref not in method.capabilities:
+                    continue
+                candidates = tuple(
+                    PolicyImplementationV1(
+                        implementation=implementation.ref,
+                        priority=100,
+                    )
+                    for implementation in sorted(
+                        (
+                            item
+                            for item in registry.implementations
+                            if item.capability == capability.ref
+                        ),
+                        key=lambda item: item.id.encode("utf-8"),
+                    )
+                )
+                if not candidates:
+                    continue
+                rules.append(
+                    CapabilityResolutionRuleV1(
+                        capability=capability.ref,
+                        implementations=candidates,
+                        required_trust_dimensions=(
+                            TrustDimension.SCHEMA_CHECKED,
+                            TrustDimension.TRUSTED_ADAPTER,
+                        ),
+                        allowed_transports=(ImplementationTransport.DQ_NATIVE,),
+                    )
+                )
+            policy = ResolutionPolicyV1(
+                id="dq_native_default",
+                version="1.0.0",
+                method=method.ref,
+                capability_rules=tuple(
+                    sorted(
+                        rules,
+                        key=lambda item: (
+                            item.capability.id,
+                            item.capability.version,
+                            item.capability.capability_hash,
+                        ),
+                    )
+                ),
+            )
+
+        availability = self._governed_availability
+        if availability is None:
+            availability = AvailabilitySnapshotV1(
+                implementations=tuple(
+                    ImplementationAvailabilityV1(
+                        implementation=item.ref,
+                        status=(
+                            AvailabilityStatus.AVAILABLE
+                            if projected
+                            else AvailabilityStatus.UNKNOWN
+                        ),
+                        reason=(
+                            AvailabilityReason.READY
+                            if projected
+                            else AvailabilityReason.STATUS_UNKNOWN
+                        ),
+                    )
+                    for item in registry.implementations
+                )
+            )
+        return compile_governed_plan(
+            validated,
+            method,
+            registry.capabilities,
+            registry.implementations,
+            policy,
+            availability,
+        )
+
     def execute_operation(
         self,
         request: OperationRequest,
@@ -291,9 +448,7 @@ class DefinedQuantService:
                     if reference_match is not None and reference_match.group(1) != "1":
                         raise HostFailureException(
                             HostFailureCode.UNSUPPORTED_REFERENCE_VERSION,
-                            details={
-                                "requested_version": f"v{reference_match.group(1)}"
-                            },
+                            details={"requested_version": f"v{reference_match.group(1)}"},
                         )
                 source = DatasetOperationSourceV1.model_validate(source_value)
                 stored_dataset = self.session_cas.load_dataset(source.ref)

@@ -14,10 +14,7 @@ for _entry in sys.path:
         and (_candidate / "validation.py").is_file()
     ):
         __path__.insert(0, str(_candidate))
-    elif (
-        _candidate.name == "categories"
-        and (_candidate / "README.md").is_file()
-    ):
+    elif _candidate.name == "categories" and (_candidate / "README.md").is_file():
         __path__.append(str(_candidate))
 
 from defined_quant.catalog import (  # noqa: E402
@@ -43,6 +40,14 @@ from defined_quant.discovery import (  # noqa: E402
     search_components,
     tokenize,
 )
+from defined_quant.method_registry import (  # noqa: E402
+    GovernedRegistry,
+    project_component_inspection,
+)
+from defined_quant.plan_compiler import (  # noqa: E402
+    RESOLUTION_ALGORITHM_VERSION,
+    compile_plan,
+)
 from defined_quant.plan_validation import (  # noqa: E402
     create_authorization_binding,
     create_manual_approval,
@@ -60,6 +65,8 @@ __all__ = [
     "DiscoveryFilters",
     "FacetValue",
     "FieldMatch",
+    "GovernedRegistry",
+    "RESOLUTION_ALGORITHM_VERSION",
     "SearchHit",
     "SearchResults",
     "catalog_facets",
@@ -68,11 +75,13 @@ __all__ = [
     "component_facets",
     "create_authorization_binding",
     "create_manual_approval",
+    "compile_plan",
     "invalidate_subject_cache",
     "iter_components",
     "load_component",
     "load_execution_policy",
     "preflight",
+    "project_component_inspection",
     "render_svg",
     "save_svg",
     "search_components",

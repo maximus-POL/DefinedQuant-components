@@ -39,6 +39,7 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made the native worker provider select inspection scratch roots and required POSIX to canonicalize the trusted system temporary root before the session store pins it. | macOS exposes `/var` as a symlink alias of `/private/var`; provider-owned canonical selection preserves strict symlink refusal for caller paths while allowing the session store to verify the actual local temporary root. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Required Windows worker state to use the deepest eligible non-home, non-volume-root same-volume ancestor whose path is at most 64 UTF-16 code units, while keeping the workspace inside the locked session namespace and publishing to long destinations with native handles. | CPython startup and library paths used by the child are not uniformly `MAX_PATH`-independent on a default Windows installation; bounding only the internal managed path preserves long caller-output support without machine-wide registry settings or unmanaged home/drive-root staging. |
 | 2026-08-16 | this commit | Phase-4 remediation | §4.2; §7.1; §7.3 | Replaced the unreachable 250,000-row/128 MiB dataset contract with conjunctive 40,000-row, 128-column, and 512 KiB canonical-payload ceilings; removed dataset-level `intraday`; and specified Linux `RLIMIT_AS`, Windows Job Object commit, and macOS controller-RSS enforcement. | Native production-wheel probes at 1, 8, and 128 columns found macOS to be tightest at 50,000 one-column rows succeeding and 60,000 reaching the 512 MiB resource limit; the lower ceiling retains measured headroom, keeps every accepted dataset beneath the worker channels, and states the macOS sampling-window risk truthfully. |
+| 2026-09-01 | this commit | Governed planning Phase 1 | Post-freeze amendments | Recorded the additive backend-neutral method registry and pure deterministic `compile_plan` contract while preserving all existing local-MCP tools, unmanaged execution, records, and hashes; execution, provider I/O, snapshots, and replay remain excluded. | Establish a separately bounded planning layer in which the service owns policy and explicit availability, the agent cannot select implementations, only relevant candidates affect `plan_hash`, rationale is non-computational, and positive claims remain limited to plan validation and policy eligibility. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -686,6 +687,28 @@ Failure example:
 ```json
 {"host_schema_version":1,"outcome":"refused","error":{"code":"incompatible_ports","message":"The selected output and input semantic ports are not compatible.","retry_allowed":false,"details":{"differences":[{"dimension":"convention","producer_value":"simple_periodic_return","consumer_value":"log_periodic_return"}]}},"trust":{"label":"structural_compatibility_only","statement":"Semantic-port compatibility is structural only; it neither transfers data nor authorizes execution."}}
 ```
+
+#### `compile_plan`
+
+```text
+Request = {
+  host_schema_version?: integer = 1,
+  proposal: PlanProposalV1
+}
+```
+
+This additive governed-planning surface is specified by
+[`GOVERNED_PLAN_COMPILER_V1.md`](GOVERNED_PLAN_COMPILER_V1.md). The request contains a method ID
+and version, structured financial inputs, declared conventions, and optional untrusted rationale.
+It contains no implementation/provider selector or executable/access configuration. The service
+collects the exact registry slice, configured policy, and explicit non-secret availability before
+calling the pure compiler. Its data is exactly one closed `compiled`, `needs_information`, or
+`refused` outcome. It never executes, fetches, publishes a record, or probes availability.
+
+Annotations are `{readOnlyHint:true, destructiveHint:false, idempotentHint:true,
+openWorldHint:false}`. The neutral transport trust label is `plan_compilation_only`; only a
+`compiled` data outcome carries `PLAN VALIDATION PASSED` and `ELIGIBLE UNDER POLICY`. Neither claim
+attests calculation success, output correctness, data authenticity, or replay.
 
 #### `execute_component`
 
@@ -1479,7 +1502,8 @@ The committed Phase-4 transport replaces that spike and uses the official low-le
 `on_list_tools`, `on_call_tool`, `on_list_resources`,
 `on_list_resource_templates`, and `on_read_resource`. `on_list_resources` returns an empty list;
 it is still required because v2.0.0 advertises the resources capability only when that handler is
-present. The other list handlers return exactly the seven frozen tools and one resource template.
+present. The other list handlers return the seven original tools plus the additive, compile-only
+`compile_plan` tool and one resource template.
 Startup uses the tagged
 [`stdio_server()` and `Server.run(...)` shape](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/src/mcp/server/lowlevel/server.py#L20-L29),
 with `server.create_initialization_options()` and `raise_exceptions=False`. The official
@@ -1587,7 +1611,8 @@ runtime. Status below describes this working tree; only the native release gate 
    vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits are
    implemented behind the transport-neutral platform facade.
 4. **Phase 4 — STDIO MCP server and worker: implemented, native validation pending.** The optional
-   package isolates SDK code in `server.py`, exposes the seven tools and one resource, and includes
+   package isolates SDK code in `server.py`, exposes eight tools (the seven original tools plus
+   compile-only `compile_plan`) and one resource, and includes
    official-client and process-cleanup tests. The Windows filesystem, session-store, Job Object,
    environment, locking, cleanup, and binary-STDIO providers are in-tree; the six native CI cells
    must prove them before Phase 4 is declared release-complete.

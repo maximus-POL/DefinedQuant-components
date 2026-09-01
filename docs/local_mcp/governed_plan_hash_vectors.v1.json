@@ -1,0 +1,774 @@
+{
+  "schema_version": 1,
+  "fixture": "synthetic_return_compiler_context_v1",
+  "canonicalization_id": "dq-tagged-json-v1",
+  "hash_algorithm": "sha256",
+  "vectors": [
+    {
+      "id": "method_spec",
+      "identity": "spec_hash",
+      "domain": "governance.method_spec.v1",
+      "value": {
+        "schema_version": 1,
+        "id": "dq.market_data.synthetic_return",
+        "version": "1.0.0",
+        "title": "Synthetic Return",
+        "summary": "A deterministic synthetic method used only for compiler tests.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "adjusted",
+                "unadjusted"
+              ]
+            },
+            "prices": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "x-defined-quant-port": {
+                "direction": "input",
+                "concept": "price_series",
+                "unit": "price",
+                "shape": "ordered_series",
+                "cardinality": "one_or_more",
+                "convention": "ordered_positive_prices",
+                "ordering": "preserve_source_order",
+                "frequency": "inherited",
+                "provenance_requirement": "not_required"
+              }
+            },
+            "window": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            }
+          },
+          "required": [
+            "kind",
+            "prices"
+          ],
+          "additionalProperties": false
+        },
+        "output_schema": {
+          "type": "object",
+          "properties": {
+            "returns": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "x-defined-quant-port": {
+                "direction": "output",
+                "concept": "periodic_return_series",
+                "unit": "decimal",
+                "shape": "ordered_series",
+                "cardinality": "one_or_more",
+                "convention": "simple_periodic_return",
+                "ordering": "preserve_source_order",
+                "frequency": "inherited",
+                "provenance_requirement": "not_required"
+              }
+            }
+          },
+          "required": [
+            "returns"
+          ],
+          "additionalProperties": false
+        },
+        "input_ports": [
+          {
+            "field": "prices",
+            "port": {
+              "direction": "input",
+              "concept": "price_series",
+              "unit": "price",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "ordered_positive_prices",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "output_ports": [
+          {
+            "field": "returns",
+            "port": {
+              "direction": "output",
+              "concept": "periodic_return_series",
+              "unit": "decimal",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "simple_periodic_return",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "methodology": [
+          "r_t = P_t / P_t-1 - 1"
+        ],
+        "assumptions": [],
+        "limitations": [],
+        "interpretation": "Interpret results as synthetic decimal periodic returns.",
+        "constraints": [],
+        "conventions": [
+          {
+            "id": "kind",
+            "field": "kind",
+            "question": "Are the prices adjusted or unadjusted?",
+            "materiality": "The choice changes the economic interpretation.",
+            "required_from_user": true,
+            "allowed_values": [
+              "adjusted",
+              "unadjusted"
+            ]
+          }
+        ],
+        "defaults": [
+          {
+            "field": "window",
+            "value": 5,
+            "rationale": "The synthetic fixture explicitly authors this default."
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "statistics.simple_return",
+            "version": "1.0.0",
+            "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+          }
+        ],
+        "recipe": {
+          "steps": [
+            {
+              "step_id": "calculate",
+              "capability_id": "statistics.simple_return",
+              "depends_on": [],
+              "input_bindings": [
+                {
+                  "target_field": "kind",
+                  "source": {
+                    "source": "method_input",
+                    "field": "kind",
+                    "step_id": null
+                  }
+                },
+                {
+                  "target_field": "prices",
+                  "source": {
+                    "source": "method_input",
+                    "field": "prices",
+                    "step_id": null
+                  }
+                },
+                {
+                  "target_field": "window",
+                  "source": {
+                    "source": "method_input",
+                    "field": "window",
+                    "step_id": null
+                  }
+                }
+              ],
+              "output_fields": [
+                "returns"
+              ]
+            }
+          ],
+          "result_steps": [
+            "calculate"
+          ]
+        }
+      },
+      "expected_sha256": "0713d16e50638c3a9152021ed567ee45ed1b0552bfb01009c35bfa60c53c29f2"
+    },
+    {
+      "id": "capability_spec",
+      "identity": "capability_hash",
+      "domain": "governance.capability_spec.v1",
+      "value": {
+        "schema_version": 1,
+        "id": "statistics.simple_return",
+        "version": "1.0.0",
+        "title": "Synthetic return capability",
+        "kind": "calculation",
+        "summary": "Transforms an ordered price series into periodic returns.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "adjusted",
+                "unadjusted"
+              ]
+            },
+            "prices": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "x-defined-quant-port": {
+                "direction": "input",
+                "concept": "price_series",
+                "unit": "price",
+                "shape": "ordered_series",
+                "cardinality": "one_or_more",
+                "convention": "ordered_positive_prices",
+                "ordering": "preserve_source_order",
+                "frequency": "inherited",
+                "provenance_requirement": "not_required"
+              }
+            },
+            "window": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            }
+          },
+          "required": [
+            "kind",
+            "prices"
+          ],
+          "additionalProperties": false
+        },
+        "output_schema": {
+          "type": "object",
+          "properties": {
+            "returns": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "x-defined-quant-port": {
+                "direction": "output",
+                "concept": "periodic_return_series",
+                "unit": "decimal",
+                "shape": "ordered_series",
+                "cardinality": "one_or_more",
+                "convention": "simple_periodic_return",
+                "ordering": "preserve_source_order",
+                "frequency": "inherited",
+                "provenance_requirement": "not_required"
+              }
+            }
+          },
+          "required": [
+            "returns"
+          ],
+          "additionalProperties": false
+        },
+        "input_ports": [
+          {
+            "field": "prices",
+            "port": {
+              "direction": "input",
+              "concept": "price_series",
+              "unit": "price",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "ordered_positive_prices",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "output_ports": [
+          {
+            "field": "returns",
+            "port": {
+              "direction": "output",
+              "concept": "periodic_return_series",
+              "unit": "decimal",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "simple_periodic_return",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ]
+      },
+      "expected_sha256": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+    },
+    {
+      "id": "implementation_impl_alpha",
+      "identity": "implementation_hash",
+      "domain": "governance.implementation_spec.v1",
+      "value": {
+        "schema_version": 1,
+        "id": "impl.alpha",
+        "version": "1.0.0",
+        "title": "Synthetic impl.alpha",
+        "capability": {
+          "id": "statistics.simple_return",
+          "version": "1.0.0",
+          "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+        },
+        "input_ports": [
+          {
+            "field": "prices",
+            "port": {
+              "direction": "input",
+              "concept": "price_series",
+              "unit": "price",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "ordered_positive_prices",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "output_ports": [
+          {
+            "field": "returns",
+            "port": {
+              "direction": "output",
+              "concept": "periodic_return_series",
+              "unit": "decimal",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "simple_periodic_return",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "adapter": {
+          "id": "synthetic_adapter",
+          "version": "1.0.0",
+          "distribution": "defined-quant"
+        },
+        "transport": {
+          "kind": "python_package",
+          "locality": "local",
+          "system_id": "synthetic_runtime",
+          "requires_network": false,
+          "requires_credentials": false
+        },
+        "component": null,
+        "trust_dimensions": [
+          "deterministic",
+          "schema_checked",
+          "trusted_adapter"
+        ]
+      },
+      "expected_sha256": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+    },
+    {
+      "id": "implementation_impl_beta",
+      "identity": "implementation_hash",
+      "domain": "governance.implementation_spec.v1",
+      "value": {
+        "schema_version": 1,
+        "id": "impl.beta",
+        "version": "1.0.0",
+        "title": "Synthetic impl.beta",
+        "capability": {
+          "id": "statistics.simple_return",
+          "version": "1.0.0",
+          "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+        },
+        "input_ports": [
+          {
+            "field": "prices",
+            "port": {
+              "direction": "input",
+              "concept": "price_series",
+              "unit": "price",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "ordered_positive_prices",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "output_ports": [
+          {
+            "field": "returns",
+            "port": {
+              "direction": "output",
+              "concept": "periodic_return_series",
+              "unit": "decimal",
+              "shape": "ordered_series",
+              "cardinality": "one_or_more",
+              "convention": "simple_periodic_return",
+              "ordering": "preserve_source_order",
+              "frequency": "inherited",
+              "provenance_requirement": "not_required"
+            }
+          }
+        ],
+        "adapter": {
+          "id": "synthetic_adapter",
+          "version": "1.0.0",
+          "distribution": "defined-quant"
+        },
+        "transport": {
+          "kind": "python_package",
+          "locality": "local",
+          "system_id": "synthetic_runtime",
+          "requires_network": false,
+          "requires_credentials": false
+        },
+        "component": null,
+        "trust_dimensions": [
+          "deterministic",
+          "schema_checked",
+          "trusted_adapter"
+        ]
+      },
+      "expected_sha256": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+    },
+    {
+      "id": "resolution_policy",
+      "identity": "policy_hash",
+      "domain": "governance.resolution_policy.v1",
+      "value": {
+        "schema_version": 1,
+        "id": "professional_default",
+        "version": "1.0.0",
+        "method": {
+          "id": "dq.market_data.synthetic_return",
+          "version": "1.0.0",
+          "spec_hash": "0713d16e50638c3a9152021ed567ee45ed1b0552bfb01009c35bfa60c53c29f2"
+        },
+        "capability_rules": [
+          {
+            "capability": {
+              "id": "statistics.simple_return",
+              "version": "1.0.0",
+              "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+            },
+            "implementations": [
+              {
+                "implementation": {
+                  "id": "impl.alpha",
+                  "version": "1.0.0",
+                  "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+                },
+                "priority": 10
+              },
+              {
+                "implementation": {
+                  "id": "impl.beta",
+                  "version": "1.0.0",
+                  "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+                },
+                "priority": 20
+              }
+            ],
+            "required_trust_dimensions": [
+              "deterministic",
+              "schema_checked",
+              "trusted_adapter"
+            ],
+            "allowed_transports": [
+              "python_package"
+            ]
+          }
+        ]
+      },
+      "expected_sha256": "d44447b2f0b13cb4eb7c03f307cd8b6d6c6201483bc95d9e2b4ef1f2094549b5"
+    },
+    {
+      "id": "compiled_plan_semantics",
+      "identity": "plan_hash",
+      "domain": "governance.compiled_plan.v1",
+      "value": {
+        "status": "compiled",
+        "schema_version": 1,
+        "algorithm_version": "governed_resolution_v1",
+        "claims": [
+          "PLAN VALIDATION PASSED",
+          "ELIGIBLE UNDER POLICY"
+        ],
+        "method": {
+          "id": "dq.market_data.synthetic_return",
+          "version": "1.0.0",
+          "spec_hash": "0713d16e50638c3a9152021ed567ee45ed1b0552bfb01009c35bfa60c53c29f2"
+        },
+        "policy": {
+          "id": "professional_default",
+          "version": "1.0.0",
+          "policy_hash": "d44447b2f0b13cb4eb7c03f307cd8b6d6c6201483bc95d9e2b4ef1f2094549b5"
+        },
+        "resolved_financial_inputs": {
+          "prices": [
+            100.0,
+            101.0
+          ],
+          "window": 5
+        },
+        "resolved_conventions": {
+          "kind": "adjusted"
+        },
+        "applied_defaults": [
+          {
+            "field": "window",
+            "value": 5,
+            "rationale": "The synthetic fixture explicitly authors this default."
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "statistics.simple_return",
+            "version": "1.0.0",
+            "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+          }
+        ],
+        "resolution_receipts": [
+          {
+            "schema_version": 1,
+            "step_id": "calculate",
+            "capability": {
+              "id": "statistics.simple_return",
+              "version": "1.0.0",
+              "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+            },
+            "relevant_candidates": [
+              {
+                "implementation": {
+                  "id": "impl.alpha",
+                  "version": "1.0.0",
+                  "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+                },
+                "priority": 10,
+                "capability_match": true,
+                "semantic_ports_match": true,
+                "policy_allowed": true,
+                "trust_requirements_satisfied": true,
+                "transport_allowed": true,
+                "availability": {
+                  "implementation": {
+                    "id": "impl.alpha",
+                    "version": "1.0.0",
+                    "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+                  },
+                  "status": "available",
+                  "reason": "ready"
+                },
+                "rejection_reasons": [],
+                "selected": true
+              },
+              {
+                "implementation": {
+                  "id": "impl.beta",
+                  "version": "1.0.0",
+                  "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+                },
+                "priority": 20,
+                "capability_match": true,
+                "semantic_ports_match": true,
+                "policy_allowed": true,
+                "trust_requirements_satisfied": true,
+                "transport_allowed": true,
+                "availability": {
+                  "implementation": {
+                    "id": "impl.beta",
+                    "version": "1.0.0",
+                    "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+                  },
+                  "status": "available",
+                  "reason": "ready"
+                },
+                "rejection_reasons": [],
+                "selected": false
+              }
+            ],
+            "selected_implementation": {
+              "id": "impl.alpha",
+              "version": "1.0.0",
+              "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+            },
+            "selected_policy_priority": 10,
+            "satisfied_trust_dimensions": [
+              "deterministic",
+              "schema_checked",
+              "trusted_adapter"
+            ],
+            "algorithm_version": "governed_resolution_v1",
+            "runtime_fallback_allowed": false
+          }
+        ]
+      },
+      "expected_sha256": "4121009e7141da413f075fcfdd8851c1a606036dd88167d3da60e5a128e07bb5"
+    }
+  ],
+  "compilation_inputs": {
+    "proposal": {
+      "schema_version": 1,
+      "method_id": "dq.market_data.synthetic_return",
+      "method_version": "1.0.0",
+      "financial_inputs": {
+        "prices": [
+          100.0,
+          101.0
+        ]
+      },
+      "conventions": {
+        "kind": "adjusted"
+      },
+      "agent_rationale": "The user requested periodic returns."
+    },
+    "availability": {
+      "schema_version": 1,
+      "implementations": [
+        {
+          "implementation": {
+            "id": "impl.alpha",
+            "version": "1.0.0",
+            "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+          },
+          "status": "available",
+          "reason": "ready"
+        },
+        {
+          "implementation": {
+            "id": "impl.beta",
+            "version": "1.0.0",
+            "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+          },
+          "status": "available",
+          "reason": "ready"
+        }
+      ]
+    }
+  },
+  "compiled_plan_value": {
+    "status": "compiled",
+    "schema_version": 1,
+    "algorithm_version": "governed_resolution_v1",
+    "claims": [
+      "PLAN VALIDATION PASSED",
+      "ELIGIBLE UNDER POLICY"
+    ],
+    "method": {
+      "id": "dq.market_data.synthetic_return",
+      "version": "1.0.0",
+      "spec_hash": "0713d16e50638c3a9152021ed567ee45ed1b0552bfb01009c35bfa60c53c29f2"
+    },
+    "policy": {
+      "id": "professional_default",
+      "version": "1.0.0",
+      "policy_hash": "d44447b2f0b13cb4eb7c03f307cd8b6d6c6201483bc95d9e2b4ef1f2094549b5"
+    },
+    "resolved_financial_inputs": {
+      "prices": [
+        100.0,
+        101.0
+      ],
+      "window": 5
+    },
+    "resolved_conventions": {
+      "kind": "adjusted"
+    },
+    "applied_defaults": [
+      {
+        "field": "window",
+        "value": 5,
+        "rationale": "The synthetic fixture explicitly authors this default."
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "statistics.simple_return",
+        "version": "1.0.0",
+        "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+      }
+    ],
+    "resolution_receipts": [
+      {
+        "schema_version": 1,
+        "step_id": "calculate",
+        "capability": {
+          "id": "statistics.simple_return",
+          "version": "1.0.0",
+          "capability_hash": "f468abc33c8d932622bc5477a73c336c56da2ab71610fe423178d8ff1d22b018"
+        },
+        "relevant_candidates": [
+          {
+            "implementation": {
+              "id": "impl.alpha",
+              "version": "1.0.0",
+              "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+            },
+            "priority": 10,
+            "capability_match": true,
+            "semantic_ports_match": true,
+            "policy_allowed": true,
+            "trust_requirements_satisfied": true,
+            "transport_allowed": true,
+            "availability": {
+              "implementation": {
+                "id": "impl.alpha",
+                "version": "1.0.0",
+                "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+              },
+              "status": "available",
+              "reason": "ready"
+            },
+            "rejection_reasons": [],
+            "selected": true
+          },
+          {
+            "implementation": {
+              "id": "impl.beta",
+              "version": "1.0.0",
+              "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+            },
+            "priority": 20,
+            "capability_match": true,
+            "semantic_ports_match": true,
+            "policy_allowed": true,
+            "trust_requirements_satisfied": true,
+            "transport_allowed": true,
+            "availability": {
+              "implementation": {
+                "id": "impl.beta",
+                "version": "1.0.0",
+                "implementation_hash": "38de2bc6b2bad77460a4f7491890bf243e1f766f2f9573809fea8a72662fc136"
+              },
+              "status": "available",
+              "reason": "ready"
+            },
+            "rejection_reasons": [],
+            "selected": false
+          }
+        ],
+        "selected_implementation": {
+          "id": "impl.alpha",
+          "version": "1.0.0",
+          "implementation_hash": "b4db56ff1b525f559a75b9237bd2db03250681af90187e056dcdd5fcdbae5d21"
+        },
+        "selected_policy_priority": 10,
+        "satisfied_trust_dimensions": [
+          "deterministic",
+          "schema_checked",
+          "trusted_adapter"
+        ],
+        "algorithm_version": "governed_resolution_v1",
+        "runtime_fallback_allowed": false
+      }
+    ],
+    "agent_rationale": "The user requested periodic returns.",
+    "plan_hash": "4121009e7141da413f075fcfdd8851c1a606036dd88167d3da60e5a128e07bb5"
+  },
+  "expected_compiled_plan_canonical_bytes_sha256": "9b042dfcb237abdd8d2a23b8a19ec4841eb89d0f55bb006075834ec3099d4ba8"
+}

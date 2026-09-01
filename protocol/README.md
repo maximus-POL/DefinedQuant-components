@@ -142,5 +142,28 @@ managed authorization revalidation recalculates all semantic roots. A shallow ne
 therefore requires revalidation and, if semantics changed, a new manual approval. Hosts should
 serialize and revalidate records at trust boundaries.
 
+## Governed plan compilation V1
+
+`governance.py` adds an independent schema-v1 planning surface without changing protocol 0.4
+operation or authorization records. `MethodSpecV1` owns the financial contract and embedded
+backend-neutral recipe; `CapabilitySpecV1` describes typed abstract operations; and
+`ImplementationSpecV1` binds trusted adapters and transport metadata. A closed
+`PlanProposalV1` cannot name implementations, providers, executable code, SQL, URLs, credentials,
+imports, or arbitrary MCP tools.
+
+The pure compiler receives the exact registry slice, `ResolutionPolicyV1`, and explicit
+`AvailabilitySnapshotV1`. It returns only `CompiledPlanV1`, `NeedsInformationV1`, or
+`PlanRefusalV1`. The compiled plan binds relevant candidate and availability facts, one immutable
+selected implementation per recipe step, resolution receipts, applied defaults, and policy. It
+has no runtime fallback and performs no calculation. The only positive claims are `PLAN
+VALIDATION PASSED` and `ELIGIBLE UNDER POLICY`; neither is a correctness, execution, data, or
+replay attestation.
+
+Governance records recursively freeze nested JSON containers. Methods reconcile every optional
+input and JSON Schema default with one authored default, bind assumptions and limitations, and use
+exact schema plus semantic-port compatibility across recipe edges. Implementation eligibility uses
+separate trust dimensions; those dimensions are policy facts, not additional public success
+claims.
+
 The protocol source code is licensed under Apache-2.0 under the repository's `LICENSE` file. This
 README is documentation and remains licensed under CC BY 4.0 as specified by `LICENSE-CONTENT`.

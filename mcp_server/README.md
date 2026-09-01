@@ -58,6 +58,12 @@ defined-quant-mcp --catalog-root PATH --data-root PATH --state-root PATH
 tool arguments. Unicode and long local paths are supported. UNC paths, mapped network drives,
 device namespaces, and other network roots fail closed for the alpha.
 
+The additive `compile_plan` tool accepts only a closed `PlanProposalV1`. It deterministically
+binds one approved, available registered implementation per backend-neutral recipe step and
+returns `compiled`, `needs_information`, or `refused`. It does not execute the compiled plan,
+probe a provider, or create a run record. Existing component execution remains a separate
+unmanaged tool.
+
 ## Transport and trust boundary
 
 The transport is local STDIO only. Stdout is reserved for MCP frames. Operational stderr records

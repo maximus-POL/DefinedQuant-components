@@ -599,6 +599,21 @@
       "result_limit_exceeded",
       "internal_failure"
     ],
+    "compile_plan": [
+      "invalid_tool_request",
+      "unsupported_host_schema",
+      "input_limit_exceeded",
+      "component_not_found",
+      "component_identity_mismatch",
+      "component_contract_error",
+      "worker_timeout",
+      "worker_cancelled",
+      "worker_crashed",
+      "worker_capacity",
+      "worker_resource_limit",
+      "result_limit_exceeded",
+      "internal_failure"
+    ],
     "register_dataset": [
       "invalid_tool_request",
       "unsupported_host_schema",

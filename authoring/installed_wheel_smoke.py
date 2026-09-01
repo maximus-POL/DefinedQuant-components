@@ -62,6 +62,7 @@ async def _mcp_smoke(state_root: Path) -> None:
                     "register_dataset",
                     "describe_dataset",
                     "compare_ports",
+                    "compile_plan",
                     "execute_component",
                     "get_operation",
                 )

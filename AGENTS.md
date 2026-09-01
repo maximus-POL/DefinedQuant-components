@@ -27,6 +27,7 @@ conflate them with these repository instructions.
 | `shared/local_host_platform.py` | Transport-neutral local host capability facade and provider selection; protected |
 | `shared/_posix_local_host.py` | POSIX secure-filesystem provider behind the host facade; protected |
 | `shared/_windows_local_host.py` | Native Windows secure-filesystem, private-state, locking, publication, and cleanup provider; protected |
+| `shared/method_registry.py` | Immutable governed method, capability, and implementation registry plus legacy projection; protected |
 | `shared/worker_process.py` | Transport-neutral native worker-process contract; protected |
 | `shared/worker_runtime.py` | Shared bounded-worker lifecycle and atomic publication; protected |
 | `shared/worker_limits.py` | Stable worker request and control-channel byte ceilings; protected |
@@ -37,6 +38,7 @@ conflate them with these repository instructions.
 | `shared/_windows_worker.py` | Windows suspended-process Job Object provider; protected |
 | `shared/_windows_worker_entry.py` | Windows binary-STDIO bootstrap; protected |
 | `shared/stdio_framing.py` | Bounded binary LF framing and exact byte I/O; protected |
+| `shared/plan_compiler.py` | Pure deterministic validation and implementation resolution for governed plans; protected |
 | `shared/plan_validation.py` | Managed plan validation and authorization; protected |
 | `shared/agent.py` | Compatibility imports only; protected |
 | `shared/__init__.py` | Public exports and source-layout bridge; protected |
@@ -45,6 +47,8 @@ conflate them with these repository instructions.
 | `authoring/*.py` | Explicit creation, checking, and catalog-export tools; protected |
 | `.agents/skills/use-defined-quant/` | Optional catalog-wide Codex adapter; never component-specific |
 | `protocol/` | Canonical typed operation envelopes, installed as `defined_quant_protocol` |
+| `protocol/governance.py` | Backend-neutral governed method, capability, implementation, policy, availability, and plan records; protected |
+| `protocol/_immutable_json.py` | Recursively immutable JSON containers for governance identities; protected |
 | `mcp_server/` | Separate optional `defined-quant-mcp` distribution; all MCP SDK code stays here |
 | `mcp_server/src/defined_quant_mcp/server.py` | Low-level SDK adapter, bounded STDIO, safe envelopes, and redacted audit output |
 | `mcp_server/uv.lock` | Platform-complete locked MCP dependency graph; protected |
@@ -54,8 +58,9 @@ conflate them with these repository instructions.
 
 - `docs/LOCAL_MCP_ALPHA_DESIGN.md` is the frozen implementation contract. Every amendment must
   add one row to its post-freeze amendment table in the same commit.
-- `docs/local_mcp/hash_vectors.v1.json`, `host_failures.v1.json`, and
-  `evaluation_cases.v1.json` are normative test fixtures, not samples or generated schemas.
+- `docs/local_mcp/hash_vectors.v1.json`, `governed_plan_hash_vectors.v1.json`,
+  `host_failures.v1.json`, and `evaluation_cases.v1.json` are normative test fixtures, not samples
+  or generated schemas.
 
 | Surface | Required platforms |
 |---|---|

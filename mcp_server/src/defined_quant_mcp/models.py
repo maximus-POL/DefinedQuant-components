@@ -12,7 +12,12 @@ from defined_quant.data_records import (
     FieldMappingV1,
 )
 from defined_quant.discovery import FACET_NAMES
-from defined_quant_protocol import CallerProvenance, ComponentRef, canonical_json_bytes
+from defined_quant_protocol import (
+    CallerProvenance,
+    ComponentRef,
+    PlanProposalV1,
+    canonical_json_bytes,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -153,6 +158,10 @@ class ComparePortsRequest(ClosedRequest):
     consumer: PortRef
 
 
+class CompilePlanRequest(ClosedRequest):
+    proposal: PlanProposalV1
+
+
 class DatasetSource(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -268,6 +277,7 @@ REQUEST_MODELS: dict[str, type[BaseModel]] = {
     "register_dataset": RegisterDatasetRequest,
     "describe_dataset": DescribeDatasetRequest,
     "compare_ports": ComparePortsRequest,
+    "compile_plan": CompilePlanRequest,
     "execute_component": ExecuteComponentRequest,
     "get_operation": GetOperationRequest,
 }
@@ -275,6 +285,7 @@ REQUEST_MODELS: dict[str, type[BaseModel]] = {
 
 __all__ = [
     "ComparePortsRequest",
+    "CompilePlanRequest",
     "DescribeDatasetRequest",
     "ExecuteComponentRequest",
     "GetOperationRequest",

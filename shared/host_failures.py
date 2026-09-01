@@ -79,6 +79,7 @@ class TrustLabel(StrEnum):
 
     CONTRACT_METADATA_ONLY = "contract_metadata_only"
     INSTALLED_SUBJECT_INSPECTED = "installed_subject_inspected"
+    PLAN_COMPILATION_ONLY = "plan_compilation_only"
     UNVERIFIED_CALLER_DATA = "unverified_caller_data"
     STRUCTURAL_COMPATIBILITY_ONLY = "structural_compatibility_only"
     UNMANAGED_EXECUTION = "unmanaged_execution"
@@ -92,6 +93,10 @@ _TRUST_STATEMENTS: Mapping[TrustLabel, str] = MappingProxyType(
         ),
         TrustLabel.INSTALLED_SUBJECT_INSPECTED: (
             "Installed component identity and schema were inspected; no calculation was executed."
+        ),
+        TrustLabel.PLAN_COMPILATION_ONLY: (
+            "Deterministic plan compilation outcome only; no execution, financial correctness, "
+            "data authenticity, or replay result is attested."
         ),
         TrustLabel.UNVERIFIED_CALLER_DATA: (
             "Registered caller-supplied data is unverified and unauthenticated."

@@ -46,8 +46,10 @@ components/
 │   ├── host_failures.py         closed host failures, outcomes, and trust labels
 │   ├── local_host_platform.py   transport-neutral host facade and provider selection
 │   ├── managed_profiles/        packaged managed-execution allowlists
+│   ├── method_registry.py       governed method and implementation registry
 │   ├── operation_records.py     manifest-to-operation-record reconciliation
 │   ├── operation_runtime.py     canonical validation, execution, and publication
+│   ├── plan_compiler.py         pure deterministic governed-plan compiler
 │   ├── plan_validation.py       managed plan validation and authorization
 │   ├── py.typed                 installed-package typing marker
 │   ├── record_views.py          bounded dataset and operation projections
@@ -62,10 +64,12 @@ components/
 │   ├── worker_process.py        transport-neutral native process contract
 │   └── worker_runtime.py        shared bounded-worker lifecycle and publication
 ├── protocol/
+│   ├── _immutable_json.py       recursively immutable governance JSON
 │   ├── __init__.py
 │   ├── README.md
 │   ├── authorization.py
 │   ├── canonical.py
+│   ├── governance.py
 │   ├── operation.py
 │   ├── plan.py
 │   ├── ports.py
@@ -296,6 +300,21 @@ the record is not independent execution attestation. It also does not establish 
 data is authentic, that an interpretation is correct, that a person approved an analysis plan, or
 that a portable research bundle passed independent verification. Caller provenance is a recorded
 assertion, not a provider or Defined Quant attestation.
+
+The additive governed-plan compiler is specified in
+[`docs/GOVERNED_PLAN_COMPILER_V1.md`](docs/GOVERNED_PLAN_COMPILER_V1.md). It introduces
+backend-neutral method, capability, and implementation records plus deterministic compilation,
+but no execution. `DefinedQuantService` supplies an immutable relevant registry slice, configured
+resolution policy, and explicit non-secret availability snapshot to a pure compiler that performs
+no ambient I/O. Compilation returns exactly `compiled`, `needs_information`, or `refused`; the
+agent cannot choose an implementation. The compiled plan binds only relevant candidates, selected
+implementations, policy, availability facts, resolution receipts, and resolved financial meaning.
+Untrusted rationale remains inspectable but is excluded from `plan_hash`.
+
+This Phase-1 surface may claim only `PLAN VALIDATION PASSED` and `ELIGIBLE UNDER POLICY`. It does
+not calculate, fetch data, attest correctness, produce a run record, retain a snapshot, or support
+replay. Existing component tools, records, unmanaged execution, and `subject_hash` behavior remain
+unchanged; `Component` remains the public compatibility term.
 
 The separate C3B surface is atomic managed authorization, not managed execution. An immutable
 `AnalysisPlan` contains exactly one step. A data-driven packaged policy currently allowlists only

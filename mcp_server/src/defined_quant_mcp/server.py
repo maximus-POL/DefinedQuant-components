@@ -49,6 +49,7 @@ from pydantic import BaseModel, ValidationError
 from .models import (
     REQUEST_MODELS,
     ComparePortsRequest,
+    CompilePlanRequest,
     DescribeDatasetRequest,
     ExecuteComponentRequest,
     GetOperationRequest,
@@ -67,8 +68,10 @@ MAX_RESOURCE_FRAME_BYTES = 8 * 1024 * 1024
 RESOURCE_TEMPLATE = "dqop://v1/{operation_sha256}/artifact/{artifact_id}"
 INITIALIZATION_INSTRUCTIONS = (
     "For financial calculations, search the Defined Quant catalog, inspect only selected "
-    "canonical contracts, register or reference data, execute through Defined Quant tools, "
-    "and read the typed outcome. Do not inspect component source unless the user explicitly "
+    "canonical contracts, submit structured proposals to compile_plan when governed planning "
+    "is required, register or reference data, execute through Defined Quant tools, and read "
+    "the typed outcome. Compilation never executes a calculation. Do not inspect component "
+    "source unless the user explicitly "
     "requests development, review, or debugging. Never infer an answer-changing convention. "
     "Operations are unmanaged and supplied data is not authenticated."
 )
@@ -83,6 +86,7 @@ _RESOURCE_URI = re.compile(
 _SUCCESS_TRUST = {
     "search_components": TrustLabel.CONTRACT_METADATA_ONLY,
     "inspect_component": TrustLabel.INSTALLED_SUBJECT_INSPECTED,
+    "compile_plan": TrustLabel.PLAN_COMPILATION_ONLY,
     "register_dataset": TrustLabel.UNVERIFIED_CALLER_DATA,
     "describe_dataset": TrustLabel.UNVERIFIED_CALLER_DATA,
     "compare_ports": TrustLabel.STRUCTURAL_COMPATIBILITY_ONLY,
@@ -107,6 +111,23 @@ _ALLOWED_FAILURES = {
         }
     ),
     "inspect_component": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.COMPONENT_NOT_FOUND,
+            HostFailureCode.COMPONENT_IDENTITY_MISMATCH,
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            HostFailureCode.WORKER_TIMEOUT,
+            HostFailureCode.WORKER_CANCELLED,
+            HostFailureCode.WORKER_CRASHED,
+            HostFailureCode.WORKER_CAPACITY,
+            HostFailureCode.WORKER_RESOURCE_LIMIT,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "compile_plan": frozenset(
         {
             HostFailureCode.INVALID_TOOL_REQUEST,
             HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
@@ -567,6 +588,15 @@ async def _dispatch(
             ),
             cancel_event,
         )
+    if isinstance(request, CompilePlanRequest):
+        outcome = await _cancellable_call(
+            lambda: service.compile_plan(
+                request.proposal,
+                cancel_event=cancel_event,
+            ),
+            cancel_event,
+        )
+        return outcome.model_dump(mode="json")
     if isinstance(request, ExecuteComponentRequest):
         return await _cancellable_call(
             lambda: service.execute_component(
@@ -600,6 +630,7 @@ _TOOL_DESCRIPTIONS = {
     "register_dataset": "Normalize and register caller-supplied data for this session.",
     "describe_dataset": "Read bounded metadata or a deliberate preview from a dataset record.",
     "compare_ports": "Compare one exact output semantic port with one exact input port.",
+    "compile_plan": "Compile one structured proposal into a deterministic governance outcome.",
     "execute_component": "Execute one exact unmanaged component operation.",
     "get_operation": "Read a bounded verified projection of an operation record.",
 }
@@ -608,6 +639,7 @@ _READ_ONLY_TOOLS = {
     "inspect_component",
     "describe_dataset",
     "compare_ports",
+    "compile_plan",
     "get_operation",
 }
 _IDEMPOTENT_TOOLS = _READ_ONLY_TOOLS | {"execute_component"}

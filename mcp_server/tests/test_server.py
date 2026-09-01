@@ -47,6 +47,7 @@ _TOOLS = (
     "register_dataset",
     "describe_dataset",
     "compare_ports",
+    "compile_plan",
     "execute_component",
     "get_operation",
 )
@@ -138,6 +139,14 @@ def _minimal_tool_arguments() -> dict[str, dict[str, Any]]:
         "compare_ports": {
             "producer": {"component": component, "field": "returns"},
             "consumer": {"component": component, "field": "prices"},
+        },
+        "compile_plan": {
+            "proposal": {
+                "method_id": "dq.market_data.simple_return",
+                "method_version": "0.3.4",
+                "financial_inputs": {"prices": [100.0, 101.0]},
+                "conventions": {"price_kind": "adjusted"},
+            }
         },
         "execute_component": {
             "component": component,
@@ -315,6 +324,45 @@ def test_official_client_initialization_every_tool_and_resource(tmp_path: Path) 
                     )
                 )
                 assert compatibility["compatible"] is True
+
+                compiled = _assert_success(
+                    await client.call_tool(
+                        "compile_plan",
+                        {
+                            "proposal": {
+                                "method_id": "dq.market_data.simple_return",
+                                "method_version": "0.3.4",
+                                "financial_inputs": {"prices": [100.0, 110.0]},
+                                "conventions": {"price_kind": "adjusted"},
+                                "agent_rationale": "Compile the inspected return method.",
+                            }
+                        },
+                    )
+                )
+                assert compiled["status"] == "compiled"
+                assert compiled["claims"] == [
+                    "PLAN VALIDATION PASSED",
+                    "ELIGIBLE UNDER POLICY",
+                ]
+                assert compiled["resolution_receipts"][0][
+                    "runtime_fallback_allowed"
+                ] is False
+
+                unknown_method = _assert_success(
+                    await client.call_tool(
+                        "compile_plan",
+                        {
+                            "proposal": {
+                                "method_id": "dq.market_data.not_installed",
+                                "method_version": "1.0.0",
+                                "financial_inputs": {},
+                                "conventions": {},
+                            }
+                        },
+                    )
+                )
+                assert unknown_method["status"] == "refused"
+                assert unknown_method["code"] == "method_not_found"
 
                 registration = _assert_success(
                     await client.call_tool("register_dataset", _registration())
