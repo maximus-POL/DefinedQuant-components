@@ -13,6 +13,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "defined-quant.yml"
 RUNNER = ROOT / "authoring" / "run_native_wheel_matrix.py"
 ISOLATION_PLUGIN = ROOT / "authoring" / "pytest_wheel_isolation.py"
 RELEASE_EXTRAS = ROOT / "authoring" / "prepare_release_extras.py"
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 
 
 def _workflow() -> tuple[str, dict[str, Any]]:
@@ -92,6 +93,7 @@ def test_native_runner_covers_every_required_behavior_from_installed_wheels() ->
     assert '"installed_wheel_smoke.py"' in runner
     assert '"check_component.py"' in runner
     assert runner.count('"pytest"') == 2
+    assert runner.count('"pythonpath=."') == 2
     assert '"mcp_server" / "tests"' in runner
     assert '"authoring.pytest_wheel_isolation"' in runner
     for required_module in (
@@ -111,6 +113,12 @@ def test_native_runner_covers_every_required_behavior_from_installed_wheels() ->
         "mcp_server/tests/test_server.py",
     ):
         assert required_module in isolation
+
+
+def test_dq_native_artifact_sources_have_platform_independent_bytes() -> None:
+    attributes = GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines()
+
+    assert "adapters/dq_native/src/** text eol=lf" in attributes
 
 
 def test_release_extras_publish_the_canonical_component_page_artifact() -> None:
