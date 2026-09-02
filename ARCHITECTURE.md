@@ -357,6 +357,8 @@ the declared entry point, and wheel-declared source/package resource bytes. Inst
 `__pycache__` bytecode is derived local state outside that source-resource manifest. An
 `ArtifactAttestation` is issued only when the manifest matches the registry's exact distribution,
 version, and artifact hash.
+The DQ-native manifest and its Implementation and evidence pins are generated together from the
+built wheel by `authoring/pin_adapter_artifact.py`, rather than maintained as independent hashes.
 
 `TrustedAdapterCatalog` is host-constructed from explicit policy and attestations. Installation is
 not trust and does not make an implementation eligible. Immediately before one step is invoked, the

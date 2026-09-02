@@ -12,7 +12,6 @@ from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "registry"
 LEGACY_SUBJECT_HASH = "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
-ARTIFACT_HASH = "134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c"
 
 
 def _load(relative: str) -> dict[str, Any]:
@@ -149,20 +148,34 @@ def test_installed_manifest_exactly_binds_adapter_distribution_resources() -> No
         content = (ROOT / "adapters/dq_native/src" / member["path"]).read_bytes()
         assert hashlib.sha256(content).hexdigest() == member["sha256"]
 
-    assert (
-        canonical_hash(
-            manifest,
-            domain="registry.artifact.installed_distribution_manifest",
-        )
-        == ARTIFACT_HASH
+    artifact_hash = canonical_hash(
+        manifest,
+        domain="registry.artifact.installed_distribution_manifest",
     )
+    implementations = [
+        _load(path.relative_to(REGISTRY).as_posix())
+        for path in sorted(REGISTRY.glob("implementations/dq_native/*.yaml"))
+    ]
+    evidence = [
+        _load(path.relative_to(REGISTRY).as_posix())
+        for path in sorted(REGISTRY.glob("evidence/implementations/dq_native/*.yaml"))
+    ]
+    assert len(implementations) == 9
+    assert len(evidence) == 9
+    assert {
+        item["artifact"]["artifact_hash"] for item in implementations
+    } == {artifact_hash}
+    assert {
+        item["artifact"]["hash"]["value"] for item in evidence
+    } == {artifact_hash}
+
     adapter = _load("adapters/dq_native/simple_return.yaml")
     implementation = _load("implementations/dq_native/simple_return.yaml")
     assert "artifact_requirement" not in adapter
     assert implementation["artifact"] == {
         "distribution": "defined-quant-adapter-dq-native",
         "version": "1.0.0",
-        "artifact_hash": ARTIFACT_HASH,
+        "artifact_hash": artifact_hash,
     }
 
 

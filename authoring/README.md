@@ -66,6 +66,19 @@ Implementation alone owns the exact distribution version and artifact hash. Its 
 may describe realization-specific installation facts but must not duplicate Backend operational
 requirements.
 
+After changing DQ-native adapter source, package members, or entry points, rebuild the wheel and
+regenerate its manifest plus every bound Implementation and implementation-evidence pin:
+
+```bash
+uv run python authoring/pin_adapter_artifact.py
+```
+
+The command reads the built wheel without installing or importing adapter code, validates the
+registered dispatch and evidence boundaries, and preserves authored YAML formatting. The adapter
+project and artifact records must already declare the same version. To verify that committed pins
+are current without writing, run `uv run python authoring/pin_adapter_artifact.py --check`. Treat
+pinning as a single-writer authoring operation; do not edit its registry targets while it runs.
+
 Do not add a production external-Backend record before the real Adapter and scoped evidence exist.
 An installed package is an availability fact, not policy admission or trust.
 
