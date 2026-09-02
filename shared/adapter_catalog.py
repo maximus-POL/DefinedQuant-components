@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Literal, TypeAlias, cast
+from typing import Literal, TypeAlias, cast
 
 from defined_quant.adapter_artifacts import (
     ArtifactAttestation,
@@ -12,6 +12,7 @@ from defined_quant.adapter_artifacts import (
     reverify_installed_artifact,
 )
 from defined_quant.adapter_discovery import InstalledAdapterDiscovery
+from defined_quant.policy_evaluation import evaluate_policy_admission
 from defined_quant.registry import ProtocolRegistry
 from defined_quant_protocol import (
     AdapterExecutionFailure,
@@ -286,43 +287,6 @@ def build_availability_snapshot(
     )
 
 
-def _policy_admits(
-    implementation: ImplementationSpec,
-    policy: ResolutionPolicy,
-    *,
-    backends: Mapping[str, Any],
-) -> bool:
-    rule = next(
-        (item for item in policy.capability_rules if item.capability == implementation.capability),
-        None,
-    )
-    if rule is None or not any(
-        item.implementation == implementation.ref for item in rule.implementations
-    ):
-        return False
-    if not set(rule.required_trust_dimensions) <= {item.dimension for item in implementation.trust}:
-        return False
-    role_rules = {item.role: item for item in rule.backend_roles}
-    for binding in implementation.backend_bindings:
-        backend = backends.get(binding.backend.spec_hash)
-        role_rule = role_rules.get(binding.role)
-        if backend is None or role_rule is None or backend.ref != binding.backend:
-            return False
-        if role_rule.allowed_backends and binding.backend not in role_rule.allowed_backends:
-            return False
-        if backend.kind not in role_rule.allowed_kinds:
-            return False
-        if binding.transport not in role_rule.allowed_transports:
-            return False
-        if binding.locality not in role_rule.allowed_localities:
-            return False
-        if backend.requires_network and not role_rule.network_allowed:
-            return False
-        if backend.data_boundary.egress not in role_rule.allowed_data_egress:
-            return False
-    return True
-
-
 class TrustedAdapterCatalog:
     """Fail-closed loader for one exact policy-admitted, attested implementation."""
 
@@ -373,7 +337,12 @@ class TrustedAdapterCatalog:
                 "The exact implementation is not registered.",
             )
         adapter = _adapter_for(self._registry, selected)
-        if not _policy_admits(selected, self._policy, backends=self._backends):
+        policy_facts = evaluate_policy_admission(
+            selected,
+            self._policy,
+            backends=self._backends,
+        )
+        if not policy_facts.admitted:
             raise AdapterCatalogError(
                 "implementation_not_admitted",
                 "The active policy does not admit this exact implementation.",

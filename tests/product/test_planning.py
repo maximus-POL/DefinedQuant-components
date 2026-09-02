@@ -364,6 +364,42 @@ def test_automatic_resolution_compiles_exact_simple_return_implementation() -> N
     assert outcome.runtime_fallback_allowed is False
 
 
+def test_missing_exact_backend_is_reported_as_policy_ineligibility() -> None:
+    registry = _registry()
+    policy = _policy(registry)
+    availability = _availability(registry)
+    registry_without_backends = ProtocolRegistry(
+        methods=registry.methods,
+        capabilities=registry.capabilities,
+        backends=(),
+        adapters=registry.adapters,
+        implementations=registry.implementations,
+    )
+
+    outcome = compile_plan(
+        _proposal(),
+        registry=registry_without_backends,
+        policy=policy,
+        availability=availability,
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "no_eligible_implementation"
+    candidate = outcome.resolution_attempts[0].candidates[0]
+    assert candidate.backend_kind_allowed is False
+    assert candidate.transport_allowed is False
+    assert candidate.locality_allowed is False
+    assert candidate.network_allowed is False
+    assert candidate.data_handling_allowed is False
+    assert candidate.rejection_reasons == (
+        "backend_kind",
+        "data_handling",
+        "locality",
+        "network",
+        "transport",
+    )
+
+
 @pytest.mark.parametrize("prices", ([100.0], "not a list"))
 def test_schema_invalid_financial_input_is_not_reported_as_an_invalid_convention(
     prices: Any,

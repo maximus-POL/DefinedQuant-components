@@ -27,6 +27,7 @@ second permanent runtime.
 | `shared/charts.py` | Trusted renderer for typed visualization specifications; protected |
 | `shared/schema_validation.py` | Closed deterministic canonical-schema validator; protected |
 | `shared/constraint_evaluation.py` | Closed methods-first constraint evaluator; protected |
+| `shared/policy_evaluation.py` | Canonical policy-admission facts shared by planning and adapter loading; protected |
 | `shared/planning.py` | Canonical methods-first proposal validation and exact resolution; protected |
 | `shared/execution.py` | Exact compiled-plan execution with no runtime fallback; protected |
 | `shared/method_records.py` | Immutable compiled-plan, step, and complete-run record store; protected |

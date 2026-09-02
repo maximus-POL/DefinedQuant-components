@@ -136,6 +136,7 @@ components/
 │   ├── operation_runtime.py     canonical native validation, execution, and publication
 │   ├── plan_compiler.py         deprecated compatibility-plan compiler
 │   ├── plan_validation.py       managed plan validation and authorization
+│   ├── policy_evaluation.py     shared static policy-admission fact evaluator
 │   ├── planning.py              canonical preference-aware recipe compiler
 │   ├── py.typed                 installed-package typing marker
 │   ├── record_views.py          bounded dataset and operation projections

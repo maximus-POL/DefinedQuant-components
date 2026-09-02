@@ -17,6 +17,7 @@ from defined_quant.constraint_evaluation import (
     ConstraintEvaluationError,
     evaluate_constraint,
 )
+from defined_quant.policy_evaluation import evaluate_policy_admission
 from defined_quant.registry import ProtocolRegistry
 from defined_quant.schema_validation import schema_matches, validate_instance
 from defined_quant_protocol import (
@@ -27,7 +28,6 @@ from defined_quant_protocol import (
     BackendRole,
     BackendSpec,
     CandidateDecision,
-    CapabilityPolicyRule,
     CompilationOutcome,
     CompiledPlan,
     CompiledStep,
@@ -686,57 +686,17 @@ def _preference_rank(
 
 def _policy_context(
     implementation: ImplementationSpec,
-    rule: CapabilityPolicyRule | None,
+    policy: ResolutionPolicy,
     indexes: _RegistryIndexes,
     values: Mapping[str, Any],
+    *,
+    availability: ImplementationAvailability,
 ) -> _CandidateContext:
-    policy_entry = None
-    if rule is not None:
-        policy_entry = next(
-            (
-                item
-                for item in rule.implementations
-                if item.implementation == implementation.ref
-            ),
-            None,
-        )
-    policy_allowed = policy_entry is not None
-    priority = None if policy_entry is None else policy_entry.priority
-    trust_required = set(() if rule is None else rule.required_trust_dimensions)
-    asserted_trust = {item.dimension for item in implementation.trust}
-    satisfied_trust = tuple(
-        sorted(trust_required & asserted_trust, key=lambda item: item.value)
+    policy_facts = evaluate_policy_admission(
+        implementation,
+        policy,
+        backends=indexes.backends,
     )
-    missing_trust = tuple(
-        sorted(trust_required - asserted_trust, key=lambda item: item.value)
-    )
-    trust_satisfied = not missing_trust
-    role_rules = {} if rule is None else {item.role: item for item in rule.backend_roles}
-
-    backend_kind_allowed = True
-    transport_allowed = True
-    locality_allowed = True
-    network_allowed = True
-    data_handling_allowed = True
-    for binding in implementation.backend_bindings:
-        backend = indexes.backends[binding.backend.spec_hash]
-        role_rule = role_rules.get(binding.role)
-        if role_rule is None:
-            backend_kind_allowed = False
-            transport_allowed = False
-            locality_allowed = False
-            network_allowed = False
-            data_handling_allowed = False
-            continue
-        exact_allowed = (
-            not role_rule.allowed_backends
-            or binding.backend in role_rule.allowed_backends
-        )
-        backend_kind_allowed &= exact_allowed and backend.kind in role_rule.allowed_kinds
-        transport_allowed &= binding.transport in role_rule.allowed_transports
-        locality_allowed &= binding.locality in role_rule.allowed_localities
-        network_allowed &= role_rule.network_allowed or not backend.requires_network
-        data_handling_allowed &= backend.data_boundary.egress in role_rule.allowed_data_egress
 
     applicability_satisfied = True
     for restriction in implementation.restrictions:
@@ -752,23 +712,20 @@ def _policy_context(
 
     return _CandidateContext(
         implementation=implementation,
-        availability=_unknown_availability(
-            implementation,
-            tuple(indexes.backends.values()),
-        ),
-        priority=priority,
+        availability=availability,
+        priority=policy_facts.priority,
         capability_match=True,
-        policy_allowed=policy_allowed,
-        trust_satisfied=trust_satisfied,
-        backend_kind_allowed=backend_kind_allowed,
+        policy_allowed=policy_facts.policy_allowed,
+        trust_satisfied=policy_facts.trust_satisfied,
+        backend_kind_allowed=policy_facts.backend_kind_allowed,
         adapter_family_allowed=True,
-        transport_allowed=transport_allowed,
-        locality_allowed=locality_allowed,
-        network_allowed=network_allowed,
-        data_handling_allowed=data_handling_allowed,
+        transport_allowed=policy_facts.transport_allowed,
+        locality_allowed=policy_facts.locality_allowed,
+        network_allowed=policy_facts.network_allowed,
+        data_handling_allowed=policy_facts.data_handling_allowed,
         applicability_satisfied=applicability_satisfied,
-        satisfied_trust_dimensions=satisfied_trust,
-        missing_trust_dimensions=missing_trust,
+        satisfied_trust_dimensions=policy_facts.satisfied_trust_dimensions,
+        missing_trust_dimensions=policy_facts.missing_trust_dimensions,
     )
 
 
@@ -956,37 +913,22 @@ def _resolve_step(
                 ),
                 fields=(constraint.constraint_id,),
             )
-    rule = next(
-        (item for item in policy.capability_rules if item.capability == step.capability),
-        None,
-    )
     observed = _availability_by_implementation(availability)
     contexts: list[_CandidateContext] = []
     for implementation in implementations:
-        context = _policy_context(implementation, rule, indexes, values)
+        candidate_availability = observed.get(implementation.ref.spec_hash)
+        if candidate_availability is None:
+            candidate_availability = _unknown_availability(
+                implementation,
+                tuple(indexes.backends.values()),
+            )
         contexts.append(
-            _CandidateContext(
-                implementation=implementation,
-                availability=observed.get(
-                    implementation.ref.spec_hash,
-                    _unknown_availability(
-                        implementation,
-                        tuple(indexes.backends.values()),
-                    ),
-                ),
-                priority=context.priority,
-                capability_match=context.capability_match,
-                policy_allowed=context.policy_allowed,
-                trust_satisfied=context.trust_satisfied,
-                backend_kind_allowed=context.backend_kind_allowed,
-                adapter_family_allowed=context.adapter_family_allowed,
-                transport_allowed=context.transport_allowed,
-                locality_allowed=context.locality_allowed,
-                network_allowed=context.network_allowed,
-                data_handling_allowed=context.data_handling_allowed,
-                applicability_satisfied=context.applicability_satisfied,
-                satisfied_trust_dimensions=context.satisfied_trust_dimensions,
-                missing_trust_dimensions=context.missing_trust_dimensions,
+            _policy_context(
+                implementation,
+                policy,
+                indexes,
+                values,
+                availability=candidate_availability,
             )
         )
     preliminary = tuple(

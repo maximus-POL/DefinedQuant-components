@@ -7,6 +7,8 @@ component path:
   Discovery never imports adapter or implementation code and never probes live availability.
 - `schema_validation.py` evaluates the closed deterministic JSON Schema subset used at Method and
   Capability boundaries.
+- `policy_evaluation.py` returns the canonical static policy-admission facts shared by plan
+  candidate explanations and exact adapter loading.
 - `planning.py` validates Method proposals and explicit resolution preferences, applies trusted
   origin receipts, policy, restrictions, trust requirements, and explicit availability, and binds
   one exact Implementation per recipe step without ambient I/O.
