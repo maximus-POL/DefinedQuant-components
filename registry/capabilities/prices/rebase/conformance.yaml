@@ -1,0 +1,93 @@
+schema_version: 1
+capability:
+  id: prices.rebase
+  version: 1.0.0
+numeric_model:
+  input: finite_ieee_754_binary64
+  output: finite_ieee_754_binary64
+cases:
+  - id: explicit_base_known_answer
+    kind: known_answer
+    input:
+      prices: [80.0, 100.0, 60.0, 120.0]
+      base_index: 1
+      base_value: 100.0
+      timestamps: null
+    expected:
+      outcome: success
+      output:
+        index_values: [80.0, 100.0, 60.0, 120.0]
+        base_index: 1
+        base_value: 100.0
+        index_timestamps: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: unit_base
+    kind: boundary
+    input:
+      prices: [80.0, 100.0, 60.0, 120.0]
+      base_index: 1
+      base_value: 1.0
+      timestamps: null
+    expected:
+      outcome: success
+      output:
+        index_values: [0.8, 1.0, 0.6, 1.2]
+        base_index: 1
+        base_value: 1.0
+        index_timestamps: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: timestamp_alignment
+    kind: boundary
+    input:
+      prices: [100.0, 110.0]
+      base_index: 0
+      base_value: 100.0
+      timestamps:
+        - '2026-07-24T00:00:00Z'
+        - '2026-07-27T00:00:00Z'
+    expected:
+      outcome: success
+      output:
+        index_values: [100.0, 110.0]
+        base_index: 0
+        base_value: 100.0
+        index_timestamps:
+          - '2026-07-24T00:00:00Z'
+          - '2026-07-27T00:00:00Z'
+        ordering_status: verified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: out_of_range_base
+    kind: invalid_input
+    input:
+      prices: [100.0, 110.0]
+      base_index: 2
+      base_value: 100.0
+      timestamps: null
+    expected: {outcome: failure, code: base_index_out_of_range}
+  - id: non_positive_price
+    kind: invalid_input
+    input:
+      prices: [100.0, 0.0]
+      base_index: 0
+      base_value: 100.0
+      timestamps: null
+    expected: {outcome: failure, code: non_positive_prices}
+  - id: reversed_timestamps
+    kind: invalid_input
+    input:
+      prices: [100.0, 110.0]
+      base_index: 0
+      base_value: 100.0
+      timestamps:
+        - '2026-07-27T00:00:00Z'
+        - '2026-07-24T00:00:00Z'
+    expected: {outcome: failure, code: non_increasing_timestamps}
+invariants:
+  - id: base_identity
+    statement: The output at base_index equals base_value exactly.
+  - id: positive_scale_invariance
+    statement: Multiplying every source price by one positive scale leaves index values unchanged.
+  - id: relative_path_preserved
+    statement: Every pairwise output ratio equals the corresponding pairwise price ratio.

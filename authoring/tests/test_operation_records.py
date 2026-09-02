@@ -36,7 +36,7 @@ from defined_quant_protocol import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-PHASE0 = Path(__file__).parent / "fixtures" / "operation_runtime_phase0.v1.json"
+PHASE0 = Path(__file__).parent / "fixtures" / "operation_runtime.json"
 
 
 def _phase0() -> dict[str, Any]:

@@ -1,0 +1,138 @@
+name: Propose a financial method
+description: Propose a professional financial contract and capability-only recipe before code.
+title: "[Method proposal] "
+labels: ["proposal", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a Method.
+
+        A Method owns financial meaning, the user-facing contract, explicit conventions and a
+        backend-neutral recipe. Recipe steps reference atomic Capabilities only. Backends,
+        providers, Adapters and Implementations are separate registry subjects and must not be
+        embedded in the Method.
+
+        Discuss the proposal before implementation. Do not add a legacy five-file component
+        folder; accepted work enters the methods-first registry.
+
+  - type: input
+    id: proposed_id
+    attributes:
+      label: Proposed Method ID
+      description: Include the professional title below. Semantic versions belong in record metadata.
+      placeholder: dq.performance.equity_return_report
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Discovery category
+      description: Category is taxonomy metadata only; it does not determine code or implementations.
+      options:
+        - conventions
+        - market_data
+        - statistics
+        - performance
+        - risk
+        - derivatives
+        - data_quality
+        - New taxonomy entry needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: User goal and professional purpose
+      description: Describe the financial question and intended decision context, not a Python function.
+    validations:
+      required: true
+
+  - type: textarea
+    id: methodology
+    attributes:
+      label: Canonical methodology and interpretation
+      description: |
+        State the proposed definition, formula, interpretation and legitimate alternatives. Explain
+        why alternatives are separate Methods, explicit conventions, or unsupported scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: contract
+    attributes:
+      label: Canonical inputs and outputs
+      description: |
+        List user-facing fields, semantic meaning, units, shapes, ordering and provenance needs.
+        Do not include imports, executable code, raw SQL, arbitrary URLs or provider credentials.
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: conventions
+    attributes:
+      label: Conventions, authored defaults and material ambiguities
+      description: |
+        Include every answer-changing choice: return kind, annualisation, day count, compounding,
+        currency, quote convention, exercise style, observation rules and missing-data policy.
+        Distinguish explicit defaults from questions that must block execution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Constraints, assumptions, limitations and unsupported scope
+      description: |
+        Distinguish meaningless states that must block from uncertainty that should warn. State
+        instruments, regimes and uses that are definitively outside the Method.
+    validations:
+      required: true
+
+  - type: textarea
+    id: recipe
+    attributes:
+      label: Proposed capability-only recipe and boundaries
+      description: |
+        Describe the dataflow as atomic, backend-neutral Capability IDs and bindings. Mark each
+        Capability as existing or proposed. Do not name a Backend, provider, Adapter or
+        Implementation as part of the recipe. Explain why each proposed Capability is atomic and
+        reusable, identify its semantic ports, and list needed backend-independent conformance.
+      placeholder: |
+        - step: acquire_history
+          capability: market_data.equity_history
+        - step: calculate_returns
+          capability: returns.simple
+    validations:
+      required: true
+
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources, known-answer basis and implementation landscape
+      description: |
+        Cite standards, papers or textbooks and explain which claims or cases they support.
+        Possible libraries or providers are optional context only and remain separate from the
+        Method. Naming one does not register support; provider support requires real Adapter code,
+        packaging, evidence, policy admission and host availability.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read CONTRIBUTING.md
+          required: true
+        - label: I understand this proposes a Method, not a bundled Python component or provider choice
+          required: true
+        - label: I will not add a legacy five-file component folder for this proposal
+          required: true
+        - label: Any contributed test data will be synthetic, seeded and redistributable, never vendor or scraped data
+          required: true
+        - label: I have included no credentials, secrets, connection strings or executable control fields
+          required: true

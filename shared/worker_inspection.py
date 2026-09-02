@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
@@ -44,12 +45,8 @@ def _component(
         raise HostFailureException(HostFailureCode.COMPONENT_CONTRACT_ERROR) from exc
     try:
         reference = component_reference(record)
-        if (
-            expected_version is not None
-            and reference.version != expected_version
-        ) or (
-            expected_subject_hash is not None
-            and reference.subject_hash != expected_subject_hash
+        if (expected_version is not None and reference.version != expected_version) or (
+            expected_subject_hash is not None and reference.subject_hash != expected_subject_hash
         ):
             raise HostFailureException(
                 HostFailureCode.COMPONENT_IDENTITY_MISMATCH,
@@ -118,6 +115,55 @@ def _guidance(record: Any) -> dict[str, Any]:
     return result
 
 
+def _governance(record: Any) -> dict[str, Any]:
+    """Project the authored method facts needed by the controller-side compiler.
+
+    This view is internal to :class:`DefinedQuantService`.  It deliberately contains no
+    callable path, provider selector, credential reference, or executable payload.
+    """
+
+    guidance = record.metadata.get("guidance")
+    display = record.metadata.get("display")
+    if not isinstance(guidance, Mapping) or not isinstance(display, Mapping):
+        raise HostFailureException(
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            details={"component_id": record.component_id},
+        )
+    required_questions = guidance.get("required_questions")
+    allowed_defaults = guidance.get("allowed_defaults")
+    constraints = guidance.get("constraints")
+    if not all(
+        isinstance(value, (list, tuple))
+        for value in (required_questions, allowed_defaults, constraints)
+    ):
+        raise HostFailureException(
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            details={"component_id": record.component_id},
+        )
+    formula = display.get("formula")
+    interpretation = guidance.get("interpretation")
+    if not isinstance(formula, str) or not isinstance(interpretation, str):
+        raise HostFailureException(
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            details={"component_id": record.component_id},
+        )
+    assert isinstance(required_questions, (list, tuple))
+    assert isinstance(allowed_defaults, (list, tuple))
+    assert isinstance(constraints, (list, tuple))
+    return {
+        "definition": record.metadata.get("summary"),
+        "methodology": {
+            "formula": formula,
+            "assumptions": list(record.metadata.get("assumptions", ())),
+            "limitations": list(record.metadata.get("limitations", ())),
+        },
+        "required_questions": deepcopy(list(required_questions)),
+        "allowed_defaults": deepcopy(list(allowed_defaults)),
+        "constraints": deepcopy(list(constraints)),
+        "interpretation": interpretation,
+    }
+
+
 def _ports(
     model: type[Any],
     *,
@@ -165,7 +211,7 @@ def inspect_component(
     """Return one exact installed component/schema projection."""
 
     component_id = arguments["component_id"]
-    view: Literal["compact", "schemas"] = arguments.get("view", "compact")
+    view: Literal["compact", "schemas", "governance"] = arguments.get("view", "compact")
     record, reference, inputs, output = _component(
         component_id,
         catalog_root=catalog_root,
@@ -191,9 +237,11 @@ def inspect_component(
         "input_schema_sha256": hashlib.sha256(canonical_json_bytes(input_schema)).hexdigest(),
         "output_schema_sha256": hashlib.sha256(canonical_json_bytes(output_schema)).hexdigest(),
     }
-    if view == "schemas":
+    if view in {"schemas", "governance"}:
         data["input_schema"] = input_schema
         data["output_schema"] = output_schema
+    if view == "governance":
+        data["governance"] = _governance(record)
     return data
 
 
@@ -239,8 +287,7 @@ def compare_ports(
             HostFailureCode.INCOMPATIBLE_PORTS,
             details={
                 "differences": [
-                    difference.model_dump(mode="json")
-                    for difference in compatibility.differences
+                    difference.model_dump(mode="json") for difference in compatibility.differences
                 ]
             },
         )

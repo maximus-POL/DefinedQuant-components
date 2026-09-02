@@ -37,7 +37,7 @@ from defined_quant_protocol import (
 from pydantic import ValidationError
 
 ROOT = Path(__file__).parents[2]
-HASH_VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.v1.json"
+HASH_VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.json"
 
 
 def _fixture() -> dict[str, Any]:

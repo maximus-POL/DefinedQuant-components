@@ -1,0 +1,32 @@
+schema_version: 1
+capability:
+  id: statistics.square_root_annualize_series
+  version: 1.0.0
+numeric_model:
+  input: finite_ieee_754_binary64
+  output: finite_ieee_754_binary64
+cases:
+  - id: factor_twelve_known_answer
+    kind: known_answer
+    input:
+      periodic_values: [0.02, 0.02]
+      annualization_factor: 12.0
+    expected:
+      outcome: success
+      output:
+        annualized_values: [0.06928203230275509, 0.06928203230275509]
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: zeros_preserved
+    kind: boundary
+    input:
+      periodic_values: [0.0, 0.0]
+      annualization_factor: 252.0
+    expected:
+      outcome: success
+      output: {annualized_values: [0.0, 0.0]}
+      tolerance: {relative: 0.0, absolute: 0.0}
+invariants:
+  - id: length_preserved
+    statement: Output length and order exactly match the periodic input series.
+  - id: factor_one_identity
+    statement: An annualization factor of one preserves every periodic value exactly.

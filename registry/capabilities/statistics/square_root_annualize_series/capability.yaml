@@ -1,0 +1,75 @@
+schema_version: 2
+id: statistics.square_root_annualize_series
+version: 1.0.0
+title: Square-root annualization of a series
+kind: transformation
+summary: Scales a non-negative periodic-volatility series by the square root of an explicit factor.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualization_factor
+    - periodic_values
+  properties:
+    annualization_factor:
+      type: number
+      exclusiveMinimum: 0.0
+      x-defined-quant-port:
+        direction: input
+        concept: annualization_factor
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: explicit_periods_per_year_factor
+        ordering: not_applicable
+        frequency: annual
+        provenance_requirement: not_required
+    periodic_values:
+      type: array
+      minItems: 1
+      items:
+        type: number
+        minimum: 0.0
+      x-defined-quant-port:
+        direction: input
+        concept: periodic_volatility
+        unit: volatility
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: rolling_sample_standard_deviation_n_minus_1
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualized_values
+  properties:
+    annualized_values:
+      type: array
+      minItems: 1
+      items:
+        type: number
+        minimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: annualized_volatility
+        unit: volatility
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: rolling_sample_standard_deviation_n_minus_1_square_root_annualization
+        ordering: preserve_source_order
+        frequency: annual
+        provenance_requirement: not_required
+constraints:
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: annualized_values, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Finite inputs produced an unrepresentable annualized series value.

@@ -39,8 +39,8 @@ from defined_quant_protocol import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-HASH_VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.v1.json"
-OPERATION_FIXTURE = Path(__file__).parent / "fixtures" / "operation_runtime_phase0.v1.json"
+HASH_VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.json"
+OPERATION_FIXTURE = Path(__file__).parent / "fixtures" / "operation_runtime.json"
 WINDOWS_DEVICE_NAMES = {
     "con",
     "prn",

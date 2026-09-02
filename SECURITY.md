@@ -24,7 +24,7 @@ In scope:
 Out of scope:
 
 - a component producing a numerically wrong answer — that is a
-  [component report](.github/ISSUE_TEMPLATE/report-component.yml), not a vulnerability
+  [Method report](.github/ISSUE_TEMPLATE/report-method.yml), not a vulnerability
 - findings that require a maintainer to merge malicious code deliberately
 
 ## Release security guarantees

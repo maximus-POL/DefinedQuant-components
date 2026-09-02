@@ -1,0 +1,254 @@
+schema_version: 2
+id: dq.market_data.rebased_price_index
+version: 1.0.0
+title: Rebased Price Index
+lifecycle: draft
+summary: >-
+  Experimental Technical Preview method for normalizing an ordered positive price series to an
+  explicit base observation and value.
+category: market_data
+discovery:
+  slug: rebased_price_index
+  website_slug: rebased-price-index
+  aliases:
+    - base 100 chart
+    - indexed performance path
+    - normalized asset path
+    - rebase observations
+    - rebased series chart
+  intents:
+    - compare_indexed_paths
+    - normalize_observation_series
+    - show_complete_asset_cycle
+  input_concepts:
+    - adjustment_kind
+    - base_observation
+    - base_value
+    - ordered_positive_series
+  output_concepts:
+    - normalized_observation_path
+    - rebased_index
+  tags:
+    - experimental_technical_preview
+    - market_data
+    - normalized_prices
+    - time_series
+  use_when:
+    - The caller wants the direction and complete path of one asset series on an explicit base.
+    - The caller supplies ordered positive observations, adjustment kind, base observation, and base value.
+    - The result should preserve every supplied observation.
+  do_not_use_when:
+    - The request is for periodic returns, drawdown, volatility, a portfolio index, or total return.
+    - Prices need fetching, sorting, resampling, currency conversion, or corporate-action repair.
+    - The base observation or base value is missing and would have to be guessed.
+  unsupported_scope:
+    - Return calculation, drawdown measurement, volatility estimation, and calendar aggregation.
+    - Portfolio weighting, constituent changes, rebalancing, fees, dividends, and currency conversion.
+    - Data sourcing, cleaning, sorting, alignment, resampling, and gap repair.
+formula: Iₜ = B × (Pₜ / P_b)
+methodology:
+  - Normalize every positive price to the caller-selected base observation and positive base value.
+  - Preserve every supplied observation and make the base value exact at the selected base index.
+  - Preserve caller order and align timestamps without sorting or resampling.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - base_index
+    - base_value
+    - price_kind
+    - prices
+  properties:
+    base_index:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: input
+        field: base_index
+    base_value:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: input
+        field: base_value
+    declared_frequency:
+      anyOf:
+        - type: string
+          enum: [intraday, daily, weekly, monthly, quarterly, annual, irregular]
+        - type: 'null'
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      x-defined-quant-port:
+        direction: input
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    prices:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: input
+        field: prices
+    timestamps:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: input
+        field: timestamps
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - base_index
+    - base_value
+    - declared_frequency
+    - gap_check
+    - index_timestamps
+    - index_values
+    - ordering_status
+    - price_kind
+  properties:
+    base_index:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: output
+        field: base_index
+    base_value:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: output
+        field: base_value
+    declared_frequency:
+      anyOf:
+        - type: string
+          enum: [intraday, daily, weekly, monthly, quarterly, annual, irregular]
+        - type: 'null'
+    gap_check: {const: not_assessed}
+    index_timestamps:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: output
+        field: index_timestamps
+    index_values:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: output
+        field: index_values
+    ordering_status:
+      x-defined-quant-capability-field:
+        capability: {id: prices.rebase, version: 1.0.0}
+        direction: output
+        field: ordering_status
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      x-defined-quant-port:
+        direction: output
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+assumptions:
+  - All observations refer to the same instrument and price unit.
+  - Caller order is meaningful when timestamps are absent.
+  - Adjusted-price semantics are defined upstream and accepted as supplied.
+limitations:
+  - Index levels are normalized price levels, not periodic returns.
+  - The method is not a total-return, portfolio-index, drawdown, or volatility engine.
+  - It does not fetch, clean, sort, resample, align, aggregate, or currency-convert data.
+interpretation: >-
+  Report the complete unitless index path, explicit base index and value, price convention,
+  ordering status, and unassessed gap status. Do not label index levels as returns or imply
+  total-return, currency, portfolio, or calendar inference.
+constraints:
+  - id: frequency_without_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: declared_frequency}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps}
+          op: eq
+          right: {value: null}
+    message: A declared frequency requires aligned timestamps.
+  - id: ordering_unverified
+    target: input
+    severity: warning
+    expression:
+      left: {field: timestamps}
+      op: eq
+      right: {value: null}
+    message: No timestamps were supplied, so chronology could not be verified.
+  - id: unadjusted_price_interpretation
+    target: input
+    severity: warning
+    expression:
+      left: {field: price_kind}
+      op: eq
+      right: {value: unadjusted}
+    message: Corporate-action breaks can distort a rebased path from unadjusted prices.
+conventions:
+  - id: base_index
+    field: base_index
+    question: Which zero-based observation should define the index base?
+    materiality: The selected observation determines every relative index level.
+    required_from_user: true
+  - id: base_value
+    field: base_value
+    question: What positive index level should be assigned to the base observation?
+    materiality: The value determines display scale without changing relative path shape.
+    required_from_user: true
+  - id: price_kind
+    field: price_kind
+    question: Are the supplied prices adjusted or unadjusted?
+    materiality: Corporate actions affect interpretation of the normalized path.
+    required_from_user: true
+    allowed_values: [adjusted, unadjusted]
+defaults:
+  - field: declared_frequency
+    value: null
+    rationale: Frequency is never inferred.
+  - field: timestamps
+    value: null
+    rationale: Timestamps are optional; absence is disclosed as unverified chronology.
+recipe:
+  steps:
+    - step_id: rebase
+      capability: {id: prices.rebase, version: 1.0.0}
+      depends_on: []
+      input_bindings:
+        - target_field: base_index
+          source: {kind: method_input, field: base_index}
+        - target_field: base_value
+          source: {kind: method_input, field: base_value}
+        - target_field: prices
+          source: {kind: method_input, field: prices}
+        - target_field: timestamps
+          source: {kind: method_input, field: timestamps}
+  result_bindings:
+    - target_field: base_index
+      source: {kind: step_output, step_id: rebase, field: base_index}
+    - target_field: base_value
+      source: {kind: step_output, step_id: rebase, field: base_value}
+    - target_field: declared_frequency
+      source: {kind: method_input, field: declared_frequency}
+    - target_field: gap_check
+      source: {kind: authored_constant, value: not_assessed}
+    - target_field: index_timestamps
+      source: {kind: step_output, step_id: rebase, field: index_timestamps}
+    - target_field: index_values
+      source: {kind: step_output, step_id: rebase, field: index_values}
+    - target_field: ordering_status
+      source: {kind: step_output, step_id: rebase, field: ordering_status}
+    - target_field: price_kind
+      source: {kind: method_input, field: price_kind}

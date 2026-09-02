@@ -19,6 +19,7 @@ from typing import Any, cast
 
 from defined_quant.data_records import (
     MAX_DATASET_ROWS,
+    MAX_SAFE_INTEGER,
     DatasetPayloadV1,
     DatasetRecordV1,
     DatasetRegistrationRequest,
@@ -177,14 +178,20 @@ def _json_cell(value: Any, data_type: str) -> tuple[Any, bool]:
             raise _invalid_dataset("invalid_boolean_cell")
         return value, False
     if data_type == "integer":
-        if type(value) is not int or abs(value) > 9_007_199_254_740_991:
+        if type(value) is not int or abs(value) > MAX_SAFE_INTEGER:
             raise _invalid_dataset("invalid_integer_cell")
         return value, False
     if data_type == "number":
         if type(value) not in {int, float}:
             raise _invalid_dataset("invalid_number_cell")
-        if not math.isfinite(value) or (
-            isinstance(value, int) and abs(value) > 9_007_199_254_740_991
+        if (
+            not math.isfinite(value)
+            or (isinstance(value, int) and abs(value) > MAX_SAFE_INTEGER)
+            or (
+                isinstance(value, float)
+                and value.is_integer()
+                and abs(value) > MAX_SAFE_INTEGER
+            )
         ):
             raise _invalid_dataset("invalid_number_cell")
         try:
@@ -220,7 +227,7 @@ def _csv_cell(value: str, data_type: str) -> tuple[Any, str | None, bool]:
         if _JSON_INTEGER.fullmatch(value) is None:
             raise _invalid_dataset("invalid_integer_cell")
         parsed_integer = int(value)
-        if abs(parsed_integer) > 9_007_199_254_740_991:
+        if abs(parsed_integer) > MAX_SAFE_INTEGER:
             raise _invalid_dataset("invalid_integer_cell")
         return parsed_integer, "csv_integer_parsed", False
     if data_type == "number":
@@ -228,9 +235,14 @@ def _csv_cell(value: str, data_type: str) -> tuple[Any, str | None, bool]:
             raise _invalid_dataset("invalid_number_cell")
         parsed_number: int | float
         parsed_number = int(value) if _JSON_INTEGER.fullmatch(value) else float(value)
-        if not math.isfinite(parsed_number) or (
-            isinstance(parsed_number, int)
-            and abs(parsed_number) > 9_007_199_254_740_991
+        if (
+            not math.isfinite(parsed_number)
+            or (isinstance(parsed_number, int) and abs(parsed_number) > MAX_SAFE_INTEGER)
+            or (
+                isinstance(parsed_number, float)
+                and parsed_number.is_integer()
+                and abs(parsed_number) > MAX_SAFE_INTEGER
+            )
         ):
             raise _invalid_dataset("invalid_number_cell")
         try:

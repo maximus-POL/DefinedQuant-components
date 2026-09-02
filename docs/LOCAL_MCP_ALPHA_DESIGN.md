@@ -10,9 +10,10 @@ mandatory; the repository still does not contain the deferred protocol-0.5 imple
 This document is the single architectural record for the local MCP alpha. Its companion JSON
 files are normative test fixtures, not generated production schemas:
 
-- [`local_mcp/hash_vectors.v1.json`](local_mcp/hash_vectors.v1.json)
-- [`local_mcp/host_failures.v1.json`](local_mcp/host_failures.v1.json)
-- [`local_mcp/evaluation_cases.v1.json`](local_mcp/evaluation_cases.v1.json)
+- [`local_mcp/hash_vectors.json`](local_mcp/hash_vectors.json)
+- [`local_mcp/governed_plan_hash_vectors.json`](local_mcp/governed_plan_hash_vectors.json)
+- [`local_mcp/host_failures.json`](local_mcp/host_failures.json)
+- [`local_mcp/evaluation_cases.json`](local_mcp/evaluation_cases.json)
 
 ## Post-freeze amendments
 
@@ -39,6 +40,11 @@ commit's actual diff.
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Made the native worker provider select inspection scratch roots and required POSIX to canonicalize the trusted system temporary root before the session store pins it. | macOS exposes `/var` as a symlink alias of `/private/var`; provider-owned canonical selection preserves strict symlink refusal for caller paths while allowing the session store to verify the actual local temporary root. |
 | 2026-08-16 | this commit | Phase-4 remediation | §7.3 | Required Windows worker state to use the deepest eligible non-home, non-volume-root same-volume ancestor whose path is at most 64 UTF-16 code units, while keeping the workspace inside the locked session namespace and publishing to long destinations with native handles. | CPython startup and library paths used by the child are not uniformly `MAX_PATH`-independent on a default Windows installation; bounding only the internal managed path preserves long caller-output support without machine-wide registry settings or unmanaged home/drive-root staging. |
 | 2026-08-16 | this commit | Phase-4 remediation | §4.2; §7.1; §7.3 | Replaced the unreachable 250,000-row/128 MiB dataset contract with conjunctive 40,000-row, 128-column, and 512 KiB canonical-payload ceilings; removed dataset-level `intraday`; and specified Linux `RLIMIT_AS`, Windows Job Object commit, and macOS controller-RSS enforcement. | Native production-wheel probes at 1, 8, and 128 columns found macOS to be tightest at 50,000 one-column rows succeeding and 60,000 reaching the 512 MiB resource limit; the lower ceiling retains measured headroom, keeps every accepted dataset beneath the worker channels, and states the macOS sampling-window risk truthfully. |
+| 2026-09-01 | this commit | Governed planning Phase 1 | Post-freeze amendments | Recorded the additive backend-neutral method registry and pure deterministic `compile_plan` contract while preserving all existing local-MCP tools, unmanaged execution, records, and hashes; execution, provider I/O, snapshots, and replay remain excluded. | Establish a separately bounded planning layer in which the service owns policy and explicit availability, the agent cannot select implementations, only relevant candidates affect `plan_hash`, rationale is non-computational, and positive claims remain limited to plan validation and policy eligibility. |
+| 2026-09-01 | this commit | Governed planning Phase 1 | Fixture inventory; §4.2 | Added the governed-plan hash vectors to the normative companion-fixture inventory and updated the example-fixture count. | Keep the frozen document aligned with the additive compiler's already normative hash fixture without changing any wire or execution contract. |
+| 2026-09-01 | this commit | Methods-first Gate 2 | Transport surface; trust; §8; §10 | Made `search_methods`, `inspect_method`, `compile_plan`, `execute_plan`, `get_plan`, `get_run`, `get_dataset`, and `read_artifact` the canonical MCP surface; renamed the old compiler `compile_component_plan`; retained component tools only through the dated compatibility-deletion milestone; and added a governed-run trust label. | Route the public transport through one methods-first service boundary while keeping compilation distinct from validated governed execution and making no claim of provider authentication, data authenticity, domain review, financial correctness, or independent reproduction. |
+| 2026-09-02 | this commit | Methods-first Gate 2 | Transport surface; §7.1; §8 | Bounded `execute_plan` to a compact status and retained run reference; made `get_run` expose deterministic summary and cursor-paged record projections with exact counts and digests; and made `read_artifact` return digest-bound, cursor-paged byte chunks while refusing artifacts above the host's full-verification ceiling before reader invocation. Complete immutable runs remain in the core session store. | Large canonical sequence outputs and ordinary governed artifacts must remain retrievable without placing unbounded records or opaque bytes on the MCP wire, silently truncating data, weakening exact execution identity, or loading an artifact the current store cannot safely verify. |
+| 2026-09-02 | this commit | Methods-first Gate 2 | §5 | Kept unsafe Python integers forbidden while allowing every finite Python float, including integer-valued binary64 outside the safe-integer range, in exact tagged canonical encoding. | Capability conformance promises finite IEEE-754 binary64 and hashes floats by their exact bytes; refusing those finite values made valid conformance inputs impossible to execute through the trusted request envelope. |
 
 Going forward, every amendment to this document must add one row here in the same commit that
 changes the contract. The row must identify the date, phase, affected section, exact change, and
@@ -247,7 +253,7 @@ Success<T> = {
   trust: TrustNotice
 }
 
-ClosedFailureDetails = the exact per-code object in host_failures.v1.json;
+ClosedFailureDetails = the exact per-code object in host_failures.json;
 codes without a listed schema require exactly {}.
 
 Failure = {
@@ -282,7 +288,7 @@ codes and text; an unavailable process has no wire response. The closed code def
 surface-specific
 allowed sets, safe messages, retry
 rules, and mapping from every current `OperationErrorCode` are authoritative in
-[`host_failures.v1.json`](local_mcp/host_failures.v1.json).
+[`host_failures.json`](local_mcp/host_failures.json).
 
 Reference inputs admit only a one-to-three-digit version token so the host can return
 `unsupported_reference_version` without reflecting unbounded text; an overlong token is
@@ -293,13 +299,17 @@ Initialization instructions begin with this fixed workflow text:
 > For financial calculations, search the Defined Quant catalog, inspect only selected canonical
 > contracts, register or reference data, execute through Defined Quant tools, and read the typed
 > outcome. Do not inspect component source unless the user explicitly requests development,
-> review, or debugging. Never infer an answer-changing convention. Operations are unmanaged and
-> supplied data is not authenticated.
+> review, or debugging. Never infer an answer-changing convention or implementation preference.
+> Canonical plan execution runs only exact compiled implementations and never falls back at
+> runtime. Supplied data is not authenticated.
 
 Because every tool object is closed, none accepts a catalog/component/import path, output/cache
-directory, arbitrary URL or network option, secret or credential, arbitrary expression or code,
-unregistered transform, or provider selection. Catalog, configured input roots, and state
-locations are launch-time settings only.
+directory, arbitrary URL, secret or credential, arbitrary expression or code, or unregistered
+transform. A proposal may carry only bounded registry identifiers and closed resolution semantics
+for an explicit user implementation/backend/provider preference; it cannot carry a host origin
+receipt, automatic-resolution control, SDK setting, connection detail, or executable material.
+Catalog, configured input roots, credentials, policy, trusted receipts, and state locations remain
+host-owned settings.
 
 The response trust labels and exact wording are:
 
@@ -307,8 +317,10 @@ The response trust labels and exact wording are:
 |---|---|
 | `contract_metadata_only` | Contract-only catalog metadata; no component was imported or executed. |
 | `installed_subject_inspected` | Installed component identity and schema were inspected; no calculation was executed. |
+| `plan_compilation_only` | Deterministic plan compilation outcome only; no execution, financial correctness, data authenticity, or replay result is attested. |
 | `unverified_caller_data` | Registered caller-supplied data is unverified and unauthenticated. |
 | `structural_compatibility_only` | Semantic-port compatibility is structural only; it neither transfers data nor authorizes execution. |
+| `governed_execution_record` | Validated governed record binding a compiled plan, exact implementations, adapter results, and canonical validations. It does not attest data authenticity, financial correctness, provider authentication, domain review, or independent reproduction. |
 | `unmanaged_execution` | Unsigned host-reconciled record for an unmanaged local operation; digests bind its request, selected subject, result, and declared artifact bytes. Data authenticity, financial approval, correctness, and independent execution are not attested. |
 | `no_verified_result` | No dataset, component result, or digest-checked artifact was returned. |
 
@@ -323,7 +335,7 @@ private. A server may configure lower limits, never higher ones.
 
 The JSON blocks below are concise, schema-valid wire-shape examples, not catalog snapshots or hash
 vectors; repeated hexadecimal placeholders and shortened synthetic prose are intentional. The
-three companion fixtures, not these examples, carry exact future-test values.
+four companion fixtures, not these examples, carry exact test values.
 
 #### `search_components`
 
@@ -544,7 +556,7 @@ declared type, and timestamp events only to timestamp columns.
 Every accepted-source-to-payload value change must be accounted for by the complete column mapping
 or one of these events; an unaccounted change is `internal_failure` and publishes no dataset.
 The code list, uniqueness/sort keys, maximum, preprocessing statuses, and safe default are repeated
-machine-readably in `hash_vectors.v1.json`; prose and fixture must compare equal in Phase-3 tests.
+machine-readably in `hash_vectors.json`; prose and fixture must compare equal in Phase-3 tests.
 
 `external_preprocessing` describes only transformations before the accepted source reached this
 host. Its safe default is `unknown`. `none_declared` and `receipt_supplied` are caller assertions;
@@ -686,6 +698,28 @@ Failure example:
 ```json
 {"host_schema_version":1,"outcome":"refused","error":{"code":"incompatible_ports","message":"The selected output and input semantic ports are not compatible.","retry_allowed":false,"details":{"differences":[{"dimension":"convention","producer_value":"simple_periodic_return","consumer_value":"log_periodic_return"}]}},"trust":{"label":"structural_compatibility_only","statement":"Semantic-port compatibility is structural only; it neither transfers data nor authorizes execution."}}
 ```
+
+#### `compile_plan`
+
+```text
+Request = {
+  host_schema_version?: integer = 1,
+  proposal: PlanProposalV1
+}
+```
+
+This additive governed-planning surface is specified by
+[`GOVERNED_PLAN_COMPILER.md`](GOVERNED_PLAN_COMPILER.md). The request contains a method ID
+and version, structured financial inputs, declared conventions, and optional untrusted rationale.
+It contains no implementation/provider selector or executable/access configuration. The service
+collects the exact registry slice, configured policy, and explicit non-secret availability before
+calling the pure compiler. Its data is exactly one closed `compiled`, `needs_information`, or
+`refused` outcome. It never executes, fetches, publishes a record, or probes availability.
+
+Annotations are `{readOnlyHint:true, destructiveHint:false, idempotentHint:true,
+openWorldHint:false}`. The neutral transport trust label is `plan_compilation_only`; only a
+`compiled` data outcome carries `PLAN VALIDATION PASSED` and `ELIGIBLE UNDER POLICY`. Neither claim
+attests calculation success, output correctness, data authenticity, or replay.
 
 #### `execute_component`
 
@@ -967,16 +1001,17 @@ sha256(
 ```
 
 Object keys sort by UTF-8 bytes. Types are tagged so strings, numbers, and booleans cannot collide;
-numbers are encoded as big-endian IEEE-754 binary64 hex after negative zero normalization. Values
-with non-finite numbers, unsafe integers, lone surrogates, non-string object keys, duplicate text-
-JSON keys, or unsupported types are refused.
+numbers are encoded as big-endian IEEE-754 binary64 hex after negative zero normalization. Every
+finite float is accepted; Python integers outside the binary64 safe-integer range remain refused.
+Values with non-finite numbers, unsafe integers, lone surrogates, non-string object keys, duplicate
+text-JSON keys, or unsupported types are refused.
 
 The domains are `mcp.dataset.payload.v1` for a normalized table member, `mcp.dataset.v1` for the
 immutable dataset record, and `mcp.operation.v1` for the immutable successful host operation
 record. Reusing a domain for another record type is forbidden. Raw file/source bytes and manifest
 members use ordinary byte SHA-256 and are explicitly labelled as such. The normative records,
 canonical bytes, domain-separation checks, digests, and reference strings are in
-[`hash_vectors.v1.json`](local_mcp/hash_vectors.v1.json); Phase 3 tests must reproduce every vector
+[`hash_vectors.json`](local_mcp/hash_vectors.json); Phase 3 tests must reproduce every vector
 on supported platforms without importing the MCP SDK.
 
 The linked dataset vector accepts two timestamp spellings that normalize to canonical UTC, binds
@@ -995,7 +1030,7 @@ hashes. The fixture includes a fixed serialization/digest smoke vector.
 The hash projections are closed and versioned independently from their transport models:
 
 ```text
-CanonicalCell = null | boolean | finite IEEE-754-safe number | string
+CanonicalCell = null | boolean | finite IEEE-754 binary64 float | safe integer | string
 
 DatasetPayloadV1 = {
   schema_version: 1,
@@ -1138,7 +1173,7 @@ collection are deferred.
 
 ## 6. Failure and redaction contract
 
-[`host_failures.v1.json`](local_mcp/host_failures.v1.json) is the one authoritative closed
+[`host_failures.json`](local_mcp/host_failures.json) is the one authoritative closed
 vocabulary. Future tests must compare its `operation_error_mappings[].operation_error_code` set to
 the live `OperationErrorCode` enum and fail if either side has an unmapped value. Conditional
 mapping is allowed only for `component_refused`: a safe nested component code identifying missing
@@ -1240,7 +1275,7 @@ defence in depth. A worker control response above 4 MiB is `result_limit_exceede
 `limit_name:"worker_control_response_bytes"`; it is never reported as `worker_crashed` merely
 because the complete typed response could not fit the bounded channel.
 The only permitted input/result `limit_name` values are the enums in
-`host_failures.v1.json`; the field is not free-form. Tool-argument bytes are counted before the
+`host_failures.json`; the field is not free-form. Tool-argument bytes are counted before the
 closed request model runs, so every tool surface can return `input_limit_exceeded` for that one
 pre-validation boundary.
 Initialization and list payloads are serialized and checked before the server advertises
@@ -1254,8 +1289,8 @@ is present, and identical source bytes, all three platforms must produce byte-id
 dataset payloads, dataset records, operation records, normalized inputs, normalized results,
 manifests, rendered artifacts, CAS records, hashes, digests, references, cursors, failure codes,
 failure messages and details, trust wording, response envelopes, resource projections, and CLI
-STDOUT/STDERR. In particular, every vector in `hash_vectors.v1.json` and every surface in
-`operation_runtime_phase0.v1.json` must reproduce exactly on all three platforms.
+STDOUT/STDERR. In particular, every vector in `hash_vectors.json` and every surface in
+`operation_runtime.json` must reproduce exactly on all three platforms.
 
 Platform mechanisms may differ only behind one transport-neutral host abstraction. POSIX modes and
 Windows DACLs, `openat` containment and Windows handle containment, `flock` and `LockFileEx`, native
@@ -1479,7 +1514,10 @@ The committed Phase-4 transport replaces that spike and uses the official low-le
 `on_list_tools`, `on_call_tool`, `on_list_resources`,
 `on_list_resource_templates`, and `on_read_resource`. `on_list_resources` returns an empty list;
 it is still required because v2.0.0 advertises the resources capability only when that handler is
-present. The other list handlers return exactly the seven frozen tools and one resource template.
+present. The other list handlers return the eight canonical methods-first tools, dataset
+registration, seven explicitly named migration-compatibility component tools, and one legacy
+operation-artifact resource template. Compatibility removal is tied to migration of the remaining
+six native components.
 Startup uses the tagged
 [`stdio_server()` and `Server.run(...)` shape](https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/src/mcp/server/lowlevel/server.py#L20-L29),
 with `server.create_initialization_options()` and `raise_exceptions=False`. The official
@@ -1550,7 +1588,7 @@ locking, publication, Job Objects, STDIO, wheels, or official-client behavior.
 
 ## 9. Frozen evaluation cases
 
-[`evaluation_cases.v1.json`](local_mcp/evaluation_cases.v1.json) contains exactly five synthetic,
+[`evaluation_cases.json`](local_mcp/evaluation_cases.json) contains exactly five synthetic,
 deterministic, data-only contracts:
 
 1. a daily two-stock Simple Return analysis with compact result paging;
@@ -1587,7 +1625,8 @@ runtime. Status below describes this working tree; only the native release gate 
    vectors, scoped ephemeral CAS, inline/file normalization, paging, and security limits are
    implemented behind the transport-neutral platform facade.
 4. **Phase 4 — STDIO MCP server and worker: implemented, native validation pending.** The optional
-   package isolates SDK code in `server.py`, exposes the seven tools and one resource, and includes
+   package isolates SDK code in `server.py`, exposes the canonical methods-first tools, dataset
+   registration, time-bounded legacy component tools, and one legacy resource, and includes
    official-client and process-cleanup tests. The Windows filesystem, session-store, Job Object,
    environment, locking, cleanup, and binary-STDIO providers are in-tree; the six native CI cells
    must prove them before Phase 4 is declared release-complete.

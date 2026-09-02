@@ -1,0 +1,132 @@
+name: Report a methods-first problem
+description: Report a defect in a Method or another exact registry, planning, execution or projection subject.
+title: "[Methods-first report] "
+labels: ["report", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports are welcome and remain visible. Select the exact subject that is wrong; Method
+        meaning, Capability conformance, Backend boundaries, Adapter mapping, Implementation
+        behavior and evidence are different claims and may require different corrections.
+
+        **Security issues do not belong here** — use the private process in SECURITY.md. Never
+        paste credentials, tokens, secrets, connection strings, private provider responses or
+        restricted vendor data into this form.
+
+  - type: dropdown
+    id: subject_kind
+    attributes:
+      label: Exact subject kind
+      options:
+        - Method
+        - Capability
+        - Backend
+        - Adapter
+        - Implementation
+        - Capability conformance
+        - Method evidence
+        - Adapter evidence
+        - Implementation evidence
+        - Policy or availability
+        - Compiler or resolution decision
+        - Step or run record
+        - Static website projection
+    validations:
+      required: true
+
+  - type: input
+    id: subject_id
+    attributes:
+      label: Subject ID
+      placeholder: dq.market_data.simple_return or returns.simple or dq_native.simple_return
+    validations:
+      required: true
+
+  - type: input
+    id: subject_version
+    attributes:
+      label: Subject semantic version
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: identity_hash
+    attributes:
+      label: Exact identity hash, plan reference or run reference
+      description: Provide the contract hash, spec hash, evidence hash, plan reference or run reference when available.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: problem_kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Financial methodology or interpretation is wrong
+        - Canonical schema or semantic port is wrong
+        - Convention, default, assumption or limitation is unclear
+        - Recipe or capability binding is wrong
+        - Capability conformance case or tolerance is wrong
+        - Backend operational boundary is wrong
+        - Adapter input, output or failure mapping is wrong
+        - Implementation result or restriction is wrong
+        - Resolution constraint, origin, policy or availability was mishandled
+        - Compiled binding or no-fallback execution rule was violated
+        - Step, run, provenance or artifact record is wrong
+        - Evidence or trust claim is unsupported or conflated
+        - Static website projection is misleading
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Explain the expected contract or record and cite its basis when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Separate registered support from installation-specific availability.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal structured reproduction
+      description: |
+        Provide the smallest non-secret proposal, registry excerpt or record reference that shows
+        the issue. Use synthetic inputs only. Remove credentials, connection strings, raw SQL,
+        arbitrary URLs, executable imports and restricted provider responses.
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and installation facts
+      placeholder: |
+        Python: 3.13
+        defined-quant: 0.1.3 or commit SHA
+        adapter distributions: names and versions only
+        OS: macOS, Linux or Windows
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: This report contains no secrets, credentials, private provider responses or restricted vendor data
+          required: true
+        - label: I identified observed installation facts separately from registered support and trust
+          required: true

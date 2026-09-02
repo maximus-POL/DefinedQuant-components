@@ -1,0 +1,50 @@
+schema_version: 1
+id: evidence.implementation.dq_native.simple_return
+version: 1.0.0
+subject:
+  kind: implementation
+  id: dq_native.simple_return
+  version: 1.0.0
+status:
+  label: Experimental Technical Preview
+artifact:
+  kind: installed_distribution_manifest
+  distribution: defined-quant-adapter-dq-native
+  version: 1.0.0
+  manifest: registry/artifacts/defined_quant_adapter_dq_native/manifest.json
+  hash:
+    algorithm: sha256
+    canonicalization: defined_quant_canonical_json_v1
+    domain: registry.artifact.installed_distribution_manifest
+    value: 134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c
+conformance:
+  capability:
+    id: returns.simple
+    version: 1.0.0
+  suite: registry/capabilities/returns/simple/conformance.yaml
+  tests:
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_case
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_invariant
+evidence:
+  - id: deterministic_binary64_kernel
+    kind: source_and_test_review
+    description: The local kernel uses difference-before-division binary64 arithmetic without I/O.
+    operation_order: difference_before_division
+migration:
+  legacy_component:
+    id: dq.market_data.simple_return
+    version: 0.3.4
+    subject_hash: ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a
+    meaning: >-
+      Migration provenance only. The legacy hash jointly bound the old component contract,
+      implementation, generated schemas, and shared runtime; it is not a method, capability,
+      adapter, or implementation identity in the new registry.
+review:
+  engineering: author_reviewed
+  capability_conformance: author_asserted
+  domain: none
+  independent_reproduction: none
+non_claims:
+  - Installation alone does not make this implementation eligible under host policy.
+  - The installed-distribution manifest binds verified package resources and adapter entry-point metadata; it is not a whole-wheel byte hash.
+  - This evidence does not authenticate input data or independently reproduce a run.

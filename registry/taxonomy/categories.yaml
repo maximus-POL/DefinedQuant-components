@@ -1,0 +1,11 @@
+schema_version: 1
+categories:
+  - id: market_data
+    title: Market Data
+    summary: Deterministic transformations of explicitly supplied market observations.
+  - id: performance
+    title: Performance
+    summary: Deterministic path-dependent performance measures from explicitly supplied observations.
+  - id: volatility
+    title: Volatility
+    summary: Deterministic descriptive risk estimates from explicitly supplied return observations.

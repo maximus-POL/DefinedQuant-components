@@ -124,16 +124,14 @@ def activate_source_runtime() -> None:
     protocol_root = project_root / "protocol"
 
     _activate_package(
-        "defined_quant",
-        shared_root / "__init__.py",
-        (shared_root, categories_root),
+        "defined_quant_protocol",
+        protocol_root / "__init__.py",
+        (protocol_root,),
     )
+    # Activate the protocol first. The core initializer imports protocol models, so reversing this
+    # order would leave core modules bound to classes from a stale installed package and then swap
+    # the public protocol package underneath them.
     _activate_package(
-        "defined_quant_protocol",
-        protocol_root / "__init__.py",
-        (protocol_root,),
-    )
-    _assert_package_checkout(
         "defined_quant",
         shared_root / "__init__.py",
         (shared_root, categories_root),
@@ -142,6 +140,11 @@ def activate_source_runtime() -> None:
         "defined_quant_protocol",
         protocol_root / "__init__.py",
         (protocol_root,),
+    )
+    _assert_package_checkout(
+        "defined_quant",
+        shared_root / "__init__.py",
+        (shared_root, categories_root),
     )
 
 

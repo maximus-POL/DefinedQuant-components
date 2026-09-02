@@ -1,0 +1,152 @@
+schema_version: 2
+id: statistics.rolling_sample_standard_deviation
+version: 1.0.0
+title: Rolling sample standard deviation
+kind: calculation
+summary: Calculates sample standard deviation for every complete fixed-length rolling window.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - values
+    - window_length
+  properties:
+    timestamps:
+      anyOf:
+        - type: array
+          minItems: 2
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+    values:
+      type: array
+      minItems: 2
+      items:
+        type: number
+    window_length:
+      type: integer
+      minimum: 2
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - ordering_status
+    - standard_deviations
+    - window_end_timestamps
+    - window_length
+  properties:
+    ordering_status:
+      type: string
+      enum:
+        - verified
+        - unverified
+    standard_deviations:
+      type: array
+      minItems: 1
+      items:
+        type: number
+        minimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: periodic_volatility
+        unit: volatility
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: rolling_sample_standard_deviation_n_minus_1
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+    window_end_timestamps:
+      anyOf:
+        - type: array
+          minItems: 1
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+    window_length:
+      type: integer
+      minimum: 2
+constraints:
+  - id: duplicate_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: true}
+    message: Duplicate timestamps are not accepted.
+  - id: insufficient_values
+    target: input
+    severity: blocking
+    expression:
+      left: {field: values, measure: count}
+      op: lt
+      right: {value: 2}
+    message: At least two values are required.
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: standard_deviations, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: A complete window produced an unrepresentable sample standard deviation.
+  - id: non_finite_values
+    target: input
+    severity: blocking
+    expression:
+      left: {field: values, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Every sample value must be finite.
+  - id: non_increasing_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: false}
+        - left: {field: timestamps, measure: is_strictly_increasing}
+          op: eq
+          right: {value: false}
+    message: Timestamps must be strictly increasing and are never silently reordered.
+  - id: timestamp_length_mismatch
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: count}
+          op: ne
+          right: {field: values, measure: count}
+    message: Timestamps and sample values must align one-to-one.
+  - id: window_exceeds_values
+    target: input
+    severity: blocking
+    expression:
+      left: {field: values, measure: count}
+      op: lt
+      right: {field: window_length}
+    message: At least one complete rolling window is required.
+  - id: window_too_short
+    target: input
+    severity: blocking
+    expression:
+      left: {field: window_length}
+      op: lt
+      right: {value: 2}
+    message: Window length must be at least two.

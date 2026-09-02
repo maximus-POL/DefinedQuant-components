@@ -32,7 +32,7 @@ from defined_quant_protocol import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-EVALUATIONS = ROOT / "docs" / "local_mcp" / "evaluation_cases.v1.json"
+EVALUATIONS = ROOT / "docs" / "local_mcp" / "evaluation_cases.json"
 
 
 def _daily_request(*, count: int = 55) -> dict[str, Any]:

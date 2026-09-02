@@ -1,0 +1,13 @@
+schema_version: 1
+id: evidence.adapter.dq_native.square_root_annualize
+version: 1.0.0
+subject: {kind: adapter, id: dq_native.square_root_annualize, version: 1.0.0}
+status: {label: Experimental Technical Preview}
+evidence:
+  - {id: canonical_mapping, kind: executable_test_definition, test: 'tests/adapters/test_remaining_dq_native.py::test_statistical_adapters_map_atomic_outputs'}
+  - {id: closed_input, kind: executable_test_definition, test: 'tests/adapters/test_remaining_dq_native.py::test_adapters_refuse_undeclared_resolution_controls'}
+review: {engineering: author_reviewed, security: local_mapping_boundary_reviewed, provider_authentication: not_applicable}
+non_claims:
+  - Adapter evidence does not establish financial-method correctness.
+  - The adapter does not select implementations or perform fallback.
+  - No external provider, credential, licence, or entitlement is involved.

@@ -1,0 +1,17 @@
+schema_version: 1
+method: {id: dq.volatility.historical_volatility, version: 1.0.0}
+examples:
+  - id: symmetric_two_returns
+    title: Two-return sample with factor-four annualization
+    input:
+      returns: [-0.01, 0.01]
+      annualization_factor: 4.0
+      return_kind: log
+    conformance_cases:
+      - capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+        id: symmetric_two_value_sample
+      - capability: {id: statistics.square_root_annualize, version: 1.0.0}
+        id: factor_four_known_answer
+    interpretation: >-
+      Periodic sample volatility is approximately 0.0141421 and annualized volatility is
+      approximately 0.0282843. The sample is small and the result is descriptive.

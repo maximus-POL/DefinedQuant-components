@@ -1,0 +1,17 @@
+schema_version: 1
+method: {id: dq.market_data.rebased_price_index, version: 1.0.0}
+examples:
+  - id: explicit_base_100
+    title: Rebase the second observation to 100
+    input:
+      prices: [80.0, 100.0, 60.0, 120.0]
+      price_kind: adjusted
+      base_index: 1
+      base_value: 100.0
+      timestamps: null
+      declared_frequency: null
+    conformance_case:
+      capability: {id: prices.rebase, version: 1.0.0}
+      id: explicit_base_known_answer
+    interpretation: >-
+      The index is 80, 100, 60, and 120. These are normalized levels, not percentage returns.

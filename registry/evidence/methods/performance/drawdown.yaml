@@ -1,0 +1,26 @@
+schema_version: 1
+id: evidence.method.dq.performance.drawdown
+version: 1.0.0
+subject: {kind: method, id: dq.performance.drawdown, version: 1.0.0}
+status:
+  label: Experimental Technical Preview
+  lifecycle: draft
+evidence:
+  - id: worked_example
+    kind: author_derivation
+    description: The recovered-episode example references backend-independent capability conformance.
+    reference:
+      capability: {id: performance.drawdown, version: 1.0.0}
+      case: recovered_episode_known_answer
+  - id: tie_and_recovery_review
+    kind: authored_scope_review
+    description: Equal-peak, earliest-trough, recovery, and zero-drawdown conventions are explicit.
+review:
+  engineering: author_reviewed
+  domain: none
+  independent_reproduction: none
+non_claims:
+  - No independent domain review has been performed.
+  - Draft lifecycle and authored evidence do not establish production readiness.
+  - Method evidence does not authenticate a dataset, provider, adapter, or execution.
+  - Drawdown is not a probability estimate, forecast, or investment recommendation.

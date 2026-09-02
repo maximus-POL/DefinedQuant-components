@@ -1,0 +1,70 @@
+schema_version: 2
+id: statistics.sample_standard_deviation
+version: 1.0.0
+title: Sample standard deviation
+kind: calculation
+summary: Calculates finite sample standard deviation using an n minus 1 denominator.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - values
+  properties:
+    values:
+      type: array
+      minItems: 2
+      items:
+        type: number
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - degrees_of_freedom_adjustment
+    - sample_size
+    - standard_deviation
+  properties:
+    degrees_of_freedom_adjustment:
+      const: 1
+    sample_size:
+      type: integer
+      minimum: 2
+    standard_deviation:
+      type: number
+      minimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: periodic_volatility
+        unit: volatility
+        shape: scalar
+        cardinality: exactly_one
+        convention: sample_standard_deviation_n_minus_1
+        ordering: not_applicable
+        frequency: inherited
+        provenance_requirement: not_required
+constraints:
+  - id: insufficient_values
+    target: input
+    severity: blocking
+    expression:
+      left: {field: values, measure: count}
+      op: lt
+      right: {value: 2}
+    message: At least two values are required for sample standard deviation.
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: standard_deviation, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Finite values produced an unrepresentable sample standard deviation.
+  - id: non_finite_values
+    target: input
+    severity: blocking
+    expression:
+      left: {field: values, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Every sample value must be finite.

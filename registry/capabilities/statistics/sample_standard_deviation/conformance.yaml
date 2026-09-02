@@ -1,0 +1,71 @@
+schema_version: 1
+capability:
+  id: statistics.sample_standard_deviation
+  version: 1.0.0
+numeric_model:
+  input: finite_ieee_754_binary64
+  output: finite_ieee_754_binary64
+fixture_encoding:
+  binary64: Exact finite floats outside the canonical JSON safe-integer range use a $binary64 hex tag.
+cases:
+  - id: symmetric_two_value_sample
+    kind: known_answer
+    input: {values: [-0.01, 0.01]}
+    expected:
+      outcome: success
+      output:
+        standard_deviation: 0.01414213562373095
+        sample_size: 2
+        degrees_of_freedom_adjustment: 1
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-15}
+  - id: three_value_cross_check
+    kind: known_answer
+    input: {values: [-0.02, 0.0, 0.03]}
+    expected:
+      outcome: success
+      output:
+        standard_deviation: 0.025166114784235832
+        sample_size: 3
+        degrees_of_freedom_adjustment: 1
+      tolerance: {relative: 1.0e-14, absolute: 1.0e-15}
+  - id: constant_sample
+    kind: boundary
+    input: {values: [0.01, 0.01, 0.01]}
+    expected:
+      outcome: success
+      output:
+        standard_deviation: 0.0
+        sample_size: 3
+        degrees_of_freedom_adjustment: 1
+      tolerance: {relative: 0.0, absolute: 0.0}
+  - id: large_common_offset
+    kind: numerical_boundary
+    input:
+      values:
+        - {$binary64: '0x1.1ccf385ebc8a0p+1023'}
+        - {$binary64: '0x1.1ccf385ebc8a1p+1023'}
+    expected:
+      outcome: success
+      output:
+        standard_deviation: {$binary64: '0x1.6a09e667f3bcdp+970'}
+        sample_size: 2
+        degrees_of_freedom_adjustment: 1
+      tolerance: {relative: 1.0e-15, absolute: 0.0}
+  - id: one_value
+    kind: invalid_input
+    input: {values: [0.01]}
+    expected: {outcome: failure, code: insufficient_values}
+  - id: overflow_result
+    kind: numerical_boundary
+    input:
+      values:
+        - {$binary64: '-0x1.72409614c1e6ap+1023'}
+        - {$binary64: '0x1.72409614c1e6ap+1023'}
+    expected: {outcome: failure, code: non_finite_result}
+invariants:
+  - id: translation_invariance
+    statement: Adding one finite constant to every value leaves sample standard deviation unchanged.
+  - id: positive_scale_equivariance
+    statement: Multiplying every value by one positive scale multiplies standard deviation by that scale.
+  - id: constant_sample_zero
+    statement: A constant finite sample has exact zero standard deviation.

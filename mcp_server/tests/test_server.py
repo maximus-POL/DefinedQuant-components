@@ -11,22 +11,29 @@ import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import anyio
 import pytest
-from defined_quant.host_failures import HostFailureCode
+from defined_quant.host_failures import HostFailureCode, HostFailureException
 from defined_quant.local_host_platform import (
     SecureFilesystemError,
     SecureFilesystemErrorCode,
 )
-from defined_quant.service import DefinedQuantService
+from defined_quant.run_views import MAX_ARTIFACT_CHUNK_BYTES
+from defined_quant.service import (
+    MAX_METHOD_ARTIFACT_READ_BYTES,
+    DefinedQuantService,
+    OperationArtifact,
+)
 from mcp import StdioServerParameters, stdio_client
 from mcp.client import Client
 from mcp.server._otel import OpenTelemetryMiddleware
 from mcp.shared.exceptions import MCPError
 
 from defined_quant_mcp import server as server_module
+from defined_quant_mcp.models import CompilePlanRequest, ReadArtifactRequest
 from defined_quant_mcp.server import (
     _ALLOWED_FAILURES,
     INITIALIZATION_INSTRUCTIONS,
@@ -35,6 +42,7 @@ from defined_quant_mcp.server import (
     RESOURCE_TEMPLATE,
     _bounded_tool_result,
     _compact_bytes,
+    _dispatch,
     _success_result,
     _tool_result_projection,
     create_server,
@@ -42,11 +50,20 @@ from defined_quant_mcp.server import (
 )
 
 _TOOLS = (
+    "search_methods",
+    "inspect_method",
+    "compile_plan",
+    "execute_plan",
+    "get_plan",
+    "get_run",
+    "get_dataset",
+    "read_artifact",
+    "register_dataset",
     "search_components",
     "inspect_component",
-    "register_dataset",
     "describe_dataset",
     "compare_ports",
+    "compile_component_plan",
     "execute_component",
     "get_operation",
 )
@@ -131,6 +148,24 @@ def _minimal_tool_arguments() -> dict[str, dict[str, Any]]:
         "subject_hash": "a" * 64,
     }
     return {
+        "search_methods": {"query": "return"},
+        "inspect_method": {"method_id": "dq.market_data.simple_return"},
+        "compile_plan": {
+            "proposal": {
+                "method_id": "dq.market_data.simple_return",
+                "method_version": "1.0.0",
+                "financial_inputs": {"prices": [100.0, 101.0]},
+                "conventions": {"price_kind": "adjusted"},
+            }
+        },
+        "execute_plan": {"plan_ref": "dqplan:" + "a" * 64},
+        "get_plan": {"plan_ref": "dqplan:" + "a" * 64},
+        "get_run": {"run_ref": "dqrun:" + "a" * 64},
+        "get_dataset": {"dataset_ref": "dqds:v1:" + "a" * 64},
+        "read_artifact": {
+            "run_ref": "dqrun:" + "a" * 64,
+            "artifact_id": "returns_chart",
+        },
         "search_components": {"query": "return"},
         "inspect_component": {"component_id": "dq.market_data.simple_return"},
         "register_dataset": _registration(),
@@ -138,6 +173,14 @@ def _minimal_tool_arguments() -> dict[str, dict[str, Any]]:
         "compare_ports": {
             "producer": {"component": component, "field": "returns"},
             "consumer": {"component": component, "field": "prices"},
+        },
+        "compile_component_plan": {
+            "proposal": {
+                "method_id": "dq.market_data.simple_return",
+                "method_version": "0.3.4",
+                "financial_inputs": {"prices": [100.0, 101.0]},
+                "conventions": {"price_kind": "adjusted"},
+            }
         },
         "execute_component": {
             "component": component,
@@ -209,7 +252,7 @@ def test_startup_failures_distinguish_arguments_capabilities_and_internal_errors
 
 def test_failure_allowlists_match_the_normative_fixture_exactly() -> None:
     fixture = json.loads(
-        (Path(__file__).resolve().parents[2] / "docs/local_mcp/host_failures.v1.json")
+        (Path(__file__).resolve().parents[2] / "docs/local_mcp/host_failures.json")
         .read_text(encoding="utf-8")
     )
     assert {
@@ -236,6 +279,131 @@ def test_sdk_telemetry_middleware_is_removed() -> None:
         )
     finally:
         service.close()
+
+
+def test_compile_plan_tool_schema_excludes_host_receipts_and_caller_automatic_mode() -> None:
+    tool = next(item for item in server_module._tools() if item.name == "compile_plan")
+    schema = json.dumps(tool.input_schema, sort_keys=True)
+
+    assert "origin_receipt" not in schema
+    assert "session_binding_hash" not in schema
+    assert '"automatic"' not in schema
+    assert '"user_explicit"' in schema
+    assert all(
+        field not in schema
+        for field in (
+            "api_key",
+            "connection_string",
+            "credentials",
+            "executable_code",
+            "raw_sql",
+        )
+    )
+
+    constraint = {
+        "constraint_id": "runtime_choice",
+        "scope": {"all_steps": True},
+        "dimension": "backend",
+        "backend_role": "runtime",
+        "mode": "required",
+        "targets": ["dq_native"],
+        "asserted_origin": "user_explicit",
+        "fallback": "forbidden",
+    }
+    proposal = {
+        "method_id": "dq.market_data.simple_return",
+        "method_version": "1.0.0",
+        "financial_inputs": {"prices": [100.0, 101.0]},
+        "conventions": {"price_kind": "adjusted"},
+        "resolution_constraints": {"constraints": [constraint]},
+    }
+    assert CompilePlanRequest.model_validate({"proposal": proposal}).proposal.to_protocol()
+
+    with pytest.raises(ValueError):
+        CompilePlanRequest.model_validate(
+            {
+                "proposal": {
+                    **proposal,
+                    "resolution_constraints": {
+                        "constraints": [
+                            {
+                                **constraint,
+                                "origin_receipt": {"constraint_hash": "a" * 64},
+                            }
+                        ]
+                    },
+                }
+            }
+        )
+    with pytest.raises(ValueError):
+        CompilePlanRequest.model_validate(
+            {
+                "proposal": {
+                    **proposal,
+                    "resolution_constraints": {
+                        "constraints": [
+                            {
+                                **constraint,
+                                "mode": "automatic",
+                                "targets": [],
+                            }
+                        ]
+                    },
+                }
+            }
+        )
+
+    for prohibited_field, value in (
+        ("provider_url", "https://example.invalid"),
+        ("api_key", "secret"),
+        ("raw_sql", "select 1"),
+        ("executable_code", "import os"),
+    ):
+        with pytest.raises(ValueError):
+            CompilePlanRequest.model_validate(
+                {
+                    "proposal": {
+                        **proposal,
+                        "financial_inputs": {
+                            "prices": [100.0, 101.0],
+                            prohibited_field: value,
+                        },
+                    }
+                }
+            )
+
+
+def test_agent_visible_preference_requires_a_trusted_host_origin_receipt() -> None:
+    request = CompilePlanRequest.model_validate(
+        {
+            "proposal": {
+                "method_id": "dq.market_data.simple_return",
+                "method_version": "1.0.0",
+                "financial_inputs": {"prices": [100.0, 101.0]},
+                "conventions": {"price_kind": "adjusted"},
+                "resolution_constraints": {
+                    "constraints": [
+                        {
+                            "constraint_id": "runtime_choice",
+                            "scope": {"all_steps": True},
+                            "dimension": "backend",
+                            "backend_role": "runtime",
+                            "mode": "required",
+                            "targets": ["dq_native"],
+                            "asserted_origin": "user_explicit",
+                            "fallback": "forbidden",
+                        }
+                    ]
+                },
+            }
+        }
+    )
+    with DefinedQuantService() as service:
+        outcome = service.compile_plan(request.proposal.to_protocol())
+
+    assert outcome.status == "needs_information"
+    assert outcome.questions[0].code == "origin_confirmation"
+    assert outcome.resolution_attempts == ()
 
 
 def test_official_client_initialization_every_tool_and_resource(tmp_path: Path) -> None:
@@ -272,6 +440,114 @@ def test_official_client_initialization_every_tool_and_resource(tmp_path: Path) 
                 assert template.annotations is not None
                 assert template.annotations.audience == ["assistant"]
                 assert template.annotations.priority == 0.5
+
+                method_search = _assert_success(
+                    await client.call_tool(
+                        "search_methods",
+                        {"query": "simple return", "limit": 1},
+                    )
+                )
+                assert method_search["hits"][0]["method_id"] == (
+                    "dq.market_data.simple_return"
+                )
+                method = _assert_success(
+                    await client.call_tool(
+                        "inspect_method",
+                        {"method_id": "dq.market_data.simple_return"},
+                    )
+                )
+                assert method["method"]["id"] == "dq.market_data.simple_return"
+
+                compiled = _assert_success(
+                    await client.call_tool(
+                        "compile_plan",
+                        {
+                            "proposal": {
+                                "method_id": "dq.market_data.simple_return",
+                                "method_version": "1.0.0",
+                                "financial_inputs": {"prices": [100.0, 110.0, 121.0]},
+                                "conventions": {"price_kind": "adjusted"},
+                                "agent_rationale": "Compile the selected return method.",
+                            }
+                        },
+                    )
+                )
+                assert compiled["status"] == "compiled"
+                assert compiled["steps"][0]["implementation"]["id"] == (
+                    "dq_native.simple_return"
+                )
+                plan_ref = compiled["plan_ref"]
+                plan_record = _assert_success(
+                    await client.call_tool("get_plan", {"plan_ref": plan_ref})
+                )
+                assert plan_record["plan_ref"] == plan_ref
+                run = _assert_success(
+                    await client.call_tool("execute_plan", {"plan_ref": plan_ref})
+                )
+                assert run["status"] == "succeeded"
+                assert run["compact"] is True
+                assert run["record_available"] is True
+                assert "canonical_method_output" not in run
+                run_ref = run["run_ref"]
+                retained_run = _assert_success(
+                    await client.call_tool("get_run", {"run_ref": run_ref})
+                )
+                assert retained_run["run_ref"] == run_ref
+                assert retained_run["view"] == "summary"
+                assert retained_run["output"]["present"] is True
+                assert "canonical_method_output" not in retained_run
+
+                first_returns = _assert_success(
+                    await client.call_tool(
+                        "get_run",
+                        {
+                            "run_ref": run_ref,
+                            "view": "output",
+                            "field": "returns",
+                            "limit": 1,
+                        },
+                    )
+                )
+                assert first_returns["items"] == [0.1]
+                assert first_returns["page"]["complete"] is False
+                returns_cursor = first_returns["page"]["next_cursor"]
+                assert isinstance(returns_cursor, str)
+                final_returns = _assert_success(
+                    await client.call_tool(
+                        "get_run",
+                        {
+                            "run_ref": run_ref,
+                            "view": "output",
+                            "field": "returns",
+                            "cursor": returns_cursor,
+                            "limit": 1,
+                        },
+                    )
+                )
+                assert final_returns["items"] == [0.1]
+                assert final_returns["page"] == {
+                    "start": 1,
+                    "returned": 1,
+                    "total": 2,
+                    "complete": True,
+                    "next_cursor": None,
+                }
+
+                rebound_cursor = await client.call_tool(
+                    "get_run",
+                    {
+                        "run_ref": run_ref,
+                        "view": "warnings",
+                        "cursor": returns_cursor,
+                        "limit": 1,
+                    },
+                )
+                _assert_failure(rebound_cursor, "invalid_tool_request")
+                missing_run_artifact = await client.call_tool(
+                    "read_artifact",
+                    {"run_ref": run_ref, "artifact_id": "returns_chart"},
+                )
+                _assert_failure(missing_run_artifact, "artifact_not_found")
 
                 search = _assert_success(
                     await client.call_tool(
@@ -316,6 +592,45 @@ def test_official_client_initialization_every_tool_and_resource(tmp_path: Path) 
                 )
                 assert compatibility["compatible"] is True
 
+                legacy_compiled = _assert_success(
+                    await client.call_tool(
+                        "compile_component_plan",
+                        {
+                            "proposal": {
+                                "method_id": "dq.market_data.simple_return",
+                                "method_version": "0.3.4",
+                                "financial_inputs": {"prices": [100.0, 110.0]},
+                                "conventions": {"price_kind": "adjusted"},
+                                "agent_rationale": "Compile the inspected return method.",
+                            }
+                        },
+                    )
+                )
+                assert legacy_compiled["status"] == "compiled"
+                assert legacy_compiled["claims"] == [
+                    "PLAN VALIDATION PASSED",
+                    "ELIGIBLE UNDER POLICY",
+                ]
+                assert legacy_compiled["resolution_receipts"][0][
+                    "runtime_fallback_allowed"
+                ] is False
+
+                unknown_method = _assert_success(
+                    await client.call_tool(
+                        "compile_plan",
+                        {
+                            "proposal": {
+                                "method_id": "dq.market_data.not_installed",
+                                "method_version": "1.0.0",
+                                "financial_inputs": {},
+                                "conventions": {},
+                            }
+                        },
+                    )
+                )
+                assert unknown_method["status"] == "refused"
+                assert unknown_method["code"] == "method_not_found"
+
                 registration = _assert_success(
                     await client.call_tool("register_dataset", _registration())
                 )
@@ -327,6 +642,13 @@ def test_official_client_initialization_every_tool_and_resource(tmp_path: Path) 
                     )
                 )
                 assert description["dataset_ref"] == dataset_ref
+                canonical_dataset = _assert_success(
+                    await client.call_tool(
+                        "get_dataset",
+                        {"dataset_ref": dataset_ref},
+                    )
+                )
+                assert canonical_dataset["dataset_ref"] == dataset_ref
 
                 execution = _assert_success(
                     await client.call_tool(
@@ -483,6 +805,193 @@ def test_tool_response_ceilings_accept_exact_bytes_and_refuse_the_next_byte(
         "limit_name": limit_name,
         "maximum": maximum,
     }
+
+
+def test_large_governed_run_is_retained_and_retrievable_in_bounded_pages() -> None:
+    prices = [100.0 if index % 2 == 0 else 101.0 for index in range(10_001)]
+    with DefinedQuantService() as service:
+        compiled = service.compile_plan(
+            {
+                "method_id": "dq.market_data.simple_return",
+                "method_version": "1.0.0",
+                "financial_inputs": {"prices": prices},
+                "conventions": {"price_kind": "adjusted"},
+            }
+        )
+        assert compiled.status == "compiled"
+
+        receipt = service.execute_plan(compiled.ref)
+        assert receipt["status"] == "succeeded"
+        assert "canonical_method_output" not in receipt
+        receipt_result = _success_result("execute_plan", receipt)
+        assert _bounded_tool_result("execute_plan", receipt_result) is receipt_result
+
+        retained = service._methods_runtime.get_run(receipt["run_ref"])
+        complete_result = _success_result(
+            "get_run",
+            retained.model_dump(mode="json"),
+        )
+        assert len(_compact_bytes(_tool_result_projection(complete_result))) > (
+            MAX_TOOL_RESULT_BYTES
+        )
+
+        summary = service.get_run(receipt["run_ref"])
+        assert summary == service.get_run(receipt["run_ref"])
+        assert summary["output"]["present"] is True
+
+        cursor = None
+        values: list[float] = []
+        field_digest = None
+        while True:
+            page = service.get_run(
+                receipt["run_ref"],
+                view="output",
+                field="returns",
+                cursor=cursor,
+                limit=1_000,
+            )
+            page_result = _success_result("get_run", page)
+            assert _bounded_tool_result("get_run", page_result) is page_result
+            if field_digest is None:
+                field_digest = page["field_sha256"]
+            else:
+                assert page["field_sha256"] == field_digest
+            values.extend(page["items"])
+            cursor = page["page"]["next_cursor"]
+            if cursor is None:
+                assert page["page"]["complete"] is True
+                break
+
+        assert len(values) == len(prices) - 1
+        assert values[:2] == [0.01, -0.009900990099009901]
+
+
+def test_governed_artifact_is_verified_and_retrievable_in_bounded_chunks() -> None:
+    content = (b"bounded-governed-artifact-" * 10_000) + b"end"
+    digest = hashlib.sha256(content).hexdigest()
+    expected = SimpleNamespace(
+        artifact_id="analysis_report",
+        media_type="application/octet-stream",
+        digest=digest,
+        byte_length=len(content),
+    )
+
+    class ArtifactRuntime:
+        def get_run(self, _reference: object) -> object:
+            return SimpleNamespace(artifacts=(expected,))
+
+        def close(self) -> None:
+            return None
+
+    reader_calls = 0
+
+    def reader(_reference: str, _artifact_id: str) -> OperationArtifact:
+        nonlocal reader_calls
+        reader_calls += 1
+        return OperationArtifact(
+            content=content,
+            media_type=expected.media_type,
+            sha256=digest,
+        )
+
+    service = DefinedQuantService(
+        methods_runtime=ArtifactRuntime(),  # type: ignore[arg-type]
+        method_artifact_reader=reader,
+    )
+    try:
+        cursor = None
+        first_cursor = None
+        reconstructed = bytearray()
+        expected_offset = 0
+        while True:
+            request = ReadArtifactRequest(
+                run_ref="dqrun:" + "a" * 64,
+                artifact_id="analysis_report",
+                cursor=cursor,
+                limit_bytes=MAX_ARTIFACT_CHUNK_BYTES,
+            )
+            page = anyio.run(_dispatch, service, request)
+            page_result = _success_result("read_artifact", page)
+            assert _bounded_tool_result("read_artifact", page_result) is page_result
+            assert page["offset"] == expected_offset
+            chunk = base64.b64decode(page["content_base64"], validate=True)
+            assert len(chunk) == page["returned_bytes"]
+            assert hashlib.sha256(chunk).hexdigest() == page["chunk_sha256"]
+            reconstructed.extend(chunk)
+            expected_offset += len(chunk)
+            cursor = page["next_cursor"]
+            if first_cursor is None:
+                first_cursor = cursor
+            if cursor is None:
+                assert page["complete"] is True
+                break
+
+        assert reader_calls > 1
+        assert bytes(reconstructed) == content
+        assert page["sha256"] == digest
+        assert page["total_bytes"] == len(content)
+        assert isinstance(first_cursor, str)
+
+        replacement = "A" if first_cursor[-1] != "A" else "B"
+        with pytest.raises(HostFailureException) as tampered:
+            service.read_artifact(
+                "dqrun:" + "a" * 64,
+                "analysis_report",
+                cursor=first_cursor[:-1] + replacement,
+            )
+        assert tampered.value.code == HostFailureCode.INVALID_TOOL_REQUEST
+    finally:
+        service.close()
+
+    with pytest.raises(ValueError):
+        ReadArtifactRequest(
+            run_ref="dqrun:" + "a" * 64,
+            artifact_id="analysis_report",
+            limit_bytes=MAX_ARTIFACT_CHUNK_BYTES + 1,
+        )
+
+
+def test_oversized_governed_artifact_is_refused_before_reader_load() -> None:
+    expected = SimpleNamespace(
+        artifact_id="analysis_report",
+        media_type="application/octet-stream",
+        digest="a" * 64,
+        byte_length=MAX_METHOD_ARTIFACT_READ_BYTES + 1,
+    )
+
+    class ArtifactRuntime:
+        def get_run(self, _reference: object) -> object:
+            return SimpleNamespace(artifacts=(expected,))
+
+        def close(self) -> None:
+            return None
+
+    reader_called = False
+
+    def reader(_reference: str, _artifact_id: str) -> OperationArtifact:
+        nonlocal reader_called
+        reader_called = True
+        raise AssertionError("oversized artifact reader must not be called")
+
+    service = DefinedQuantService(
+        methods_runtime=ArtifactRuntime(),  # type: ignore[arg-type]
+        method_artifact_reader=reader,
+    )
+    try:
+        with pytest.raises(HostFailureException) as refused:
+            service.read_artifact(
+                "dqrun:" + "a" * 64,
+                "analysis_report",
+            )
+        assert refused.value.code == HostFailureCode.RESULT_LIMIT_EXCEEDED
+        assert refused.value.failure.error.details == {
+            "limit_name": "artifact_decoded_bytes",
+            "maximum": MAX_METHOD_ARTIFACT_READ_BYTES,
+            "actual": MAX_METHOD_ARTIFACT_READ_BYTES + 1,
+        }
+        assert reader_called is False
+    finally:
+        service.close()
 
 
 def test_official_client_cursor_binding_tampering_and_resource_error_set() -> None:

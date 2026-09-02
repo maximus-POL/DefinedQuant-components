@@ -1,11 +1,19 @@
-# Component categories
+# Legacy component compatibility
 
-This is the public catalog. Each direct child folder is one financial topic, and each topic
-contains inspectable components. GitHub shows those folders automatically, while
-`authoring/export_catalog.py` produces the searchable machine index used by the website.
+The seven folders beneath `categories/` preserve the old bundled DQ-native component format for a
+time-bounded compatibility window. They are not the canonical catalog, financial contract
+hierarchy, or implementation registry, and no new component belongs here.
 
-A component is always one folder directly inside a category. Open its `README.md` for the
-financial explanation, `component.py` for the calculation, `contract.yaml` for the machine-readable
-usage rules, `evidence.yaml` for the validation record, and `test_component.py` for executable
-evidence. The required `discovery` block in every contract provides aliases, task intents, input
-concepts, and output concepts for deterministic catalog-wide search without importing functions.
+Canonical discovery and website taxonomy lives in `registry/taxonomy/categories.yaml`. Canonical
+financial meaning and Recipes live in `registry/methods/`; atomic interfaces live in
+`registry/capabilities/`; exact executable realizations live in `registry/implementations/` and
+their trusted Adapter distributions.
+
+The category README files remain human descriptions of financial topics. Category metadata may
+organize search and website navigation, but it never selects a Backend or determines code
+location.
+
+The old folders and component catalog validation are removed on **2026-12-31 or the first 0.2.0
+release, whichever comes first**. Until then they may be changed only to preserve behavior required
+by an existing compatibility client. Their `subject_hash` identities do not become Method,
+Capability, Adapter, Implementation, Plan, Step, or Run identities.

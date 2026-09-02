@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Discover and inspect installed Defined Quant components."""
+"""Legacy compatibility: discover and inspect old Defined Quant components."""
 
 from __future__ import annotations
 
@@ -70,7 +70,10 @@ def _add_filters(parser: argparse.ArgumentParser) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Discover and inspect the installed Defined Quant catalog."
+        description=(
+            "Legacy compatibility only: discover and inspect the old installed component "
+            "catalog. Use search_methods and inspect_method for canonical Method discovery."
+        )
     )
     parser.add_argument(
         "--catalog-root",
@@ -81,7 +84,7 @@ def _parser() -> argparse.ArgumentParser:
 
     listing = commands.add_parser(
         "list",
-        help="Browse installed components and discovery facets in stable order.",
+        help="Legacy check: browse old components and discovery facets in stable order.",
     )
     listing.add_argument(
         "--limit",
@@ -93,7 +96,7 @@ def _parser() -> argparse.ArgumentParser:
 
     search = commands.add_parser(
         "search",
-        help="Retrieve ranked candidates with positive and boundary match explanations.",
+        help="Legacy check: rank old component candidates with match explanations.",
     )
     search.add_argument("query", help="Plain-language financial intent.")
     search.add_argument(
@@ -106,7 +109,7 @@ def _parser() -> argparse.ArgumentParser:
 
     show = commands.add_parser(
         "show",
-        help="Show one contract, discovery facets, canonical schemas, and subject hash.",
+        help="Legacy check: show one old contract, schemas, facets, and subject hash.",
     )
     show.add_argument("component", help="Stable component ID or component directory.")
     return parser

@@ -37,7 +37,7 @@ from defined_quant_protocol import (
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-FAILURE_FIXTURE = ROOT / "docs" / "local_mcp" / "host_failures.v1.json"
+FAILURE_FIXTURE = ROOT / "docs" / "local_mcp" / "host_failures.json"
 COMPONENT = ComponentRef(
     id="dq.market_data.simple_return",
     version="0.3.4",
@@ -65,6 +65,11 @@ def _valid_details(code: HostFailureCode) -> dict[str, Any]:
         return {"requested_version": "9.0.0"}
     if code is HostFailureCode.UNSUPPORTED_REFERENCE_VERSION:
         return {"requested_version": "v2"}
+    if code in {
+        HostFailureCode.METHOD_NOT_FOUND,
+        HostFailureCode.METHOD_IDENTITY_MISMATCH,
+    }:
+        return {"method_id": "dq.market_data.simple_return"}
     if code in {
         HostFailureCode.COMPONENT_NOT_FOUND,
         HostFailureCode.COMPONENT_IDENTITY_MISMATCH,

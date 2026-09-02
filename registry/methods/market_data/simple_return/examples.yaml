@@ -1,0 +1,24 @@
+schema_version: 1
+method:
+  id: dq.market_data.simple_return
+  version: 1.0.0
+examples:
+  - id: three_adjusted_prices
+    title: Two adjacent simple returns
+    input:
+      prices:
+        - 100.0
+        - 105.0
+        - 102.9
+      price_kind: adjusted
+      timestamps: null
+      declared_frequency: null
+    conformance_case:
+      capability:
+        id: returns.simple
+        version: 1.0.0
+      id: three_prices_known_answer
+    interpretation: >-
+      The two decimal outputs represent gains of 5% and losses of 2%. Their compounded growth
+      factor equals the terminal-to-initial price ratio.
+

@@ -1,4 +1,4 @@
-"""Build-matrix smoke test for the installed core and MCP wheels."""
+"""Build-matrix smoke test for installed core, DQ-native adapter, and MCP wheels."""
 
 from __future__ import annotations
 
@@ -42,6 +42,11 @@ def main() -> int:
         "defined_quant_mcp-*.whl",
         "defined-quant-mcp",
     )
+    adapter_wheel = _one_wheel(
+        args.mcp_wheel_directory,
+        "defined_quant_adapter_dq_native-*.whl",
+        "defined-quant-adapter-dq-native",
+    )
     uv = shutil.which("uv")
     if uv is None:
         raise SystemExit("uv is unavailable")
@@ -58,10 +63,15 @@ def main() -> int:
         from mcp.client import Client
 
         assert importlib.metadata.version("defined-quant") == "0.1.3"
+        assert importlib.metadata.version("defined-quant-adapter-dq-native") == "1.0.0"
         assert importlib.metadata.version("defined-quant-mcp") == "0.1.0a1"
         assert importlib.metadata.version("mcp") == "2.0.0"
         requirements = importlib.metadata.requires("defined-quant-mcp") or []
-        assert set(requirements) == {"defined-quant==0.1.3", "mcp==2.0.0"}
+        assert set(requirements) == {
+            "defined-quant-adapter-dq-native==1.0.0",
+            "defined-quant==0.1.3",
+            "mcp==2.0.0",
+        }
         assert not any(requirement.startswith("mcp-types") for requirement in requirements)
         if sys.platform == "win32":
             assert importlib.metadata.version("pywin32")
@@ -81,23 +91,65 @@ def main() -> int:
                         assert client.server_info.name == "defined-quant-mcp"
                         tools = await client.list_tools(cache_mode="reload")
                         assert [tool.name for tool in tools.tools] == [
+                            "search_methods",
+                            "inspect_method",
+                            "compile_plan",
+                            "execute_plan",
+                            "get_plan",
+                            "get_run",
+                            "get_dataset",
+                            "read_artifact",
+                            "register_dataset",
                             "search_components",
                             "inspect_component",
-                            "register_dataset",
                             "describe_dataset",
                             "compare_ports",
+                            "compile_component_plan",
                             "execute_component",
                             "get_operation",
                         ]
                         result = await client.call_tool(
-                            "search_components",
+                            "search_methods",
                             {"query": "simple return", "limit": 1},
                         )
                         assert result.is_error is False
                         assert result.structured_content["outcome"] == "ok"
                         assert result.structured_content["data"]["hits"][0][
-                            "component_id"
+                            "method_id"
                         ] == "dq.market_data.simple_return"
+                        compiled = await client.call_tool(
+                            "compile_plan",
+                            {
+                                "proposal": {
+                                    "method_id": "dq.market_data.simple_return",
+                                    "method_version": "1.0.0",
+                                    "financial_inputs": {"prices": [100.0, 110.0, 121.0]},
+                                    "conventions": {"price_kind": "adjusted"},
+                                }
+                            },
+                        )
+                        assert compiled.is_error is False
+                        compiled_data = compiled.structured_content["data"]
+                        assert compiled_data["status"] == "compiled"
+                        run = await client.call_tool(
+                            "execute_plan",
+                            {"plan_ref": compiled_data["plan_ref"]},
+                        )
+                        assert run.is_error is False
+                        run_data = run.structured_content["data"]
+                        assert run_data["status"] == "succeeded"
+                        assert "canonical_method_output" not in run_data
+                        returned = await client.call_tool(
+                            "get_run",
+                            {
+                                "run_ref": run_data["run_ref"],
+                                "view": "output",
+                                "field": "returns",
+                                "limit": 1,
+                            },
+                        )
+                        assert returned.is_error is False
+                        assert returned.structured_content["data"]["items"] == [0.1]
 
         anyio.run(story)
         '''
@@ -116,6 +168,7 @@ def main() -> int:
                 "--python",
                 os.fspath(executable),
                 os.fspath(core_wheel),
+                os.fspath(adapter_wheel),
                 os.fspath(mcp_wheel),
             ]
         )

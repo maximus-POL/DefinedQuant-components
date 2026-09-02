@@ -227,7 +227,7 @@ def main() -> int:
         defined_quant.__path__.append(os.fspath(catalog_root / "categories"))
         matrix_reference = _install_component(catalog_root)
         simple_return_reference = load_execution_policy(
-            "simple_return_csv_v1"
+            "simple_return_csv"
         ).components[0].component
         controller = WorkerController()
         try:

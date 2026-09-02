@@ -1,0 +1,16 @@
+schema_version: 1
+id: evidence.implementation.dq_native.square_root_annualize_series
+version: 1.0.0
+subject: {kind: implementation, id: dq_native.square_root_annualize_series, version: 1.0.0}
+status: {label: Experimental Technical Preview}
+artifact: {kind: installed_distribution_manifest, distribution: defined-quant-adapter-dq-native, version: 1.0.0, manifest: registry/artifacts/defined_quant_adapter_dq_native/manifest.json, hash: {algorithm: sha256, canonicalization: defined_quant_canonical_json_v1, domain: registry.artifact.installed_distribution_manifest, value: 134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c}}
+conformance:
+  capability: {id: statistics.square_root_annualize_series, version: 1.0.0}
+  suite: registry/capabilities/statistics/square_root_annualize_series/conformance.yaml
+  tests:
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_case
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_invariant
+evidence: [{id: explicit_factor_series_scaling, kind: source_and_test_review, description: Ordered series mapping of the scalar square-root annualization kernel.}]
+migration: {legacy_component: {id: dq.volatility.rolling_historical_volatility, version: 0.1.2, subject_hash: fdf7f6d6529f3b29216b014642c8de20204452f56600e2ab9098535304b3f334, meaning: Migration provenance for the extracted series annualization capability only.}}
+review: {engineering: author_reviewed, capability_conformance: author_asserted, domain: none, independent_reproduction: none}
+non_claims: [Installation alone does not make this implementation eligible under host policy., This evidence does not authenticate input data or independently reproduce a run.]

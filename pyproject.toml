@@ -1,7 +1,7 @@
 [project]
 name = "defined-quant"
 version = "0.1.3"
-description = "Deterministic, inspectable financial components for humans and agents."
+description = "Governed, inspectable financial methods for humans and agents."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = {file = "LICENSE"}
@@ -18,8 +18,11 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "pydantic>=2.7,<3", "pyyaml"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.hooks.custom]
+path = "authoring/hatch_build.py"
 
 [tool.hatch.build.targets.wheel]
 only-include = ["shared", "categories", "protocol"]
@@ -46,6 +49,7 @@ dev-mode-dirs = ["shared", "categories", "protocol"]
 "shared/py.typed" = "defined_quant/py.typed"
 "protocol/__init__.py" = "defined_quant_protocol/__init__.py"
 "protocol/py.typed" = "defined_quant_protocol/py.typed"
+"registry" = "defined_quant/registry_data"
 
 [tool.pytest.ini_options]
 addopts = [
@@ -53,9 +57,9 @@ addopts = [
   "-p", "authoring.pytest_evidence",
   "-p", "authoring.pytest_native_inventory",
 ]
-testpaths = ["categories", "authoring/tests", ".agents/skills"]
+testpaths = ["categories", "authoring/tests", ".agents/skills", "tests"]
 python_files = ["test_*.py"]
-pythonpath = ["."]
+pythonpath = [".", "adapters/dq_native/src"]
 
 [tool.ruff]
 target-version = "py311"

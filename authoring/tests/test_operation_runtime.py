@@ -47,7 +47,7 @@ RUNNER = (
     / "scripts"
     / "run_component.py"
 )
-FIXTURE_PATH = Path(__file__).parent / "fixtures" / "operation_runtime_phase0.v1.json"
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "operation_runtime.json"
 WINDOWS_DEVICE_NAMES = (
     "con",
     "prn",

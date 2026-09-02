@@ -1,4 +1,4 @@
-"""Verify and fingerprint the exact core and MCP release wheels."""
+"""Verify and fingerprint the exact core, DQ-native adapter, and MCP wheels."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from email.policy import default
 from pathlib import Path
 from zipfile import ZipFile
 
-MANIFEST_NAME = "wheel-manifest.v1.json"
+MANIFEST_NAME = "wheel-manifest.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,10 +31,22 @@ EXPECTED_WHEELS = (
         requirements=frozenset({"pydantic<3,>=2.7"}),
     ),
     WheelExpectation(
+        filename="defined_quant_adapter_dq_native-1.0.0-py3-none-any.whl",
+        project_name="defined-quant-adapter-dq-native",
+        version="1.0.0",
+        requirements=frozenset(),
+    ),
+    WheelExpectation(
         filename="defined_quant_mcp-0.1.0a1-py3-none-any.whl",
         project_name="defined-quant-mcp",
         version="0.1.0a1",
-        requirements=frozenset({"defined-quant==0.1.3", "mcp==2.0.0"}),
+        requirements=frozenset(
+            {
+                "defined-quant-adapter-dq-native==1.0.0",
+                "defined-quant==0.1.3",
+                "mcp==2.0.0",
+            }
+        ),
     ),
 )
 
@@ -82,7 +94,9 @@ def _projection(directory: Path) -> dict[str, object]:
     wheels = tuple(sorted(directory.glob("*.whl")))
     expected_names = tuple(item.filename for item in EXPECTED_WHEELS)
     if tuple(path.name for path in wheels) != tuple(sorted(expected_names)):
-        raise ValueError("wheel directory must contain exactly the core and MCP release wheels")
+        raise ValueError(
+            "wheel directory must contain exactly the core, DQ-native adapter, and MCP wheels"
+        )
     by_name = {item.filename: item for item in EXPECTED_WHEELS}
     artifacts = [_verify_wheel(path, by_name[path.name]) for path in wheels]
     return {"schema_version": 1, "artifacts": artifacts}

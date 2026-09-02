@@ -67,6 +67,10 @@ def main() -> int:
         wheel_directory,
         "defined_quant-0.1.3-py3-none-any.whl",
     )
+    adapter_wheel = _one_wheel(
+        wheel_directory,
+        "defined_quant_adapter_dq_native-1.0.0-py3-none-any.whl",
+    )
     mcp_wheel = _one_wheel(
         wheel_directory,
         "defined_quant_mcp-0.1.0a1-py3-none-any.whl",
@@ -102,6 +106,8 @@ def main() -> int:
                 "--no-emit-project",
                 "--no-emit-package",
                 "defined-quant",
+                "--no-emit-package",
+                "defined-quant-adapter-dq-native",
                 "--output-file",
                 os.fspath(mcp_requirements),
             ]
@@ -133,6 +139,7 @@ def main() -> int:
                 os.fspath(python),
                 "--no-deps",
                 os.fspath(core_wheel),
+                os.fspath(adapter_wheel),
                 os.fspath(mcp_wheel),
             ]
         )
@@ -171,6 +178,8 @@ def main() -> int:
                 "pytest",
                 "-c",
                 os.fspath(ROOT / "pyproject.toml"),
+                "-o",
+                "pythonpath=.",
                 "-p",
                 "authoring.pytest_wheel_isolation",
             ],
@@ -186,6 +195,8 @@ def main() -> int:
                 "pytest",
                 "-c",
                 os.fspath(ROOT / "pyproject.toml"),
+                "-o",
+                "pythonpath=.",
                 "-p",
                 "authoring.pytest_wheel_isolation",
                 os.fspath(ROOT / "mcp_server" / "tests"),

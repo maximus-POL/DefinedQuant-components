@@ -1,4 +1,4 @@
-"""Smoke-test both distributions from a clean installed-wheel environment."""
+"""Smoke-test all three distributions from a clean installed-wheel environment."""
 
 from __future__ import annotations
 
@@ -57,22 +57,67 @@ async def _mcp_smoke(state_root: Path) -> None:
                     raise AssertionError("installed MCP server did not initialize")
                 tools = await client.list_tools(cache_mode="reload")
                 expected = (
+                    "search_methods",
+                    "inspect_method",
+                    "compile_plan",
+                    "execute_plan",
+                    "get_plan",
+                    "get_run",
+                    "get_dataset",
+                    "read_artifact",
+                    "register_dataset",
                     "search_components",
                     "inspect_component",
-                    "register_dataset",
                     "describe_dataset",
                     "compare_ports",
+                    "compile_component_plan",
                     "execute_component",
                     "get_operation",
                 )
                 if tuple(tool.name for tool in tools.tools) != expected:
                     raise AssertionError("installed MCP tool list changed")
                 result = await client.call_tool(
-                    "search_components",
+                    "search_methods",
                     {"query": "simple return", "limit": 1},
                 )
                 if result.is_error or result.structured_content["outcome"] != "ok":
                     raise AssertionError("installed MCP search smoke failed")
+                compiled = await client.call_tool(
+                    "compile_plan",
+                    {
+                        "proposal": {
+                            "method_id": "dq.market_data.simple_return",
+                            "method_version": "1.0.0",
+                            "financial_inputs": {"prices": [100.0, 110.0, 121.0]},
+                            "conventions": {"price_kind": "adjusted"},
+                        }
+                    },
+                )
+                if compiled.is_error:
+                    raise AssertionError("installed MCP compile smoke failed")
+                compiled_data = compiled.structured_content["data"]
+                if compiled_data["status"] != "compiled":
+                    raise AssertionError("installed MCP did not compile the DQ-native slice")
+                run = await client.call_tool(
+                    "execute_plan",
+                    {"plan_ref": compiled_data["plan_ref"]},
+                )
+                if run.is_error or run.structured_content["data"]["status"] != "succeeded":
+                    raise AssertionError("installed MCP governed execution smoke failed")
+                run_data = run.structured_content["data"]
+                if "canonical_method_output" in run_data:
+                    raise AssertionError("installed MCP execution returned an unbounded record")
+                returned = await client.call_tool(
+                    "get_run",
+                    {
+                        "run_ref": run_data["run_ref"],
+                        "view": "output",
+                        "field": "returns",
+                        "limit": 1,
+                    },
+                )
+                if returned.is_error or returned.structured_content["data"]["items"] != [0.1]:
+                    raise AssertionError("installed MCP governed run paging smoke failed")
         except BaseException as exc:
             audit.seek(0)
             records: list[str] = []
@@ -100,17 +145,27 @@ def main() -> int:
     args = _parser().parse_args()
     checkout = args.checkout_root.resolve()
     defined_quant_mcp = importlib.import_module("defined_quant_mcp")
+    defined_quant_adapter = importlib.import_module("defined_quant_adapter_dq_native")
     _assert_installed(defined_quant, checkout)
     _assert_installed(defined_quant_protocol, checkout)
     _assert_installed(defined_quant_mcp, checkout)
+    _assert_installed(defined_quant_adapter, checkout)
     if importlib.metadata.version("defined-quant") != "0.1.3":
         raise AssertionError("unexpected installed core version")
     if importlib.metadata.version("defined-quant-mcp") != "0.1.0a1":
         raise AssertionError("unexpected installed MCP version")
+    if importlib.metadata.version("defined-quant-adapter-dq-native") != "1.0.0":
+        raise AssertionError("unexpected installed DQ-native adapter version")
     if importlib.metadata.version("mcp") != "2.0.0":
         raise AssertionError("unexpected installed MCP SDK version")
     requirements = frozenset(importlib.metadata.requires("defined-quant-mcp") or ())
-    if requirements != frozenset({"defined-quant==0.1.3", "mcp==2.0.0"}):
+    if requirements != frozenset(
+        {
+            "defined-quant-adapter-dq-native==1.0.0",
+            "defined-quant==0.1.3",
+            "mcp==2.0.0",
+        }
+    ):
         raise AssertionError("unexpected installed MCP requirements")
     if sys.platform == "win32":
         importlib.metadata.version("pywin32")
@@ -119,7 +174,7 @@ def main() -> int:
         raise AssertionError("worker memory contract changed")
     if utf8_lf_frame('{"ok":true}') != b'{"ok":true}\n':
         raise AssertionError("UTF-8/LF framing contract changed")
-    reference = load_execution_policy("simple_return_csv_v1").components[0].component
+    reference = load_execution_policy("simple_return_csv").components[0].component
     request = OperationRequest(
         component=reference,
         input={"prices": [100, 101], "price_kind": "adjusted"},
@@ -132,6 +187,30 @@ def main() -> int:
     with TemporaryDirectory(prefix="defined-quant-installed-wheel-smoke-") as temporary:
         root = Path(temporary)
         with DefinedQuantService(session_state_root=root / "core-state") as service:
+            methods = service.search_methods("simple return", limit=1)
+            if methods.hits[0].method.id != "dq.market_data.simple_return":
+                raise AssertionError("installed methods-first discovery smoke failed")
+            plan = service.compile_plan(
+                {
+                    "method_id": "dq.market_data.simple_return",
+                    "method_version": "1.0.0",
+                    "financial_inputs": {"prices": [100.0, 110.0, 121.0]},
+                    "conventions": {"price_kind": "adjusted"},
+                }
+            )
+            if plan.status != "compiled":
+                raise AssertionError("installed methods-first compilation smoke failed")
+            run = service.execute_plan(plan.ref)
+            if run["status"] != "succeeded" or "canonical_method_output" in run:
+                raise AssertionError("installed governed execution smoke failed")
+            returned = service.get_run(
+                run["run_ref"],
+                view="output",
+                field="returns",
+                limit=1,
+            )
+            if returned["items"] != [0.1] or returned["page"]["total"] != 2:
+                raise AssertionError("installed governed run paging smoke failed")
             search = service.search_components("calculate period price changes", limit=5)
             if search.hits[0].record.component_id != "dq.market_data.simple_return":
                 raise AssertionError("installed core discovery smoke failed")

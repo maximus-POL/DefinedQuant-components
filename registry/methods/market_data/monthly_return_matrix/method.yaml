@@ -1,0 +1,207 @@
+schema_version: 2
+id: dq.market_data.monthly_return_matrix
+version: 1.0.0
+title: Monthly Return Matrix
+lifecycle: draft
+summary: >-
+  Experimental Technical Preview method for calculating simple returns from consecutive completed
+  month-end prices and aligning them to a calendar matrix.
+category: market_data
+discovery:
+  slug: monthly_return_matrix
+  website_slug: monthly-return-matrix
+  aliases:
+    - calendar return heatmap
+    - monthly performance matrix
+    - monthly return calendar
+    - monthly return heatmap
+    - return regime heatmap
+  intents:
+    - calculate_monthly_returns
+    - show_monthly_return_heatmap
+    - show_return_regimes
+  input_concepts:
+    - completed_month_end_prices
+    - consecutive_calendar_months
+    - price_adjustment_kind
+  output_concepts:
+    - monthly_return_heatmap
+    - monthly_simple_return_series
+  tags:
+    - calendar_matrix
+    - experimental_technical_preview
+    - market_data
+    - monthly_returns
+  use_when:
+    - The caller supplies consecutive completed month-end prices and YYYY-MM labels.
+    - The caller wants positive and negative return regimes shown by calendar month.
+    - Simple monthly price returns, not daily aggregation or total-return reconstruction, are intended.
+  do_not_use_when:
+    - The inputs are daily prices requiring calendar aggregation.
+    - The last observation is a partial month or month-end completeness is unknown.
+    - Months are missing, unordered, duplicated, or need alignment across instruments.
+  unsupported_scope:
+    - Daily-to-monthly aggregation, exchange-calendar inference, and partial-month detection.
+    - Total-return reconstruction, currency conversion, cross-instrument alignment, and portfolio aggregation.
+    - Seasonality testing, statistical significance, forecasting, and causal regime attribution.
+formula: rₘ = (Pₘ − Pₘ₋₁) / Pₘ₋₁
+methodology:
+  - Calculate adjacent simple returns from explicitly completed month-end prices.
+  - Require canonical, strictly increasing, consecutive YYYY-MM labels without missing months.
+  - Associate each return with the ending month and preserve every value in calendar order.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - months
+    - observation_kind
+    - price_kind
+    - prices
+  properties:
+    months:
+      x-defined-quant-capability-field:
+        capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        direction: input
+        field: observation_months
+    observation_kind:
+      const: completed_month_end
+      description: Explicit caller assertion that every observation is a completed month end.
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      x-defined-quant-port:
+        direction: input
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    prices:
+      x-defined-quant-capability-field:
+        capability: {id: returns.simple, version: 1.0.0}
+        direction: input
+        field: prices
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - gap_check
+    - monthly_returns
+    - observation_kind
+    - price_kind
+    - return_kind
+    - return_months
+  properties:
+    gap_check:
+      x-defined-quant-capability-field:
+        capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        direction: output
+        field: gap_check
+    monthly_returns:
+      x-defined-quant-capability-field:
+        capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        direction: output
+        field: monthly_returns
+    observation_kind: {const: completed_month_end}
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      x-defined-quant-port:
+        direction: output
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    return_kind:
+      x-defined-quant-capability-field:
+        capability: {id: returns.simple, version: 1.0.0}
+        direction: output
+        field: return_kind
+    return_months:
+      x-defined-quant-capability-field:
+        capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        direction: output
+        field: return_months
+assumptions:
+  - Every supplied price is caller-asserted to be the completed month-end observation for its label.
+  - All observations refer to one instrument in a consistent price unit.
+  - Adjusted-price semantics are defined upstream and accepted as supplied.
+limitations:
+  - The method does not aggregate daily observations or detect partial months.
+  - It does not reconstruct total returns, convert currencies, align instruments, or repair missing months.
+  - Observed calendar patterns do not establish statistically significant seasonality.
+interpretation: >-
+  Report decimal simple returns aligned to interval-end calendar months, the completed-month
+  assertion, consecutive-month status, and price kind. Describe observed regimes only; do not
+  claim tested seasonality, daily aggregation, total-return treatment, or forecasting.
+constraints:
+  - id: month_length_mismatch
+    target: input
+    severity: blocking
+    expression:
+      left: {field: months, measure: count}
+      op: ne
+      right: {field: prices, measure: count}
+    message: Month labels and prices must align one-to-one.
+  - id: unadjusted_price_interpretation
+    target: input
+    severity: warning
+    expression:
+      left: {field: price_kind}
+      op: eq
+      right: {value: unadjusted}
+    message: Corporate-action breaks can distort monthly returns, and distributions are not reinvested.
+conventions:
+  - id: observation_kind
+    field: observation_kind
+    question: Can you assert that every observation is a completed month-end price?
+    materiality: A partial current month is not comparable with completed calendar months.
+    required_from_user: true
+    allowed_values: [completed_month_end]
+  - id: price_kind
+    field: price_kind
+    question: Are the supplied month-end prices adjusted or unadjusted?
+    materiality: Corporate actions and distributions affect monthly-return interpretation.
+    required_from_user: true
+    allowed_values: [adjusted, unadjusted]
+defaults: []
+recipe:
+  steps:
+    - step_id: calculate
+      capability: {id: returns.simple, version: 1.0.0}
+      depends_on: []
+      input_bindings:
+        - target_field: prices
+          source: {kind: method_input, field: prices}
+        - target_field: timestamps
+          source: {kind: authored_constant, value: null}
+    - step_id: align_calendar
+      capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+      depends_on: [calculate]
+      input_bindings:
+        - target_field: observation_months
+          source: {kind: method_input, field: months}
+        - target_field: returns
+          source: {kind: step_output, step_id: calculate, field: returns}
+  result_bindings:
+    - target_field: gap_check
+      source: {kind: step_output, step_id: align_calendar, field: gap_check}
+    - target_field: monthly_returns
+      source: {kind: step_output, step_id: align_calendar, field: monthly_returns}
+    - target_field: observation_kind
+      source: {kind: method_input, field: observation_kind}
+    - target_field: price_kind
+      source: {kind: method_input, field: price_kind}
+    - target_field: return_kind
+      source: {kind: step_output, step_id: calculate, field: return_kind}
+    - target_field: return_months
+      source: {kind: step_output, step_id: align_calendar, field: return_months}

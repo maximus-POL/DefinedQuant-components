@@ -1,0 +1,18 @@
+schema_version: 1
+method: {id: dq.market_data.monthly_return_matrix, version: 1.0.0}
+examples:
+  - id: cross_year_matrix
+    title: Three returns across a calendar-year boundary
+    input:
+      prices: [100.0, 80.0, 88.0, 79.2]
+      months: [2022-11, 2022-12, 2023-01, 2023-02]
+      price_kind: adjusted
+      observation_kind: completed_month_end
+    conformance_cases:
+      - capability: {id: returns.simple, version: 1.0.0}
+        id: monthly_cross_year_known_answer
+      - capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        id: cross_year_known_answer
+    interpretation: >-
+      The method produces -20%, +10%, and -10% simple returns aligned to December, January,
+      and February. The pattern is descriptive and is not a seasonality test.

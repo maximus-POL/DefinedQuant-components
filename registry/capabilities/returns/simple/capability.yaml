@@ -1,0 +1,163 @@
+schema_version: 2
+id: returns.simple
+version: 1.0.0
+title: Simple periodic return calculation
+kind: calculation
+summary: Calculates decimal simple returns for adjacent positive prices with interval-end alignment.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - prices
+  properties:
+    prices:
+      type: array
+      minItems: 2
+      items:
+        type: number
+      x-defined-quant-port:
+        direction: input
+        concept: price_series
+        unit: price
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: ordered_positive_prices
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+    timestamps:
+      anyOf:
+        - type: array
+          minItems: 2
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - returns
+    - return_kind
+    - return_timestamps
+    - ordering_status
+  properties:
+    returns:
+      type: array
+      minItems: 1
+      items:
+        type: number
+        exclusiveMinimum: -1.0
+      x-defined-quant-port:
+        direction: output
+        concept: periodic_return_series
+        unit: decimal
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: simple_periodic_return
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+    return_kind:
+      const: simple
+      x-defined-quant-port:
+        direction: output
+        concept: return_convention
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: simple_periodic_return
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    return_timestamps:
+      anyOf:
+        - type: array
+          minItems: 1
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+    ordering_status:
+      type: string
+      enum:
+        - verified
+        - unverified
+constraints:
+  - id: duplicate_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: true}
+    message: Duplicate timestamps are not accepted.
+  - id: insufficient_prices
+    target: input
+    severity: blocking
+    expression:
+      left: {field: prices, measure: count}
+      op: lt
+      right: {value: 2}
+    message: At least two ordered prices are required.
+  - id: non_finite_prices
+    target: input
+    severity: blocking
+    expression:
+      left: {field: prices, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Every price must be finite.
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: returns, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Finite positive prices produced an unrepresentable simple return.
+  - id: non_increasing_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: false}
+        - left: {field: timestamps, measure: is_strictly_increasing}
+          op: eq
+          right: {value: false}
+    message: Timestamps must be strictly increasing and are never silently reordered.
+  - id: non_positive_prices
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: prices, measure: all_finite}
+          op: eq
+          right: {value: true}
+        - left: {field: prices, measure: min}
+          op: le
+          right: {value: 0}
+    message: Prices must be strictly positive.
+  - id: timestamp_length_mismatch
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: count}
+          op: ne
+          right: {field: prices, measure: count}
+    message: Timestamps and prices must align one-to-one.

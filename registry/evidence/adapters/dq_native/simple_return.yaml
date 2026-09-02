@@ -1,0 +1,31 @@
+schema_version: 1
+id: evidence.adapter.dq_native.simple_return
+version: 1.0.0
+subject:
+  kind: adapter
+  id: dq_native.simple_return
+  version: 1.0.0
+status:
+  label: Experimental Technical Preview
+evidence:
+  - id: canonical_input_mapping
+    kind: executable_test_definition
+    test: tests/adapters/test_simple_return.py::test_adapter_maps_canonical_input_and_interval_end_timestamps
+  - id: closed_input
+    kind: executable_test_definition
+    test: tests/adapters/test_simple_return.py::test_adapter_rejects_undeclared_control_fields
+  - id: failure_translation
+    kind: executable_test_definition
+    test: tests/adapters/test_simple_return.py::test_adapter_translates_kernel_failure_without_fallback
+  - id: independent_distribution
+    kind: executable_test_definition
+    test: tests/adapters/test_distribution.py::test_dq_native_adapter_is_an_independent_distribution
+review:
+  engineering: author_reviewed
+  security: local_mapping_boundary_reviewed
+  provider_authentication: not_applicable
+non_claims:
+  - Adapter evidence does not establish financial-method correctness.
+  - Author review does not establish independent security review or production readiness.
+  - The adapter does not select implementations or perform fallback.
+  - No external provider, credential, licence, or entitlement is involved.

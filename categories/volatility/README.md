@@ -8,11 +8,12 @@ summary: Deterministic descriptive risk estimates from explicitly supplied retur
 
 Deterministic descriptive risk estimates from explicitly supplied return observations.
 
-## Components
+## Taxonomy scope
 
-Each component is a direct child folder. The folder list is the browseable source of truth; the
-generated catalog supplies search and website indexing without a second hand-maintained list.
-
-Components in this category keep return convention, sampling assumptions, estimator choice, and
+Methods in this category keep return convention, sampling assumptions, estimator choice, and
 annualization policy explicit. They do not fetch or repair returns, infer calendars or frequencies,
 or present descriptive estimates as forecasts.
+
+The folders below are compatibility copies of migrated DQ-native calculations. Canonical Method,
+Capability, Implementation, and evidence records live under `registry/`; the folder list is not a
+source of truth.

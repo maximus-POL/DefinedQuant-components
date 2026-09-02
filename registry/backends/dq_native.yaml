@@ -1,0 +1,20 @@
+schema_version: 1
+id: dq_native
+version: 1.0.0
+title: Defined Quant native runtime
+kind: dq_native
+identity:
+  name: Defined Quant native runtime
+  operator: Defined Quant
+locality: local
+transports:
+  - in_process
+requires_network: false
+credential_requirement: none
+licensing:
+  kind: open_source
+  identifier: Apache-2.0
+entitlement: none
+data_boundary:
+  egress: none
+  accepts_restricted_data: true
