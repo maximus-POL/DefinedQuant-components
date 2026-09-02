@@ -508,19 +508,26 @@ def _with_verified_origins(
     *,
     expected_session_binding: str | None,
     trusted_issuers: Sequence[RuntimeIdentity],
-) -> ResolutionConstraintSet | NeedsInformation:
-    receipt_boundary_valid = bool(
-        receipts is not None
-        and expected_session_binding is not None
-        and receipts.session_binding_hash == expected_session_binding
-        and trusted_issuers
-        and all(item.issuer in trusted_issuers for item in receipts.receipts)
-    )
-    received = (
-        {item.constraint_hash: item for item in receipts.receipts}
-        if receipts is not None and receipt_boundary_valid
-        else {}
-    )
+) -> ResolutionConstraintSet | NeedsInformation | PlanRefusal:
+    supplied_receipts = () if receipts is None else receipts.receipts
+    if receipts is not None and (
+        expected_session_binding is None
+        or receipts.session_binding_hash != expected_session_binding
+        or (
+            bool(supplied_receipts)
+            and (
+                not trusted_issuers
+                or any(item.issuer not in trusted_issuers for item in supplied_receipts)
+            )
+        )
+    ):
+        return _refusal(
+            proposal,
+            PlanRefusalCode.ORIGIN_UNVERIFIED,
+            "Supplied origin receipts failed trusted host boundary verification.",
+            fields=("origin_receipts",),
+        )
+    received = {item.constraint_hash: item for item in supplied_receipts}
     verified: list[ResolutionConstraint] = []
     questions: list[ResolutionQuestion] = []
     for constraint in (
@@ -532,7 +539,7 @@ def _with_verified_origins(
             PreferenceOrigin.USER_PROFILE,
         }:
             receipt = received.get(constraint.constraint_hash)
-            if receipt is None or receipt.asserted_origin != constraint.asserted_origin:
+            if receipt is None:
                 questions.append(
                     ResolutionQuestion(
                         question_id=f"confirm_{constraint.constraint_id}",
@@ -545,6 +552,13 @@ def _with_verified_origins(
                     )
                 )
                 continue
+            if receipt.asserted_origin != constraint.asserted_origin:
+                return _refusal(
+                    proposal,
+                    PlanRefusalCode.ORIGIN_UNVERIFIED,
+                    "Supplied origin receipts failed trusted host boundary verification.",
+                    fields=("origin_receipts",),
+                )
             verified.append(constraint.model_copy(update={"origin_receipt": receipt}))
         else:
             verified.append(constraint)
@@ -837,6 +851,20 @@ def _explanation(
     )
 
 
+def _has_exclusive_blocker(
+    candidates: Sequence[CandidateDecision],
+    blocker: CandidateRejectionCode,
+) -> bool:
+    relevant = tuple(
+        item
+        for item in candidates
+        if CandidateRejectionCode.USER_CONSTRAINT not in item.rejection_reasons
+    )
+    return bool(relevant) and all(
+        item.rejection_reasons == (blocker,) for item in relevant
+    )
+
+
 def _resolve_step(
     proposal: PlanProposal,
     step: RecipeStep,
@@ -955,34 +983,67 @@ def _resolve_step(
         explanation="No candidate satisfied all user, policy, trust, and availability checks.",
     )
     if not eligible:
-        preferred = tuple(item for item in constraints if item.mode == PreferenceMode.PREFERRED)
-        if preferred and any(
-            item.fallback == FallbackBehavior.FORBIDDEN for item in preferred
-        ):
-            return NeedsInformation(
-                proposal=proposal,
-                questions=(
-                    ResolutionQuestion(
-                        question_id=f"fallback_{step.step_id}",
-                        code=ResolutionQuestionCode.FALLBACK_PERMISSION,
-                        field_path=f"recipe.{step.step_id}",
-                        description=(
-                            "The preferred implementation is not eligible. Confirm an allowed "
-                            "fallback or change the preference."
-                        ),
-                    ),
-                ),
-                resolution_attempts=(attempt,),
-            )
-        code = (
-            PlanRefusalCode.REQUIRED_CHOICE_UNAVAILABLE
-            if any(item.mode == PreferenceMode.REQUIRED for item in constraints)
-            else PlanRefusalCode.NO_ELIGIBLE_IMPLEMENTATION
+        forbidden_fallbacks = tuple(
+            item
+            for item in constraints
+            if item.mode == PreferenceMode.PREFERRED
+            and item.fallback == FallbackBehavior.FORBIDDEN
         )
+        forbidden_fallback_ids = {
+            item.constraint_id for item in forbidden_fallbacks
+        }
+        fallback_constraints = tuple(
+            item
+            for item in constraints
+            if item.constraint_id not in forbidden_fallback_ids
+        )
+        fallback_would_be_eligible = any(
+            not _candidate_decision(
+                context,
+                fallback_constraints,
+                indexes,
+                selected=False,
+            ).rejection_reasons
+            for context in contexts
+        )
+        if forbidden_fallbacks and fallback_would_be_eligible:
+            return _refusal(
+                proposal,
+                PlanRefusalCode.FALLBACK_NOT_PERMITTED,
+                (
+                    "The preferred implementation is not eligible and fallback is forbidden "
+                    f"for recipe step {step.step_id}."
+                ),
+                fields=(item.constraint_id for item in forbidden_fallbacks),
+                attempts=(attempt,),
+            )
+        if _has_exclusive_blocker(preliminary, CandidateRejectionCode.TRUST):
+            code = PlanRefusalCode.TRUST_REFUSED
+            message = (
+                "No eligible implementation meets the required trust policy for recipe step "
+                f"{step.step_id}."
+            )
+        elif _has_exclusive_blocker(
+            preliminary,
+            CandidateRejectionCode.DATA_HANDLING,
+        ):
+            code = PlanRefusalCode.DATA_HANDLING_REFUSED
+            message = (
+                "No eligible implementation meets the required data-handling policy for recipe "
+                f"step {step.step_id}."
+            )
+        elif any(item.mode == PreferenceMode.REQUIRED for item in constraints) and (
+            _has_exclusive_blocker(preliminary, CandidateRejectionCode.UNAVAILABLE)
+        ):
+            code = PlanRefusalCode.REQUIRED_CHOICE_UNAVAILABLE
+            message = f"The required choice is unavailable for recipe step {step.step_id}."
+        else:
+            code = PlanRefusalCode.NO_ELIGIBLE_IMPLEMENTATION
+            message = f"No eligible implementation can realize recipe step {step.step_id}."
         return _refusal(
             proposal,
             code,
-            f"No eligible implementation can realize recipe step {step.step_id}.",
+            message,
             attempts=(attempt,),
         )
 
@@ -1102,7 +1163,7 @@ def compile_plan(
         expected_session_binding=expected_origin_session_binding,
         trusted_issuers=trusted_origin_issuers,
     )
-    if isinstance(verified, NeedsInformation):
+    if isinstance(verified, NeedsInformation | PlanRefusal):
         return verified
     invalid_scopes = _validate_scopes(verified.constraints, selected_method)
     if invalid_scopes:

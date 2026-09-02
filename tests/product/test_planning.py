@@ -29,6 +29,7 @@ from defined_quant_protocol import (
     PreferenceMode,
     PreferenceOrigin,
     PreferenceOriginReceipt,
+    RegistryTrustDimension,
     RequirementStatus,
     ResolutionConstraint,
     ResolutionConstraintSet,
@@ -175,17 +176,34 @@ def _required_backend(registry: ProtocolRegistry) -> ResolutionConstraint:
     )
 
 
-def _receipts(constraint: ResolutionConstraint) -> OriginReceiptSet:
-    receipt = PreferenceOriginReceipt(
-        asserted_origin=PreferenceOrigin.USER_EXPLICIT,
-        verified_origin=PreferenceOrigin.USER_EXPLICIT,
-        verification=OriginVerification.USER_CONFIRMED,
+def _receipt(
+    constraint: ResolutionConstraint,
+    *,
+    issuer: RuntimeIdentity = HOST,
+) -> PreferenceOriginReceipt:
+    return PreferenceOriginReceipt(
+        asserted_origin=constraint.asserted_origin,
+        verified_origin=constraint.asserted_origin,
+        verification=(
+            OriginVerification.HOST_ATTESTED
+            if constraint.asserted_origin == PreferenceOrigin.USER_PROFILE
+            else OriginVerification.USER_CONFIRMED
+        ),
         constraint_hash=constraint.constraint_hash,
         session_binding_hash=HASH,
-        issuer=HOST,
+        issuer=issuer,
         issued_at=NOW,
     )
-    return OriginReceiptSet(session_binding_hash=HASH, receipts=(receipt,))
+
+
+def _receipts(*constraints: ResolutionConstraint) -> OriginReceiptSet:
+    receipts = tuple(
+        sorted(
+            (_receipt(constraint) for constraint in constraints),
+            key=lambda item: item.constraint_hash,
+        )
+    )
+    return OriginReceiptSet(session_binding_hash=HASH, receipts=receipts)
 
 
 def _registry_with_alternative() -> ProtocolRegistry:
@@ -400,6 +418,99 @@ def test_missing_exact_backend_is_reported_as_policy_ineligibility() -> None:
     )
 
 
+def test_exclusive_trust_rejection_uses_the_specific_refusal_code() -> None:
+    registry = _registry()
+    policy = _policy(registry)
+    rule = policy.capability_rules[0].model_copy(
+        update={
+            "required_trust_dimensions": (
+                RegistryTrustDimension.DOMAIN_REVIEWED,
+            )
+        }
+    )
+    policy = policy.model_copy(update={"capability_rules": (rule,)})
+
+    outcome = compile_plan(
+        _proposal(),
+        registry=registry,
+        policy=policy,
+        availability=_availability(registry),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "trust_refused"
+    candidate = outcome.resolution_attempts[0].candidates[0]
+    assert candidate.rejection_reasons == ("trust",)
+    assert candidate.missing_trust_dimensions == (
+        RegistryTrustDimension.DOMAIN_REVIEWED,
+    )
+
+
+def test_exclusive_data_handling_rejection_uses_the_specific_refusal_code() -> None:
+    registry = _registry()
+    policy = _policy(registry)
+    rule = policy.capability_rules[0]
+    role = rule.backend_roles[0].model_copy(
+        update={"allowed_data_egress": (DataEgress.LOCAL_PROCESS,)}
+    )
+    policy = policy.model_copy(
+        update={
+            "capability_rules": (
+                rule.model_copy(update={"backend_roles": (role,)}),
+            )
+        }
+    )
+
+    outcome = compile_plan(
+        _proposal(),
+        registry=registry,
+        policy=policy,
+        availability=_availability(registry),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "data_handling_refused"
+    candidate = outcome.resolution_attempts[0].candidates[0]
+    assert candidate.rejection_reasons == ("data_handling",)
+
+
+def test_mixed_trust_and_data_handling_rejections_remain_generic() -> None:
+    registry = _registry()
+    policy = _policy(registry)
+    rule = policy.capability_rules[0]
+    role = rule.backend_roles[0].model_copy(
+        update={"allowed_data_egress": (DataEgress.LOCAL_PROCESS,)}
+    )
+    policy = policy.model_copy(
+        update={
+            "capability_rules": (
+                rule.model_copy(
+                    update={
+                        "backend_roles": (role,),
+                        "required_trust_dimensions": (
+                            RegistryTrustDimension.DOMAIN_REVIEWED,
+                        ),
+                    }
+                ),
+            )
+        }
+    )
+
+    outcome = compile_plan(
+        _proposal(),
+        registry=registry,
+        policy=policy,
+        availability=_availability(registry),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "no_eligible_implementation"
+    assert outcome.resolution_attempts[0].candidates[0].rejection_reasons == (
+        "data_handling",
+        "trust",
+    )
+
+
 @pytest.mark.parametrize("prices", ([100.0], "not a list"))
 def test_schema_invalid_financial_input_is_not_reported_as_an_invalid_convention(
     prices: Any,
@@ -465,37 +576,173 @@ def test_user_constraint_requires_a_host_verified_origin_receipt() -> None:
         expected_origin_session_binding=HASH,
         trusted_origin_issuers=(HOST,),
     )
-    replayed_into_another_session = compile_plan(
-        proposal,
-        registry=registry,
-        policy=_policy(registry),
-        availability=_availability(registry),
-        origin_receipts=_receipts(constraint),
-        expected_origin_session_binding="9" * 64,
-        trusted_origin_issuers=(HOST,),
-    )
-    untrusted_issuer = compile_plan(
-        proposal,
-        registry=registry,
-        policy=_policy(registry),
-        availability=_availability(registry),
-        origin_receipts=_receipts(constraint),
-        expected_origin_session_binding=HASH,
-        trusted_origin_issuers=(
-            RuntimeIdentity(name="other_host", version="1.0.0", artifact_hash=HASH),
-        ),
-    )
-
     assert isinstance(unverified, NeedsInformation)
     assert unverified.questions[0].code.value == "origin_confirmation"
     assert isinstance(verified, CompiledPlan)
-    assert isinstance(replayed_into_another_session, NeedsInformation)
-    assert isinstance(untrusted_issuer, NeedsInformation)
     effective = {
         item.constraint_id: item for item in verified.effective_constraints.constraints
     }
     assert effective[constraint.constraint_id].origin_verified is True
     assert verified.original_user_constraints == proposal.resolution_constraints
+
+
+@pytest.mark.parametrize(
+    ("expected_session_binding", "trusted_issuers"),
+    (
+        ("9" * 64, (HOST,)),
+        (
+            HASH,
+            (
+                RuntimeIdentity(
+                    name="other_host",
+                    version="1.0.0",
+                    artifact_hash=HASH,
+                ),
+            ),
+        ),
+        (None, (HOST,)),
+        (HASH, ()),
+    ),
+)
+def test_supplied_receipt_outside_the_trusted_boundary_is_refused(
+    expected_session_binding: str | None,
+    trusted_issuers: tuple[RuntimeIdentity, ...],
+) -> None:
+    registry = _registry()
+    constraint = _required_backend(registry)
+    proposal = _proposal(ResolutionConstraintSet(constraints=(constraint,)))
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+        origin_receipts=_receipts(constraint),
+        expected_origin_session_binding=expected_session_binding,
+        trusted_origin_issuers=trusted_issuers,
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "origin_unverified"
+    assert outcome.fields == ("origin_receipts",)
+
+
+def test_empty_receipt_set_with_the_wrong_session_binding_is_refused() -> None:
+    registry = _registry()
+    constraint = _required_backend(registry)
+    proposal = _proposal(ResolutionConstraintSet(constraints=(constraint,)))
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+        origin_receipts=OriginReceiptSet(
+            session_binding_hash=HASH,
+            receipts=(),
+        ),
+        expected_origin_session_binding="9" * 64,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "origin_unverified"
+    assert outcome.fields == ("origin_receipts",)
+
+
+def test_untrusted_extra_receipt_refuses_the_entire_receipt_set() -> None:
+    registry = _registry()
+    constraint = _required_backend(registry)
+    other_constraint = constraint.model_copy(
+        update={
+            "constraint_id": "other_required_backend",
+            "targets": ("other_backend",),
+        }
+    )
+    other_host = RuntimeIdentity(
+        name="other_host",
+        version="1.0.0",
+        artifact_hash=HASH,
+    )
+    receipts = tuple(
+        sorted(
+            (
+                _receipt(constraint),
+                _receipt(other_constraint, issuer=other_host),
+            ),
+            key=lambda item: item.constraint_hash,
+        )
+    )
+    proposal = _proposal(ResolutionConstraintSet(constraints=(constraint,)))
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+        origin_receipts=OriginReceiptSet(
+            session_binding_hash=HASH,
+            receipts=receipts,
+        ),
+        expected_origin_session_binding=HASH,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "origin_unverified"
+    assert outcome.fields == ("origin_receipts",)
+
+
+def test_valid_receipt_set_without_the_exact_constraint_still_requests_confirmation() -> None:
+    registry = _registry()
+    constraint = _required_backend(registry)
+    other_constraint = constraint.model_copy(update={"targets": ("other_backend",)})
+    proposal = _proposal(ResolutionConstraintSet(constraints=(constraint,)))
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+        origin_receipts=_receipts(other_constraint),
+        expected_origin_session_binding=HASH,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, NeedsInformation)
+    assert outcome.questions[0].code.value == "origin_confirmation"
+
+
+def test_matching_receipt_hash_with_a_different_origin_is_refused() -> None:
+    registry = _registry()
+    constraint = _required_backend(registry)
+    proposal = _proposal(ResolutionConstraintSet(constraints=(constraint,)))
+    mismatched_receipt = PreferenceOriginReceipt(
+        asserted_origin=PreferenceOrigin.USER_PROFILE,
+        verified_origin=PreferenceOrigin.USER_PROFILE,
+        verification=OriginVerification.HOST_ATTESTED,
+        constraint_hash=constraint.constraint_hash,
+        session_binding_hash=HASH,
+        issuer=HOST,
+        issued_at=NOW,
+    )
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+        origin_receipts=OriginReceiptSet(
+            session_binding_hash=HASH,
+            receipts=(mismatched_receipt,),
+        ),
+        expected_origin_session_binding=HASH,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "origin_unverified"
+    assert outcome.fields == ("origin_receipts",)
 
 
 def test_required_unavailable_backend_refuses_without_substitution() -> None:
@@ -661,7 +908,7 @@ def test_versioned_preference_fallback_records_the_unselected_exact_target(
     assert outcome.steps[0].resolution.explanation_code.value == "preferred_fallback"
 
 
-def test_preferred_implementation_without_fallback_stops_for_confirmation() -> None:
+def test_preferred_implementation_with_forbidden_fallback_is_refused() -> None:
     registry = _registry_with_alternative()
     preference = ResolutionConstraint(
         constraint_id="preferred_calculation",
@@ -687,11 +934,53 @@ def test_preferred_implementation_without_fallback_stops_for_confirmation() -> N
         trusted_origin_issuers=(HOST,),
     )
 
-    assert isinstance(outcome, NeedsInformation)
-    assert outcome.questions[0].code.value == "fallback_permission"
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "fallback_not_permitted"
+    assert outcome.fields == ("preferred_calculation",)
     assert all(
         not candidate.selected
         for candidate in outcome.resolution_attempts[0].candidates
+    )
+
+
+def test_forbidden_fallback_does_not_hide_an_unsatisfied_required_constraint() -> None:
+    registry = _registry_with_alternative()
+    preference = ResolutionConstraint(
+        constraint_id="preferred_calculation",
+        scope=ResolutionScope(capability=_simple_capability(registry).ref),
+        dimension=PreferenceDimension.IMPLEMENTATION,
+        mode=PreferenceMode.PREFERRED,
+        targets=("dq_native.simple_return",),
+        asserted_origin=PreferenceOrigin.USER_EXPLICIT,
+        fallback=FallbackBehavior.FORBIDDEN,
+    )
+    required = _required_backend(registry)
+    constraints = ResolutionConstraintSet(constraints=(preference, required))
+
+    outcome = compile_plan(
+        _proposal(constraints),
+        registry=registry,
+        policy=_policy_for_all(registry),
+        availability=_availability_for_all(
+            registry,
+            unavailable=frozenset({"dq_native.simple_return"}),
+        ),
+        origin_receipts=_receipts(preference, required),
+        expected_origin_session_binding=HASH,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "required_choice_unavailable"
+    candidates = {
+        item.implementation.id: item
+        for item in outcome.resolution_attempts[0].candidates
+    }
+    assert candidates["dq_native.simple_return"].rejection_reasons == (
+        "unavailable",
+    )
+    assert candidates["fixture.simple_return"].rejection_reasons == (
+        "user_constraint",
     )
 
 

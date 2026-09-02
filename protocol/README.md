@@ -176,8 +176,9 @@ preferred, forbidden, allowed-set, and automatic modes.
 Preferred fallback is permitted only when the original constraint explicitly allows it. Required
 choices fail rather than substitute. A user-explicit or user-profile origin needs a separate
 host-recognized receipt bound to the exact constraint and trusted session; an agent proposal cannot
-mint one. Financial proposal values reject executable, connection, URL, SQL, import, and
-secret-bearing material.
+mint one. An absent exact receipt can request confirmation, but a supplied receipt outside that
+session, issuer, or exact-origin boundary is refused. Financial proposal values reject executable,
+connection, URL, SQL, import, and secret-bearing material.
 
 The compiler binds only relevant policy, availability, and candidate facts, preserving deterministic
 identity when unrelated registry records are added. The compiled plan records every considered
