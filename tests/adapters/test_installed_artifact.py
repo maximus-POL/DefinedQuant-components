@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import py_compile
 import shutil
 import subprocess
 import sys
@@ -231,6 +234,88 @@ def test_verifier_attests_an_isolated_built_wheel_without_importing_adapter_code
             installed=installed,
             adapter=adapter,
             artifact=implementation.artifact,
+        )
+
+
+def test_verifier_ignores_installer_generated_bytecode_record_members(
+    built_adapter_wheel: Path,
+    tmp_path: Path,
+) -> None:
+    extracted = _extract_distribution(built_adapter_wheel, tmp_path)
+    source = extracted.root / "defined_quant_adapter_dq_native/__init__.py"
+    bytecode_result = py_compile.compile(str(source), doraise=True)
+    assert bytecode_result is not None
+    bytecode = Path(bytecode_result)
+    assert bytecode.parent.name == "__pycache__"
+    assert bytecode.suffix == ".pyc"
+    assert bytecode.is_relative_to(extracted.root)
+
+    dist_info = tuple(extracted.root.glob("*.dist-info"))
+    assert len(dist_info) == 1
+    record = dist_info[0] / "RECORD"
+    record.write_text(
+        record.read_text(encoding="utf-8")
+        + f"{bytecode.relative_to(extracted.root).as_posix()},,\n",
+        encoding="utf-8",
+    )
+    distribution = metadata.PathDistribution(dist_info[0])
+    files = distribution.files
+    assert files is not None
+    assert bytecode.relative_to(extracted.root).as_posix() in {
+        item.as_posix() for item in files
+    }
+    installed = discover_installed_adapters(distributions=(distribution,))
+
+    with _adapter_imports_forbidden():
+        attestation = verify_installed_artifact(
+            installed=installed,
+            adapter=_adapter(),
+            artifact=_implementation().artifact,
+            expected_manifest=_manifest(),
+        )
+
+    assert isinstance(attestation, ArtifactAttestation)
+
+    with _adapter_imports_forbidden():
+        reverify_installed_artifact(
+            attestation=attestation,
+            installed=installed,
+            adapter=_adapter(),
+            artifact=_implementation().artifact,
+        )
+
+
+def test_verifier_refuses_wheel_declared_cache_bytecode(
+    built_adapter_wheel: Path,
+    tmp_path: Path,
+) -> None:
+    extracted = _extract_distribution(built_adapter_wheel, tmp_path)
+    source = extracted.root / "defined_quant_adapter_dq_native/__init__.py"
+    bytecode_result = py_compile.compile(str(source), doraise=True)
+    assert bytecode_result is not None
+    bytecode = Path(bytecode_result)
+    relative_bytecode = bytecode.relative_to(extracted.root).as_posix()
+    encoded_digest = base64.urlsafe_b64encode(
+        hashlib.sha256(bytecode.read_bytes()).digest()
+    ).rstrip(b"=").decode("ascii")
+
+    dist_info = tuple(extracted.root.glob("*.dist-info"))
+    assert len(dist_info) == 1
+    record = dist_info[0] / "RECORD"
+    record.write_text(
+        record.read_text(encoding="utf-8")
+        + f"{relative_bytecode},sha256={encoded_digest},{bytecode.stat().st_size}\n",
+        encoding="utf-8",
+    )
+    distribution = metadata.PathDistribution(dist_info[0])
+    installed = discover_installed_adapters(distributions=(distribution,))
+
+    with _adapter_imports_forbidden(), pytest.raises(ArtifactVerificationError):
+        verify_installed_artifact(
+            installed=installed,
+            adapter=_adapter(),
+            artifact=_implementation().artifact,
+            expected_manifest=_manifest(),
         )
 
 

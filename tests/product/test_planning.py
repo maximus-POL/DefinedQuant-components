@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 from defined_quant.planning import compile_plan
 from defined_quant.registry import ProtocolRegistry, load_registry
 from defined_quant_protocol import (
@@ -523,6 +524,58 @@ def test_preferred_implementation_falls_back_only_when_explicitly_permitted() ->
     assert outcome.steps[0].resolution.fallback_used is True
     assert outcome.steps[0].resolution.requested_targets_not_selected == (
         "dq_native.simple_return",
+    )
+    assert outcome.steps[0].resolution.explanation_code.value == "preferred_fallback"
+
+
+@pytest.mark.parametrize(
+    ("fallback", "targets"),
+    (
+        (
+            FallbackBehavior.WITHIN_PREFERENCES,
+            ("dq_native.simple_return@1.0.0", "fixture.simple_return@1.0.0"),
+        ),
+        (
+            FallbackBehavior.ANY_POLICY_ELIGIBLE,
+            ("dq_native.simple_return@1.0.0",),
+        ),
+    ),
+)
+def test_versioned_preference_fallback_records_the_unselected_exact_target(
+    fallback: FallbackBehavior,
+    targets: tuple[str, ...],
+) -> None:
+    registry = _registry_with_alternative()
+    capability = _simple_capability(registry)
+    preference = ResolutionConstraint(
+        constraint_id="preferred_calculation",
+        scope=ResolutionScope(capability=capability.ref),
+        dimension=PreferenceDimension.IMPLEMENTATION,
+        mode=PreferenceMode.PREFERRED,
+        targets=targets,
+        asserted_origin=PreferenceOrigin.USER_EXPLICIT,
+        fallback=fallback,
+    )
+
+    outcome = compile_plan(
+        _proposal(ResolutionConstraintSet(constraints=(preference,))),
+        registry=registry,
+        policy=_policy_for_all(registry),
+        availability=_availability_for_all(
+            registry,
+            unavailable=frozenset({"dq_native.simple_return"}),
+        ),
+        origin_receipts=_receipts(preference),
+        expected_origin_session_binding=HASH,
+        trusted_origin_issuers=(HOST,),
+    )
+
+    assert isinstance(outcome, CompiledPlan)
+    assert outcome.steps[0].implementation.id == "fixture.simple_return"
+    assert outcome.steps[0].resolution.fallback_permitted is True
+    assert outcome.steps[0].resolution.fallback_used is True
+    assert outcome.steps[0].resolution.requested_targets_not_selected == (
+        "dq_native.simple_return@1.0.0",
     )
     assert outcome.steps[0].resolution.explanation_code.value == "preferred_fallback"
 

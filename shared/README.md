@@ -21,8 +21,9 @@ component path:
 - `adapter_discovery.py` reads installed distribution and entry-point metadata without loading an
   entry point.
 - `adapter_artifacts.py` recomputes canonical installed-distribution manifests from package
-  metadata, declared entry point, and resource bytes and emits an attestation only after an exact
-  artifact match.
+  metadata, declared entry point, and wheel-declared source/resource bytes and emits an attestation
+  only after an exact artifact match. Installer-generated `__pycache__` bytecode is derived local
+  state and is not part of the source-resource manifest.
 - `adapter_catalog.py` builds explicit availability facts and gates exact adapter invocation on the
   compiled Implementation, registry Adapter, policy admission, current availability, and artifact
   attestation. Installation by itself never grants trust.

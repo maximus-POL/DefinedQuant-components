@@ -56,6 +56,7 @@ _SEMVER_RE = re.compile(
     r"(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
 )
+_ResolutionTarget: TypeAlias = Annotated[str, Field(min_length=1, max_length=320)]
 _FORBIDDEN_PROPOSAL_TOKENS = frozenset(
     {
         "api",
@@ -94,6 +95,13 @@ _FORBIDDEN_STRING_PATTERNS = tuple(
         r"\bAKIA[0-9A-Z]{16}\b",
     )
 )
+
+
+def _is_registry_target_reference(value: str) -> bool:
+    identifier, separator, version = value.partition("@")
+    return _REGISTRY_ID_RE.fullmatch(identifier) is not None and (
+        not separator or _SEMVER_RE.fullmatch(version) is not None
+    )
 
 
 class _ClosedModel(BaseModel):
@@ -274,7 +282,7 @@ class ResolutionConstraint(_ClosedModel):
     dimension: PreferenceDimension
     backend_role: BackendRole | None = None
     mode: PreferenceMode
-    targets: tuple[Annotated[str, Field(min_length=1, max_length=320)], ...] = ()
+    targets: tuple[_ResolutionTarget, ...] = ()
     asserted_origin: PreferenceOrigin
     fallback: FallbackBehavior = FallbackBehavior.FORBIDDEN
     origin_receipt: PreferenceOriginReceipt | None = None
@@ -329,14 +337,10 @@ class ResolutionConstraint(_ClosedModel):
             )
 
         if self.dimension == PreferenceDimension.IMPLEMENTATION:
-            for target in self.targets:
-                identifier, separator, version = target.partition("@")
-                if _REGISTRY_ID_RE.fullmatch(identifier) is None or (
-                    separator and _SEMVER_RE.fullmatch(version) is None
-                ):
-                    raise ValueError(
-                        "implementation targets must be a registry ID or ID@semantic-version"
-                    )
+            if any(not _is_registry_target_reference(target) for target in self.targets):
+                raise ValueError(
+                    "implementation targets must be a registry ID or ID@semantic-version"
+                )
         elif self.dimension in {
             PreferenceDimension.BACKEND,
             PreferenceDimension.ADAPTER_FAMILY,
@@ -869,7 +873,7 @@ class ResolutionDecision(_ClosedModel):
     selected_locality: RuntimeLocality
     fallback_permitted: bool
     fallback_used: bool
-    requested_targets_not_selected: tuple[RegistryId, ...] = ()
+    requested_targets_not_selected: tuple[_ResolutionTarget, ...] = ()
     explanation_code: ResolutionExplanationCode
     explanation: RegistryText
     runtime_fallback_allowed: Literal[False] = False
@@ -920,6 +924,13 @@ class ResolutionDecision(_ClosedModel):
             raise ValueError("fallback cannot be used without explicit permission")
         if self.fallback_used != bool(self.requested_targets_not_selected):
             raise ValueError("fallback disclosure must identify unselected requested targets")
+        if any(
+            not _is_registry_target_reference(item)
+            for item in self.requested_targets_not_selected
+        ):
+            raise ValueError(
+                "unselected requested targets must be registry IDs or ID@semantic-version"
+            )
         _unique(
             self.requested_targets_not_selected,
             key=lambda item: item,

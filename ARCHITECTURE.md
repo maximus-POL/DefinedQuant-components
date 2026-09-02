@@ -350,8 +350,10 @@ not change a plan identity.
 
 Adapter discovery reads installed distribution and entry-point metadata only; it never calls
 `EntryPoint.load`. The host recomputes a canonical manifest from installed distribution metadata,
-the declared entry point, and installed package resource bytes. An `ArtifactAttestation` is issued
-only when that manifest matches the registry's exact distribution, version, and artifact hash.
+the declared entry point, and wheel-declared source/package resource bytes. Installer-generated
+`__pycache__` bytecode is derived local state outside that source-resource manifest. An
+`ArtifactAttestation` is issued only when the manifest matches the registry's exact distribution,
+version, and artifact hash.
 
 `TrustedAdapterCatalog` is host-constructed from explicit policy and attestations. Installation is
 not trust and does not make an implementation eligible. Immediately before one step is invoked, the

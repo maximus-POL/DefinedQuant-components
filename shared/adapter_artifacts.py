@@ -1,8 +1,9 @@
-"""Verification of exact installed adapter-distribution artifacts.
+"""Verification of exact installed adapter-distribution source artifacts.
 
-The verifier reads installed package metadata and resource bytes without importing adapter code.
-Only this module can construct :class:`ArtifactAttestation`; installation or a caller-provided
-claim is never sufficient.
+The verifier reads installed package metadata and wheel-declared source/resource bytes without
+importing adapter code. Installer-generated ``__pycache__`` bytecode is derived local state, not a
+source resource in the artifact manifest. Only this module can construct
+:class:`ArtifactAttestation`; installation or a caller-provided claim is never sufficient.
 """
 
 from __future__ import annotations
@@ -275,6 +276,8 @@ def _installed_members(distribution: Any) -> list[dict[str, str]]:
         if any(part.endswith(".dist-info") for part in parsed.parts):
             continue
         canonical = _validate_member_path(path)
+        if _is_installer_generated_cache_bytecode(parsed, raw):
+            continue
         if canonical in files:
             raise _fail("installed distribution resource paths are not unique")
         files[canonical] = raw
@@ -303,6 +306,17 @@ def _installed_members(distribution: Any) -> list[dict[str, str]]:
             raise _fail("installed distribution resource bytes cannot be verified") from exc
         members.append({"path": path, "sha256": digest})
     return members
+
+
+def _is_installer_generated_cache_bytecode(path: PurePosixPath, raw: Any) -> bool:
+    """Identify conventional bytecode rows added to RECORD by an installer."""
+
+    if path.parent.name != "__pycache__" or path.suffix != ".pyc":
+        return False
+    try:
+        return raw.hash is None and raw.size is None
+    except (AttributeError, TypeError):
+        return False
 
 
 def verify_installed_artifact(
