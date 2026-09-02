@@ -14,10 +14,7 @@ from defined_quant.method_registry import GovernedRegistry, project_component_in
 from defined_quant.plan_compiler import compile_plan
 from defined_quant.service import DefinedQuantService
 from defined_quant_protocol import (
-    AvailabilityReason,
     AvailabilitySnapshotV1,
-    AvailabilityStatus,
-    CapabilityKind,
     CapabilityResolutionRuleV1,
     CapabilitySpecV1,
     CompiledPlanV1,
@@ -26,7 +23,6 @@ from defined_quant_protocol import (
     ConstraintMeasure,
     ConstraintOperandV1,
     ConstraintOperator,
-    ConstraintSeverity,
     ConstraintSpecV1,
     ConventionSpecV1,
     DefaultSpecV1,
@@ -47,10 +43,16 @@ from defined_quant_protocol import (
     SemanticPort,
     TransportLocality,
     TransportMetadataV1,
-    TrustDimension,
     TrustedAdapterV1,
     canonical_hash,
     canonical_json_bytes,
+)
+from defined_quant_protocol.governance import (
+    AvailabilityReason,
+    AvailabilityStatus,
+    CapabilityKind,
+    ConstraintSeverity,
+    TrustDimension,
 )
 from pydantic import ValidationError
 
@@ -352,7 +354,7 @@ def test_revalidating_copy_preserves_unset_literal_fields_in_nested_constraints(
 
 def test_governed_plan_hash_vectors_are_fixed() -> None:
     fixture = json.loads(
-        (ROOT / "docs/local_mcp/governed_plan_hash_vectors.v1.json").read_text(encoding="utf-8")
+        (ROOT / "docs/local_mcp/governed_plan_hash_vectors.json").read_text(encoding="utf-8")
     )
     context = _context()
     plan = _compile(context)
@@ -846,7 +848,7 @@ def test_production_simple_return_vertical_slice_and_subject_hash_compatibility(
     assert subject_hash("dq.market_data.simple_return") == SIMPLE_RETURN_SUBJECT
     service = DefinedQuantService()
     try:
-        plan = service.compile_plan(
+        plan = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.simple_return",
                 method_version="0.3.4",
@@ -876,7 +878,7 @@ def test_production_datetime_inputs_require_valid_aware_rfc3339_values(
 ) -> None:
     service = DefinedQuantService()
     try:
-        outcome = service.compile_plan(
+        outcome = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.simple_return",
                 method_version="0.3.4",
@@ -894,7 +896,7 @@ def test_production_datetime_inputs_require_valid_aware_rfc3339_values(
 def test_timestamp_ordering_is_evaluated_by_instant_not_lexical_text() -> None:
     service = DefinedQuantService()
     try:
-        outcome = service.compile_plan(
+        outcome = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.simple_return",
                 method_version="0.3.4",
@@ -917,7 +919,7 @@ def test_timestamp_ordering_is_evaluated_by_instant_not_lexical_text() -> None:
 def test_scalar_all_finite_constraints_use_the_canonical_evaluator() -> None:
     service = DefinedQuantService()
     try:
-        volatility = service.compile_plan(
+        volatility = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.volatility.historical_volatility",
                 method_version="0.1.2",
@@ -925,7 +927,7 @@ def test_scalar_all_finite_constraints_use_the_canonical_evaluator() -> None:
                 conventions={"annualization_factor": 252.0, "return_kind": "log"},
             )
         )
-        rebased = service.compile_plan(
+        rebased = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.rebased_price_index",
                 method_version="0.1.2",
@@ -946,7 +948,7 @@ def test_scalar_all_finite_constraints_use_the_canonical_evaluator() -> None:
 def test_service_unknown_method_and_version_return_typed_refusals() -> None:
     service = DefinedQuantService()
     try:
-        unknown = service.compile_plan(
+        unknown = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.not_installed",
                 method_version="1.0.0",
@@ -954,7 +956,7 @@ def test_service_unknown_method_and_version_return_typed_refusals() -> None:
                 conventions={},
             )
         )
-        wrong_version = service.compile_plan(
+        wrong_version = service.compile_component_plan(
             PlanProposalV1(
                 method_id="dq.market_data.simple_return",
                 method_version="9.9.9",
@@ -982,7 +984,7 @@ def test_injected_registry_requires_an_explicit_policy() -> None:
         governed_availability=context["availability"],
     )
     try:
-        outcome = service.compile_plan(context["proposal"])
+        outcome = service.compile_component_plan(context["proposal"])
     finally:
         service.close()
     assert isinstance(outcome, PlanRefusalV1)

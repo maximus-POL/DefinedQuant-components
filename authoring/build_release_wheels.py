@@ -1,4 +1,4 @@
-"""Build the one core wheel and one MCP wheel consumed by every CI platform."""
+"""Build the exact core, DQ-native adapter, and MCP wheels consumed by CI."""
 
 from __future__ import annotations
 
@@ -28,6 +28,17 @@ def main() -> int:
     if uv is None:
         raise SystemExit("uv is unavailable")
     _run([uv, "build", "--wheel", "--out-dir", os.fspath(wheel_directory)])
+    _run(
+        [
+            uv,
+            "build",
+            "--project",
+            "adapters/dq_native",
+            "--wheel",
+            "--out-dir",
+            os.fspath(wheel_directory),
+        ]
+    )
     _run(
         [
             uv,

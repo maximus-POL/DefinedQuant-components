@@ -1,0 +1,16 @@
+schema_version: 1
+method: {id: dq.performance.drawdown, version: 1.0.0}
+examples:
+  - id: recovered_episode
+    title: Thirty-percent drawdown with later recovery
+    input:
+      prices: [100.0, 120.0, 90.0, 84.0, 108.0, 120.0]
+      price_kind: adjusted
+      timestamps: null
+      declared_frequency: null
+    conformance_case:
+      capability: {id: performance.drawdown, version: 1.0.0}
+      id: recovered_episode_known_answer
+    interpretation: >-
+      The deepest drawdown is -30% from observation 1 to observation 3, with recovery at
+      observation 5. No elapsed-time duration is inferred without timestamps and a calendar.

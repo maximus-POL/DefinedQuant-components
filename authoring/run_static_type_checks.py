@@ -26,8 +26,11 @@ def main() -> int:
         raise SystemExit("DQ_WHEEL_DIRECTORY is required")
     wheel_directory = Path(raw_directory).resolve()
     core_wheel = wheel_directory / "defined_quant-0.1.3-py3-none-any.whl"
+    adapter_wheel = (
+        wheel_directory / "defined_quant_adapter_dq_native-1.0.0-py3-none-any.whl"
+    )
     mcp_wheel = wheel_directory / "defined_quant_mcp-0.1.0a1-py3-none-any.whl"
-    if not core_wheel.is_file() or not mcp_wheel.is_file():
+    if not core_wheel.is_file() or not adapter_wheel.is_file() or not mcp_wheel.is_file():
         raise SystemExit("exact release wheels are missing")
     uv = shutil.which("uv")
     if uv is None:
@@ -54,12 +57,14 @@ def main() -> int:
                 "--no-deps",
                 "--reinstall",
                 os.fspath(core_wheel),
+                os.fspath(adapter_wheel),
                 os.fspath(mcp_wheel),
             ]
         )
     authoring_modules = [os.fspath(path) for path in sorted((ROOT / "authoring").glob("*.py"))]
     _run([sys.executable, "-m", "mypy", "shared", "categories", *authoring_modules])
     _run([sys.executable, "-m", "mypy", "-p", "defined_quant_protocol"])
+    _run([sys.executable, "-m", "mypy", "-p", "defined_quant_adapter_dq_native"])
     _run(
         [
             os.fspath(mcp_python),

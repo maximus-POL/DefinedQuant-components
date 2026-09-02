@@ -1,0 +1,28 @@
+schema_version: 1
+id: evidence.method.dq.volatility.rolling_historical_volatility
+version: 1.0.0
+subject: {kind: method, id: dq.volatility.rolling_historical_volatility, version: 1.0.0}
+status:
+  label: Experimental Technical Preview
+  lifecycle: draft
+evidence:
+  - id: composed_worked_example
+    kind: author_derivation
+    description: The worked example references rolling-estimator and series-annualization conformance.
+    references:
+      - capability: {id: statistics.rolling_sample_standard_deviation, version: 1.0.0}
+        case: two_windows_known_answer
+      - capability: {id: statistics.square_root_annualize_series, version: 1.0.0}
+        case: factor_twelve_known_answer
+  - id: scope_review
+    kind: authored_scope_review
+    description: Window, factor, overlap, alignment, and non-forecasting boundaries are explicit.
+review:
+  engineering: author_reviewed
+  domain: none
+  independent_reproduction: none
+non_claims:
+  - No independent domain review has been performed.
+  - Draft lifecycle and authored evidence do not establish production readiness.
+  - Method evidence does not authenticate a dataset, provider, adapter, or execution.
+  - Rolling historical volatility is not a forecast or investment recommendation.

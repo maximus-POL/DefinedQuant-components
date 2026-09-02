@@ -8,10 +8,11 @@ summary: Deterministic transformations of explicitly supplied market observation
 
 Deterministic transformations of explicitly supplied market observations.
 
-## Components
+## Taxonomy scope
 
-Each component is a direct child folder. The folder list is the browseable source of truth; the
-generated catalog supplies search and website indexing without a second hand-maintained list.
+Methods in this category transform explicitly supplied market observations. They do not fetch or
+silently repair market data. Input provenance, ordering, adjustment policies, and calendar rules
+remain explicit.
 
-Components in this category do not fetch or silently repair market data. Input provenance,
-ordering, adjustment policies, and calendar rules remain explicit.
+The folders below are compatibility copies of the migrated DQ-native calculations. Canonical
+Method and Capability records live under `registry/`; the folder list is not a source of truth.

@@ -1,0 +1,226 @@
+schema_version: 2
+id: dq.market_data.log_return
+version: 1.0.0
+title: Log Return
+lifecycle: draft
+summary: >-
+  Experimental Technical Preview method for computing decimal log returns between successive
+  caller-supplied positive price observations.
+category: market_data
+discovery:
+  slug: log_return
+  website_slug: log-return
+  aliases:
+    - continuously compounded return
+    - geometric log return
+    - log price change
+    - logarithmic return
+    - period log return
+  intents:
+    - calculate_log_returns
+    - measure_log_price_change
+    - transform_prices_to_log_returns
+  input_concepts:
+    - observation_frequency
+    - observation_timestamps
+    - price_adjustment_kind
+    - price_series
+  output_concepts:
+    - log_return_series
+    - periodic_return_series
+    - return_timestamps
+  tags:
+    - experimental_technical_preview
+    - log_returns
+    - market_data
+    - time_series
+  use_when:
+    - The caller explicitly needs decimal log returns between successive positive price observations.
+    - The caller can state whether the supplied prices are adjusted or unadjusted.
+    - Caller order should be preserved exactly rather than repaired or inferred.
+  do_not_use_when:
+    - The caller asks for returns without choosing simple or log returns; clarify the convention first.
+    - The adjusted or unadjusted price convention is unknown.
+    - The request requires simple returns, total-return construction, annualization, or risk estimation.
+    - Observations need sorting, reversal, imputation, currency conversion, or corporate-action adjustment.
+  unsupported_scope:
+    - Fetching, cleaning, validating, sorting, reversing, or imputing market observations.
+    - Dividend reinvestment or total-return construction.
+    - Currency conversion or corporate-action adjustment.
+    - Exchange-calendar, holiday, or trading-session inference.
+    - Calendar-aware gap classification without an explicit future gap-policy contract.
+formula: rₜ = ln(Pₜ / Pₜ₋₁)
+methodology:
+  - Calculate one adjacent-period natural-log return for each ordered positive price pair.
+  - Preserve caller order; never sort, reverse, fill, fetch, or adjust observations.
+  - Align each return to the ending timestamp when timestamps are supplied.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - price_kind
+    - prices
+  properties:
+    prices:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: input
+        field: prices
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      description: Caller-declared upstream price-adjustment convention.
+      x-defined-quant-port:
+        direction: input
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    timestamps:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: input
+        field: timestamps
+    declared_frequency:
+      anyOf:
+        - type: string
+          enum: [intraday, daily, weekly, monthly, quarterly, annual, irregular]
+        - type: 'null'
+      description: Optional caller declaration retained as disclosure only.
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - declared_frequency
+    - gap_check
+    - ordering_status
+    - price_kind
+    - return_kind
+    - return_timestamps
+    - returns
+  properties:
+    declared_frequency:
+      anyOf:
+        - type: string
+          enum: [intraday, daily, weekly, monthly, quarterly, annual, irregular]
+        - type: 'null'
+    gap_check: {const: not_assessed}
+    ordering_status:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: output
+        field: ordering_status
+    price_kind:
+      type: string
+      enum: [adjusted, unadjusted]
+      x-defined-quant-port:
+        direction: output
+        concept: price_adjustment_kind
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: adjusted_or_unadjusted_price_kind
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    return_kind:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: output
+        field: return_kind
+    return_timestamps:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: output
+        field: return_timestamps
+    returns:
+      x-defined-quant-capability-field:
+        capability: {id: returns.log, version: 1.0.0}
+        direction: output
+        field: returns
+assumptions:
+  - Successive observations refer to the same instrument and price unit.
+  - Caller order is meaningful when timestamps are absent.
+  - Adjusted-price semantics are defined upstream and accepted as supplied.
+limitations:
+  - The method does not fetch, clean, sort, reverse, or validate market-data provenance.
+  - It does not construct total returns, reinvest dividends, convert currencies, or adjust corporate actions.
+  - Frequency is never inferred and calendar-aware gaps are not assessed.
+interpretation: >-
+  Report decimal log returns, the adjusted or unadjusted price convention, ordering status,
+  unassessed gap status, warnings, and run-record provenance. Do not describe a log return as a
+  simple percentage return or claim that the method validated the supplied data source.
+constraints:
+  - id: frequency_without_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: declared_frequency}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps}
+          op: eq
+          right: {value: null}
+    message: A declared frequency is meaningful only with aligned timestamps.
+  - id: ordering_unverified
+    target: input
+    severity: warning
+    expression:
+      left: {field: timestamps}
+      op: eq
+      right: {value: null}
+    message: No timestamps were supplied, so chronology could not be verified.
+  - id: unadjusted_price_interpretation
+    target: input
+    severity: warning
+    expression:
+      left: {field: price_kind}
+      op: eq
+      right: {value: unadjusted}
+    message: Unadjusted price changes exclude reinvested distributions and are not total returns.
+conventions:
+  - id: price_kind
+    field: price_kind
+    question: Are these adjusted or unadjusted prices?
+    materiality: The convention changes economic interpretation even though the arithmetic is identical.
+    required_from_user: true
+    allowed_values: [adjusted, unadjusted]
+defaults:
+  - field: declared_frequency
+    value: null
+    rationale: Frequency is never inferred.
+  - field: timestamps
+    value: null
+    rationale: Timestamps are optional; absence is disclosed as unverified chronology.
+recipe:
+  steps:
+    - step_id: calculate
+      capability: {id: returns.log, version: 1.0.0}
+      depends_on: []
+      input_bindings:
+        - target_field: prices
+          source: {kind: method_input, field: prices}
+        - target_field: timestamps
+          source: {kind: method_input, field: timestamps}
+  result_bindings:
+    - target_field: declared_frequency
+      source: {kind: method_input, field: declared_frequency}
+    - target_field: gap_check
+      source: {kind: authored_constant, value: not_assessed}
+    - target_field: ordering_status
+      source: {kind: step_output, step_id: calculate, field: ordering_status}
+    - target_field: price_kind
+      source: {kind: method_input, field: price_kind}
+    - target_field: return_kind
+      source: {kind: step_output, step_id: calculate, field: return_kind}
+    - target_field: return_timestamps
+      source: {kind: step_output, step_id: calculate, field: return_timestamps}
+    - target_field: returns
+      source: {kind: step_output, step_id: calculate, field: returns}

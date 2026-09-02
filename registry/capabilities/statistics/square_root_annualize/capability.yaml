@@ -1,0 +1,69 @@
+schema_version: 2
+id: statistics.square_root_annualize
+version: 1.0.0
+title: Square-root annualization
+kind: transformation
+summary: Scales one non-negative periodic volatility by the square root of an explicit factor.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualization_factor
+    - periodic_value
+  properties:
+    annualization_factor:
+      type: number
+      exclusiveMinimum: 0.0
+      x-defined-quant-port:
+        direction: input
+        concept: annualization_factor
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: explicit_periods_per_year_factor
+        ordering: not_applicable
+        frequency: annual
+        provenance_requirement: not_required
+    periodic_value:
+      type: number
+      minimum: 0.0
+      x-defined-quant-port:
+        direction: input
+        concept: periodic_volatility
+        unit: volatility
+        shape: scalar
+        cardinality: exactly_one
+        convention: sample_standard_deviation_n_minus_1
+        ordering: not_applicable
+        frequency: inherited
+        provenance_requirement: not_required
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualized_value
+  properties:
+    annualized_value:
+      type: number
+      minimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: annualized_volatility
+        unit: volatility
+        shape: scalar
+        cardinality: exactly_one
+        convention: sample_standard_deviation_n_minus_1_square_root_annualization
+        ordering: not_applicable
+        frequency: annual
+        provenance_requirement: not_required
+constraints:
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: annualized_value, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Finite inputs produced an unrepresentable annualized value.

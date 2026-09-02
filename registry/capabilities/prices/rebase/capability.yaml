@@ -1,0 +1,166 @@
+schema_version: 2
+id: prices.rebase
+version: 1.0.0
+title: Explicit-base price index transformation
+kind: transformation
+summary: Normalizes an ordered positive price series to an explicit base observation and level.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - base_index
+    - base_value
+    - prices
+  properties:
+    base_index:
+      type: integer
+      minimum: 0
+    base_value:
+      type: number
+      exclusiveMinimum: 0.0
+    prices:
+      type: array
+      minItems: 1
+      items:
+        type: number
+      x-defined-quant-port:
+        direction: input
+        concept: price_series
+        unit: price
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: ordered_positive_prices
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+    timestamps:
+      anyOf:
+        - type: array
+          minItems: 1
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - base_index
+    - base_value
+    - index_timestamps
+    - index_values
+    - ordering_status
+  properties:
+    base_index:
+      type: integer
+      minimum: 0
+    base_value:
+      type: number
+      exclusiveMinimum: 0.0
+    index_timestamps:
+      anyOf:
+        - type: array
+          minItems: 1
+          items:
+            type: string
+            format: date-time
+        - type: 'null'
+    index_values:
+      type: array
+      minItems: 1
+      items:
+        type: number
+        exclusiveMinimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: rebased_price_index_series
+        unit: unitless
+        shape: ordered_series
+        cardinality: one_or_more
+        convention: explicit_base_observation_rebasing
+        ordering: preserve_source_order
+        frequency: inherited
+        provenance_requirement: not_required
+    ordering_status:
+      type: string
+      enum:
+        - verified
+        - unverified
+constraints:
+  - id: base_index_out_of_range
+    target: input
+    severity: blocking
+    expression:
+      left: {field: base_index}
+      op: ge
+      right: {field: prices, measure: count}
+    message: The base index must identify an observation in prices.
+  - id: duplicate_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: true}
+    message: Duplicate timestamps are not accepted.
+  - id: non_finite_prices
+    target: input
+    severity: blocking
+    expression:
+      left: {field: prices, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Every price must be finite.
+  - id: non_finite_result
+    target: output
+    severity: blocking
+    expression:
+      left: {field: index_values, measure: all_finite}
+      op: eq
+      right: {value: false}
+    message: Finite positive inputs produced an unrepresentable rebased value.
+  - id: non_increasing_timestamps
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: has_duplicates}
+          op: eq
+          right: {value: false}
+        - left: {field: timestamps, measure: is_strictly_increasing}
+          op: eq
+          right: {value: false}
+    message: Timestamps must be strictly increasing and are never silently reordered.
+  - id: non_positive_prices
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: prices, measure: all_finite}
+          op: eq
+          right: {value: true}
+        - left: {field: prices, measure: min}
+          op: le
+          right: {value: 0}
+    message: Prices must be strictly positive.
+  - id: timestamp_length_mismatch
+    target: input
+    severity: blocking
+    expression:
+      all:
+        - left: {field: timestamps}
+          op: ne
+          right: {value: null}
+        - left: {field: timestamps, measure: count}
+          op: ne
+          right: {field: prices, measure: count}
+    message: Timestamps and prices must align one-to-one.

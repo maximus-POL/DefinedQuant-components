@@ -25,8 +25,8 @@ from defined_quant.service import DefinedQuantService
 from defined_quant.types import ComponentContractError, ComponentNotFound
 
 ROOT = Path(__file__).resolve().parents[2]
-EVALUATION_CASES = ROOT / "docs" / "local_mcp" / "evaluation_cases.v1.json"
-PHASE1_DISCOVERY = ROOT / "authoring" / "tests" / "fixtures" / "discovery_phase1.v1.json"
+EVALUATION_CASES = ROOT / "docs" / "local_mcp" / "evaluation_cases.json"
+PHASE1_DISCOVERY = ROOT / "authoring" / "tests" / "fixtures" / "discovery.json"
 
 
 def _record(

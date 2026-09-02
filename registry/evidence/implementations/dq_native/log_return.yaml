@@ -1,0 +1,21 @@
+schema_version: 1
+id: evidence.implementation.dq_native.log_return
+version: 1.0.0
+subject: {kind: implementation, id: dq_native.log_return, version: 1.0.0}
+status: {label: Experimental Technical Preview}
+artifact:
+  kind: installed_distribution_manifest
+  distribution: defined-quant-adapter-dq-native
+  version: 1.0.0
+  manifest: registry/artifacts/defined_quant_adapter_dq_native/manifest.json
+  hash: {algorithm: sha256, canonicalization: defined_quant_canonical_json_v1, domain: registry.artifact.installed_distribution_manifest, value: 134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c}
+conformance:
+  capability: {id: returns.log, version: 1.0.0}
+  suite: registry/capabilities/returns/log/conformance.yaml
+  tests:
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_case
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_invariant
+evidence: [{id: deterministic_binary64_kernel, kind: source_and_test_review, description: Precision-preserving local binary64 log-return kernel without I/O.}]
+migration: {legacy_component: {id: dq.market_data.log_return, version: 0.1.2, subject_hash: 493607a20037200ef6330b7930fda38a58a8c009e571858839f42fdec23b92b4, meaning: Migration provenance only; the legacy hash is not a methods-first identity.}}
+review: {engineering: author_reviewed, capability_conformance: author_asserted, domain: none, independent_reproduction: none}
+non_claims: [Installation alone does not make this implementation eligible under host policy., This evidence does not authenticate input data or independently reproduce a run.]

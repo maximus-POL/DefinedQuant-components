@@ -1,10 +1,12 @@
 # Defined Quant protocols
 
-`defined_quant_protocol` 0.4.0 provides closed, typed interchange formats for generic component
-operations, semantic component ports, and atomic managed authorization. It is versioned
-independently from the component catalog and ships in the same Python distribution for now. The
-package depends only on Pydantic and the Python standard library; it does not import component
-implementations, discovery, renderers, or any host application.
+`defined_quant_protocol` 0.4.0 provides closed, typed interchange formats for canonical methods,
+capabilities, backends, adapters, implementations, resolution preferences, policy, availability,
+compiled plans, trusted-adapter invocation, immutable step/run records, and the legacy component
+and authorization surfaces. Record schema versions remain metadata; canonical methods-first files,
+functions, and classes use unsuffixed names. The package is versioned independently and ships in
+the core distribution for now. It depends only on Pydantic and the Python standard library and does
+not import implementations, discovery, renderers, provider SDKs, or any host application.
 
 ## Unmanaged component operations
 
@@ -51,8 +53,9 @@ collision-free tagged tree:
 Object entries are sorted lexicographically by the valid UTF-8 bytes of their keys. Unicode is not
 normalized, and lone surrogates are refused. Every number is encoded as 16 lowercase hexadecimal
 digits containing its IEEE-754 binary64 big-endian bytes. Safe integers and their equivalent float
-values therefore match; signed zero becomes positive zero. Non-finite values, integers outside
-`-(2^53-1)` through `2^53-1`, and integer-valued floats outside that range are refused.
+values therefore match; signed zero becomes positive zero. Non-finite values and Python integers
+outside `-(2^53-1)` through `2^53-1` are refused. Every finite float is accepted, including an
+integer-valued binary64 outside that range, because its exact floating-point bytes are retained.
 
 The tagged tree is serialized as compact JSON arrays with no whitespace. Strings escape quote and
 backslash as `\"` and `\\`; backspace, tab, line feed, form feed, and carriage return as `\b`,
@@ -99,7 +102,7 @@ subject hash and is not a substitute for port compatibility.
 
 Protocol 0.2.0 introduced the authorization-only foundation for one immutable, one-step
 `AnalysisPlan`. New plans use protocol 0.4.0 while protocol 0.2.0 and 0.3.0 plans remain readable.
-The packaged `simple_return_csv_v1` execution policy currently permits exactly this draft subject,
+The packaged `simple_return_csv` execution policy currently permits exactly this draft subject,
 with explicit draft opt-in:
 
 ```text
@@ -142,28 +145,64 @@ managed authorization revalidation recalculates all semantic roots. A shallow ne
 therefore requires revalidation and, if semantics changed, a new manual approval. Hosts should
 serialize and revalidate records at trust boundaries.
 
-## Governed plan compilation V1
+## Canonical methods-first registry
 
-`governance.py` adds an independent schema-v1 planning surface without changing protocol 0.4
-operation or authorization records. `MethodSpecV1` owns the financial contract and embedded
-backend-neutral recipe; `CapabilitySpecV1` describes typed abstract operations; and
-`ImplementationSpecV1` binds trusted adapters and transport metadata. A closed
-`PlanProposalV1` cannot name implementations, providers, executable code, SQL, URLs, credentials,
-imports, or arbitrary MCP tools.
+`registry.py` defines the unsuffixed `MethodSpec`, `CapabilitySpec`, `BackendSpec`, `AdapterSpec`,
+and `ImplementationSpec` records and their exact references. A Method owns financial meaning and a
+Recipe whose steps reference Capabilities only. A Capability owns one atomic closed interface and
+semantic ports. Backend, Adapter, and Implementation records carry operational and trust concerns
+without redefining methodology.
 
-The pure compiler receives the exact registry slice, `ResolutionPolicyV1`, and explicit
-`AvailabilitySnapshotV1`. It returns only `CompiledPlanV1`, `NeedsInformationV1`, or
-`PlanRefusalV1`. The compiled plan binds relevant candidate and availability facts, one immutable
-selected implementation per recipe step, resolution receipts, applied defaults, and policy. It
-has no runtime fallback and performs no calculation. The only positive claims are `PLAN
-VALIDATION PASSED` and `ELIGIBLE UNDER POLICY`; neither is a correctness, execution, data, or
-replay attestation.
+Backend kinds distinguish DQ-native runtimes, Python libraries, native libraries, data providers,
+analytics services, HTTP APIs, databases, and external MCP systems. Backend bindings are role-based,
+so a runtime library and a data provider are never flattened into one ambiguous provider field.
+Credentials and secret values do not appear in any registry record.
 
-Governance records recursively freeze nested JSON containers. Methods reconcile every optional
-input and JSON Schema default with one authored default, bind assumptions and limitations, and use
-exact schema plus semantic-port compatibility across recipe edges. Implementation eligibility uses
-separate trust dimensions; those dimensions are policy facts, not additional public success
-claims.
+Method and Capability contracts have separate hash domains. Backend, Adapter, and Implementation
+specifications also have separate identities. The Implementation is the sole owner of its exact
+installed-distribution artifact pin; the Adapter owns only its distribution and dispatch identity.
+Operational availability checks are derived from exact Backend boundaries plus any
+Implementation-specific dependency probes. Registry evidence references are scoped claims and
+never become provider authentication or execution attestations.
+
+## Resolution and compiled plans
+
+`resolution.py` defines `PlanProposal`, scoped `ResolutionConstraint` records,
+`OriginReceiptSet`, `ResolutionPolicy`, `AvailabilitySnapshot`, candidate decisions, exact compiled
+steps, `CompiledPlan`, and `PlanRecord`. The closed preference vocabulary covers implementation,
+backend, adapter family, backend kind, transport, locality, and network dimensions with required,
+preferred, forbidden, allowed-set, and automatic modes.
+
+Preferred fallback is permitted only when the original constraint explicitly allows it. Required
+choices fail rather than substitute. A user-explicit or user-profile origin needs a separate
+host-recognized receipt bound to the exact constraint and trusted session; an agent proposal cannot
+mint one. Financial proposal values reject executable, connection, URL, SQL, import, and
+secret-bearing material.
+
+The compiler binds only relevant policy, availability, and candidate facts, preserving deterministic
+identity when unrelated registry records are added. The compiled plan records every considered
+candidate, policy or availability refusal, exact selection, whether fallback was permitted and used,
+and a deterministic explanation. It has no runtime fallback.
+
+## Trusted execution records
+
+`execution.py` defines `PlanExecutionRequest`, `AdapterExecutionRequest`, success and sanitized
+failure results, canonical validation receipts, `StepRecord`, and complete `RunRecord`. Adapter
+requests carry the exact compiled Capability, Implementation, Adapter, backend bindings,
+availability, canonical inputs, and dependency steps. They contain no credential or arbitrary
+dispatch control.
+
+Each Step records exact inputs, input/output validation, the adapter request/result, provider
+interactions, warnings, artifacts, timestamps, and failure or success. A Run binds the Method,
+compiled Plan, datasets, ordered Steps, canonical Method output, Method-output validation, executor,
+warnings, and complete failure or success. A false success is structurally invalid. Provider
+authentication, entitlement, request ID, and response digest are runtime interaction facts; they
+cannot be claimed by the compiler.
+
+All seven bundled Methods execute through nine exact DQ-native Implementations and their trusted
+adapters. No production OpenBB, LSEG, statsmodels, QuantLib, database, HTTP, or external-MCP
+implementation is present. Canonical source filenames and function names are unsuffixed; protocol
+versions remain record metadata and cryptographic-domain data where compatibility requires them.
 
 The protocol source code is licensed under Apache-2.0 under the repository's `LICENSE` file. This
 README is documentation and remains licensed under CC BY 4.0 as specified by `LICENSE-CONTENT`.

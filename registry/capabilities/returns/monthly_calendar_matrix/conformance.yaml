@@ -1,0 +1,67 @@
+schema_version: 1
+capability:
+  id: returns.monthly_calendar_matrix
+  version: 1.0.0
+cases:
+  - id: cross_year_known_answer
+    kind: known_answer
+    description: Three simple returns align to their interval-end months across a year boundary.
+    input:
+      returns: [-0.2, 0.1, -0.1]
+      observation_months: [2022-11, 2022-12, 2023-01, 2023-02]
+    expected:
+      outcome: success
+      output:
+        monthly_returns: [-0.2, 0.1, -0.1]
+        return_months: [2022-12, 2023-01, 2023-02]
+        gap_check: verified_consecutive_months
+      tolerance: {relative: 0.0, absolute: 0.0}
+  - id: one_interval
+    kind: boundary
+    input:
+      returns: [0.1]
+      observation_months: [2023-01, 2023-02]
+    expected:
+      outcome: success
+      output:
+        monthly_returns: [0.1]
+        return_months: [2023-02]
+        gap_check: verified_consecutive_months
+      tolerance: {relative: 0.0, absolute: 0.0}
+  - id: missing_month
+    kind: invalid_input
+    input:
+      returns: [0.1]
+      observation_months: [2023-01, 2023-03]
+    expected: {outcome: failure, code: non_consecutive_months}
+  - id: duplicate_month
+    kind: invalid_input
+    input:
+      returns: [0.1]
+      observation_months: [2023-01, 2023-01]
+    expected: {outcome: failure, code: duplicate_months}
+  - id: reversed_months
+    kind: invalid_input
+    input:
+      returns: [0.1]
+      observation_months: [2023-02, 2023-01]
+    expected: {outcome: failure, code: non_increasing_months}
+  - id: malformed_month
+    kind: invalid_input
+    input:
+      returns: [0.1]
+      observation_months: [2023-00, 2023-01]
+    expected: {outcome: failure, code: invalid_month_labels}
+  - id: return_count_mismatch
+    kind: invalid_input
+    input:
+      returns: [0.1, 0.2]
+      observation_months: [2023-01, 2023-02]
+    expected: {outcome: failure, code: return_count_mismatch}
+invariants:
+  - id: values_preserved
+    statement: The transformation preserves every supplied simple return exactly and in order.
+  - id: interval_end_alignment
+    statement: Each output month is the ending observation month for the corresponding return.
+  - id: consecutive_calendar
+    statement: Successful output covers consecutive calendar months without gaps.

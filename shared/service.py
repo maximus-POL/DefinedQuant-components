@@ -2,15 +2,31 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import secrets
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from threading import Event, Lock
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Never
 
+from defined_quant.adapter_artifacts import (
+    ArtifactAttestation,
+    ArtifactVerificationError,
+    verify_installed_artifact,
+)
+from defined_quant.adapter_catalog import (
+    HostAvailabilityAssessment,
+    TrustedAdapterCatalog,
+    build_availability_snapshot,
+)
+from defined_quant.adapter_discovery import discover_installed_adapters
 from defined_quant.catalog import ComponentRecord
 from defined_quant.data_records import (
     DatasetOperationSourceV1,
@@ -34,19 +50,36 @@ from defined_quant.host_failures import (
     map_operation_failure,
 )
 from defined_quant.local_host_platform import local_host_platform
+from defined_quant.method_records import (
+    MethodRecordStoreError,
+    MethodRecordStoreErrorCode,
+)
 from defined_quant.method_registry import GovernedRegistry, project_component_inspection
+from defined_quant.method_service import MethodsRuntime
 from defined_quant.operation_records import (
     build_operation_record,
     reconciled_bundle_bytes,
 )
 from defined_quant.plan_compiler import compile_plan as compile_governed_plan
 from defined_quant.record_views import describe_dataset, get_operation, operation_summary
+from defined_quant.registry import (
+    MethodFilters,
+    MethodInspection,
+    MethodSearchResults,
+    Registry,
+    RegistryError,
+    load_registry,
+)
+from defined_quant.run_views import (
+    ArtifactChunk,
+    execution_summary,
+    get_artifact_chunk,
+    get_run_view,
+)
 from defined_quant.session_cas import SessionCas, StoredOperation
 from defined_quant.worker_runtime import WorkerController
 from defined_quant_protocol import (
-    AvailabilityReason,
     AvailabilitySnapshotV1,
-    AvailabilityStatus,
     CallerProvenance,
     CapabilityResolutionRuleV1,
     ComponentRef,
@@ -58,12 +91,41 @@ from defined_quant_protocol import (
     OperationResult,
     OperationSuccess,
     PlanProposalV1,
-    PlanRefusalCode,
     PlanRefusalV1,
     PolicyImplementationV1,
     ResolutionPolicyV1,
     SvgArtifactRequest,
-    TrustDimension,
+)
+from defined_quant_protocol.execution import RunRef
+from defined_quant_protocol.governance import (
+    AvailabilityReason,
+    AvailabilityStatus,
+    PlanRefusalCode,
+)
+from defined_quant_protocol.governance import (
+    TrustDimension as LegacyTrustDimension,
+)
+from defined_quant_protocol.registry import (
+    BackendKind,
+    DataEgress,
+    RuntimeIdentity,
+    derive_availability_requirements,
+)
+from defined_quant_protocol.registry import (
+    TrustDimension as RegistryTrustDimension,
+)
+from defined_quant_protocol.resolution import (
+    BackendRolePolicy,
+    CapabilityPolicyRule,
+    CompilationOutcome,
+    OriginReceiptSet,
+    PlanProposal,
+    PlanRecord,
+    PlanRef,
+    PolicyImplementation,
+    RequirementStatus,
+    ResolutionConstraintSet,
+    ResolutionPolicy,
 )
 from pydantic import ValidationError
 
@@ -77,6 +139,243 @@ class OperationArtifact:
     sha256: str
 
 
+LEGACY_COMPONENT_RUNTIME_REMOVAL_MILESTONE = (
+    "remove no later than 2026-12-31 or the first 0.2.0 release, whichever comes first"
+)
+MAX_METHOD_ARTIFACT_READ_BYTES = 8 * 1024 * 1024
+
+MethodArtifactReader = Callable[[str, str], OperationArtifact]
+
+
+def _runtime_identity() -> RuntimeIdentity:
+    """Bind local compiler/executor records to this installed service module."""
+
+    try:
+        version = importlib_metadata.version("defined-quant")
+    except importlib_metadata.PackageNotFoundError:
+        version = "0.1.3"
+    return RuntimeIdentity(
+        name="defined_quant_host",
+        version=version,
+        artifact_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    )
+
+
+def _local_methods_policy(registry: Registry) -> ResolutionPolicy:
+    """Create the explicit built-in policy for local DQ-native implementations only."""
+
+    protocol_registry = registry.as_protocol_registry()
+    backends = {item.ref.spec_hash: item for item in protocol_registry.backends}
+    adapters = {item.ref.spec_hash: item for item in protocol_registry.adapters}
+    rules: list[CapabilityPolicyRule] = []
+    for capability in protocol_registry.capabilities:
+        implementations = tuple(
+            item
+            for item in protocol_registry.implementations
+            if item.capability == capability.ref
+            and all(
+                backends[binding.backend.spec_hash].kind == BackendKind.DQ_NATIVE
+                for binding in item.backend_bindings
+            )
+            and adapters[item.adapter.spec_hash].family == "dq_native"
+        )
+        if not implementations:
+            continue
+        roles = sorted(
+            {binding.role for item in implementations for binding in item.backend_bindings},
+            key=lambda item: item.value,
+        )
+        backend_rules: list[BackendRolePolicy] = []
+        for role in roles:
+            bindings = tuple(
+                binding
+                for item in implementations
+                for binding in item.backend_bindings
+                if binding.role == role
+            )
+            selected_backends = tuple(
+                sorted(
+                    {binding.backend.spec_hash: binding.backend for binding in bindings}.values(),
+                    key=lambda item: (item.id, item.version, item.spec_hash),
+                )
+            )
+            selected_specs = tuple(backends[item.spec_hash] for item in selected_backends)
+            backend_rules.append(
+                BackendRolePolicy(
+                    role=role,
+                    allowed_backends=selected_backends,
+                    allowed_kinds=tuple(
+                        sorted({item.kind for item in selected_specs}, key=lambda item: item.value)
+                    ),
+                    allowed_transports=tuple(
+                        sorted({item.transport for item in bindings}, key=lambda item: item.value)
+                    ),
+                    allowed_localities=tuple(
+                        sorted({item.locality for item in bindings}, key=lambda item: item.value)
+                    ),
+                    network_allowed=False,
+                    allowed_data_egress=(DataEgress.NONE,),
+                )
+            )
+        rules.append(
+            CapabilityPolicyRule(
+                capability=capability.ref,
+                implementations=tuple(
+                    PolicyImplementation(implementation=item.ref, priority=100)
+                    for item in sorted(
+                        implementations,
+                        key=lambda item: (
+                            item.ref.id,
+                            item.ref.version,
+                            item.ref.spec_hash,
+                        ),
+                    )
+                ),
+                backend_roles=tuple(backend_rules),
+                required_trust_dimensions=tuple(
+                    sorted(
+                        {
+                            RegistryTrustDimension.ARTIFACT_PINNED,
+                            RegistryTrustDimension.CONFORMANCE_TESTED,
+                            RegistryTrustDimension.UNIT_TESTED,
+                        },
+                        key=lambda item: item.value,
+                    )
+                ),
+            )
+        )
+    if not rules:
+        raise ValueError("the canonical registry has no policy-admissible DQ-native capability")
+    return ResolutionPolicy(
+        id="local_dq_native",
+        version="1.0.0",
+        capability_rules=tuple(
+            sorted(
+                rules,
+                key=lambda item: (
+                    item.capability.id,
+                    item.capability.version,
+                    item.capability.contract_hash,
+                ),
+            )
+        ),
+    )
+
+
+def _local_methods_runtime() -> MethodsRuntime:
+    """Build the local methods runtime from explicit policy and verified host facts."""
+
+    registry = load_registry()
+    protocol_registry = registry.as_protocol_registry()
+    policy = _local_methods_policy(registry)
+    runtime = _runtime_identity()
+    installed = discover_installed_adapters()
+    attestations: list[ArtifactAttestation] = []
+    assessments: list[HostAvailabilityAssessment] = []
+    for implementation in protocol_registry.implementations:
+        adapter = next(
+            item for item in protocol_registry.adapters if item.ref == implementation.adapter
+        )
+        attestation: ArtifactAttestation | None = None
+        normalized_distribution = re.sub(
+            r"[-_.]+",
+            "_",
+            implementation.artifact.distribution,
+        ).lower()
+        manifest_path = (
+            registry.root
+            / "artifacts"
+            / normalized_distribution
+            / "manifest.json"
+        )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(manifest, Mapping):
+                raise ArtifactVerificationError("artifact manifest is not an object")
+            attestation = verify_installed_artifact(
+                installed=installed,
+                adapter=adapter,
+                artifact=implementation.artifact,
+                expected_manifest=manifest,
+            )
+        except (ArtifactVerificationError, OSError, ValueError, json.JSONDecodeError):
+            attestation = None
+        if attestation is not None:
+            attestations.append(attestation)
+        requirements = derive_availability_requirements(
+            implementation,
+            protocol_registry.backends,
+        )
+        assessments.append(
+            HostAvailabilityAssessment(
+                implementation=implementation.ref,
+                enabled=True,
+                artifact_attestation=attestation,
+                dependencies=(
+                    RequirementStatus.UNKNOWN
+                    if requirements.dependencies_required
+                    else RequirementStatus.NOT_REQUIRED
+                ),
+                credentials=(
+                    RequirementStatus.UNKNOWN
+                    if requirements.credentials_required
+                    else RequirementStatus.NOT_REQUIRED
+                ),
+                licence=(
+                    RequirementStatus.UNKNOWN
+                    if requirements.licence_required
+                    else RequirementStatus.NOT_REQUIRED
+                ),
+                entitlement=(
+                    RequirementStatus.UNKNOWN
+                    if requirements.entitlement_required
+                    else RequirementStatus.NOT_REQUIRED
+                ),
+                transport=RequirementStatus.SATISFIED,
+                reachability=(
+                    RequirementStatus.UNKNOWN
+                    if requirements.reachability_required
+                    else RequirementStatus.NOT_REQUIRED
+                ),
+            )
+        )
+    availability = build_availability_snapshot(
+        registry=protocol_registry,
+        installed=installed,
+        assessments=assessments,
+        snapshot_id="local_runtime",
+        observed_at=datetime.now(UTC),
+        evaluator=runtime,
+    )
+    catalog = TrustedAdapterCatalog(
+        registry=protocol_registry,
+        installed=installed,
+        policy=policy,
+        artifact_attestations=attestations,
+        runtime=runtime,
+    )
+    return MethodsRuntime(
+        registry=registry,
+        policy=policy,
+        availability=availability,
+        adapter_catalog=catalog,
+        runtime_identity=runtime,
+    )
+
+
+def _raise_method_record_failure(exc: MethodRecordStoreError) -> Never:
+    mapping = {
+        MethodRecordStoreErrorCode.INVALID_REFERENCE: HostFailureCode.INVALID_TOOL_REQUEST,
+        MethodRecordStoreErrorCode.REFERENCE_NOT_FOUND: HostFailureCode.REFERENCE_NOT_FOUND,
+        MethodRecordStoreErrorCode.REFERENCE_SCOPE_DENIED: HostFailureCode.REFERENCE_SCOPE_DENIED,
+        MethodRecordStoreErrorCode.RECORD_TOO_LARGE: HostFailureCode.RESULT_LIMIT_EXCEEDED,
+        MethodRecordStoreErrorCode.SESSION_FULL: HostFailureCode.CACHE_FULL,
+        MethodRecordStoreErrorCode.RECORD_COUNT_EXCEEDED: HostFailureCode.CACHE_FULL,
+        MethodRecordStoreErrorCode.PUBLICATION_CONFLICT: HostFailureCode.RECORD_PUBLICATION_FAILED,
+    }
+    raise HostFailureException(mapping.get(exc.code, HostFailureCode.RECORD_CORRUPT)) from exc
+
+
 class DefinedQuantService:
     """Transport-neutral host API for indexed discovery and canonical execution."""
 
@@ -88,6 +387,9 @@ class DefinedQuantService:
         "_governed_registry",
         "_governed_availability",
         "_governed_policy",
+        "_method_artifact_reader",
+        "_methods_runtime",
+        "_run_cursor_key",
         "_session_cas",
         "_session_lock",
         "_session_state_root",
@@ -106,6 +408,8 @@ class DefinedQuantService:
         governed_registry: GovernedRegistry | None = None,
         governed_policy: ResolutionPolicyV1 | None = None,
         governed_availability: AvailabilitySnapshotV1 | None = None,
+        methods_runtime: MethodsRuntime | None = None,
+        method_artifact_reader: MethodArtifactReader | None = None,
     ) -> None:
         if catalog_root is not None and contract_index is not None:
             raise ValueError("catalog_root cannot be combined with contract_index")
@@ -115,6 +419,9 @@ class DefinedQuantService:
         self._governed_registry = governed_registry
         self._governed_policy = governed_policy
         self._governed_availability = governed_availability
+        self._methods_runtime = methods_runtime or _local_methods_runtime()
+        self._method_artifact_reader = method_artifact_reader
+        self._run_cursor_key = secrets.token_bytes(32)
         self._configured_roots = ConfiguredFileRoots(data_roots)
         self._session_state_root = (
             session_state_root
@@ -216,13 +523,115 @@ class DefinedQuantService:
             cancel_event=cancel_event,
         )
 
+    def search_methods(
+        self,
+        query: str,
+        *,
+        filters: MethodFilters | None = None,
+        limit: int = 20,
+    ) -> MethodSearchResults:
+        """Search canonical method metadata without importing adapter code."""
+
+        return self._methods_runtime.search_methods(
+            query,
+            filters=filters or MethodFilters(),
+            limit=limit,
+        )
+
+    def inspect_method(
+        self,
+        method_id: str,
+        *,
+        version: str | None = None,
+    ) -> MethodInspection:
+        """Inspect one method and its static registry joins without probing availability."""
+
+        try:
+            return self._methods_runtime.inspect_method(method_id, version=version)
+        except RegistryError as exc:
+            code = HostFailureCode.METHOD_NOT_FOUND
+            if version is not None and any(
+                item.id == method_id for item in self._methods_runtime.registry.methods
+            ):
+                code = HostFailureCode.METHOD_IDENTITY_MISMATCH
+            raise HostFailureException(
+                code,
+                details={"method_id": method_id},
+            ) from exc
+
     def compile_plan(
+        self,
+        proposal: PlanProposal | Mapping[str, Any],
+        *,
+        origin_receipts: OriginReceiptSet | None = None,
+        host_constraints: ResolutionConstraintSet = ResolutionConstraintSet(),
+    ) -> CompilationOutcome:
+        """Compile a canonical methods-first proposal; never load or execute an adapter.
+
+        ``origin_receipts`` and ``host_constraints`` are trusted host inputs.  They are not
+        exposed as ordinary MCP arguments, so an agent cannot label an invented provider choice
+        as an explicit user instruction.
+        """
+
+        try:
+            return self._methods_runtime.compile_plan(
+                proposal,
+                origin_receipts=origin_receipts,
+                host_constraints=host_constraints,
+            )
+        except MethodRecordStoreError as exc:
+            _raise_method_record_failure(exc)
+
+    def execute_plan(self, reference: str | PlanRef) -> dict[str, Any]:
+        """Execute the exact plan and return a compact reference-bearing acknowledgement."""
+
+        try:
+            return execution_summary(self._methods_runtime.execute_plan(reference))
+        except MethodRecordStoreError as exc:
+            _raise_method_record_failure(exc)
+
+    def get_plan(self, reference: str | PlanRef) -> PlanRecord:
+        """Return one immutable compiled-plan record from the active host session."""
+
+        try:
+            return self._methods_runtime.get_plan(reference)
+        except MethodRecordStoreError as exc:
+            _raise_method_record_failure(exc)
+
+    def get_run(
+        self,
+        reference: str | RunRef,
+        *,
+        view: str = "summary",
+        field: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Return one bounded deterministic view of a retained immutable run record."""
+
+        try:
+            record = self._methods_runtime.get_run(reference)
+            return get_run_view(
+                record,
+                cursor_key=self._run_cursor_key,
+                view=view,
+                field=field,
+                cursor=cursor,
+                limit=limit,
+            )
+        except MethodRecordStoreError as exc:
+            _raise_method_record_failure(exc)
+
+    def compile_component_plan(
         self,
         proposal: PlanProposalV1 | Mapping[str, Any],
         *,
         cancel_event: Event | None = None,
     ) -> GovernanceOutcomeV1:
-        """Compile one structured proposal without executing or probing an implementation."""
+        """Compatibility-only compiler for the legacy component projection.
+
+        Removal milestone: 2026-12-31 or the first 0.2.0 release, whichever comes first.
+        """
 
         validated = (
             proposal
@@ -298,8 +707,8 @@ class DefinedQuantService:
                         capability=capability.ref,
                         implementations=candidates,
                         required_trust_dimensions=(
-                            TrustDimension.SCHEMA_CHECKED,
-                            TrustDimension.TRUSTED_ADAPTER,
+                            LegacyTrustDimension.SCHEMA_CHECKED,
+                            LegacyTrustDimension.TRUSTED_ADAPTER,
                         ),
                         allowed_transports=(ImplementationTransport.DQ_NATIVE,),
                     )
@@ -391,6 +800,26 @@ class DefinedQuantService:
 
         return describe_dataset(
             self.session_cas,
+            reference,
+            view=view,
+            cursor=cursor,
+            limit=limit,
+        )
+
+    def get_dataset(
+        self,
+        reference: str,
+        *,
+        view: str = "metadata",
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Return a bounded canonical dataset projection.
+
+        Dataset records retain their existing identity during the methods-first migration.
+        """
+
+        return self.describe_dataset(
             reference,
             view=view,
             cursor=cursor,
@@ -620,9 +1049,72 @@ class DefinedQuantService:
             sha256=artifact.sha256,
         )
 
+    def read_artifact(
+        self,
+        run_reference: str | RunRef,
+        artifact_id: str,
+        *,
+        cursor: str | None = None,
+        limit_bytes: int | None = None,
+    ) -> ArtifactChunk:
+        """Read one bounded chunk from a verified run-declared artifact.
+
+        The bundled DQ-native adapters currently emit no artifacts. A future artifact-producing
+        adapter must configure a host reader; the service validates its bytes against the immutable
+        run record before returning a session-bound chunk. Artifacts above the bounded full-read
+        ceiling are refused before the reader is called; a future streaming store can lift that
+        ceiling without changing the public cursor contract.
+        """
+
+        try:
+            run = self._methods_runtime.get_run(run_reference)
+        except MethodRecordStoreError as exc:
+            _raise_method_record_failure(exc)
+        expected = next(
+            (item for item in run.artifacts if item.artifact_id == artifact_id),
+            None,
+        )
+        reader = self._method_artifact_reader
+        if expected is None or reader is None:
+            raise HostFailureException(
+                HostFailureCode.ARTIFACT_NOT_FOUND,
+                details={"artifact_id": artifact_id},
+            )
+        if expected.byte_length > MAX_METHOD_ARTIFACT_READ_BYTES:
+            raise HostFailureException(
+                HostFailureCode.RESULT_LIMIT_EXCEEDED,
+                details={
+                    "limit_name": "artifact_decoded_bytes",
+                    "maximum": MAX_METHOD_ARTIFACT_READ_BYTES,
+                    "actual": expected.byte_length,
+                },
+            )
+        reference = (
+            run_reference.reference if isinstance(run_reference, RunRef) else run_reference
+        )
+        artifact = reader(reference, artifact_id)
+        if (
+            artifact.media_type != expected.media_type
+            or len(artifact.content) != expected.byte_length
+            or artifact.sha256 != expected.digest
+            or hashlib.sha256(artifact.content).hexdigest() != expected.digest
+        ):
+            raise HostFailureException(HostFailureCode.RECORD_CORRUPT)
+        return get_artifact_chunk(
+            content=artifact.content,
+            media_type=artifact.media_type,
+            artifact_sha256=artifact.sha256,
+            run_reference=reference,
+            artifact_id=artifact_id,
+            cursor_key=self._run_cursor_key,
+            cursor=cursor,
+            limit_bytes=limit_bytes,
+        )
+
     def close(self) -> None:
         """Expire and remove this service's Phase-3 session state, if opened."""
 
+        self._methods_runtime.close()
         self._worker_controller.close()
         with self._session_lock:
             cas = self._session_cas
@@ -638,4 +1130,10 @@ class DefinedQuantService:
         self.close()
 
 
-__all__ = ["DefinedQuantService", "OperationArtifact"]
+__all__ = [
+    "LEGACY_COMPONENT_RUNTIME_REMOVAL_MILESTONE",
+    "MAX_METHOD_ARTIFACT_READ_BYTES",
+    "DefinedQuantService",
+    "MethodArtifactReader",
+    "OperationArtifact",
+]

@@ -1,6 +1,31 @@
 # Shared runtime
 
-Small, reusable foundations used by every component:
+Transport-neutral foundations for the canonical methods-first runtime and the time-bounded legacy
+component path:
+
+- `registry/` loads, validates, searches, and joins inert authored or compiled registry metadata.
+  Discovery never imports adapter or implementation code and never probes live availability.
+- `schema_validation.py` evaluates the closed deterministic JSON Schema subset used at Method and
+  Capability boundaries.
+- `planning.py` validates Method proposals and explicit resolution preferences, applies trusted
+  origin receipts, policy, restrictions, trust requirements, and explicit availability, and binds
+  one exact Implementation per recipe step without ambient I/O.
+- `execution.py` executes only retained compiled bindings through an `ExactAdapterCatalog`,
+  validates canonical step and Method outputs, and publishes immutable Step and Run records. It has
+  no runtime resolution or fallback.
+- `method_records.py` is the session-scoped publish-once store for compiled Plan, Step, and complete
+  Run records; it verifies hashes and cross-record bindings on retrieval.
+- `method_service.py` composes one explicit Registry, policy, availability snapshot, trusted adapter
+  catalog, runtime identity, and record store. It exposes Method search, inspection, compilation,
+  execution, and record retrieval without a transport SDK.
+- `adapter_discovery.py` reads installed distribution and entry-point metadata without loading an
+  entry point.
+- `adapter_artifacts.py` recomputes canonical installed-distribution manifests from package
+  metadata, declared entry point, and resource bytes and emits an attestation only after an exact
+  artifact match.
+- `adapter_catalog.py` builds explicit availability facts and gates exact adapter invocation on the
+  compiled Implementation, registry Adapter, policy admission, current availability, and artifact
+  attestation. Installation by itself never grants trust.
 
 - `types/` contains the canonical Pydantic financial, visualization, and datapoint-lineage types.
 - `validation.py` evaluates the closed, declarative rules stored in each `contract.yaml`.
@@ -21,25 +46,36 @@ Small, reusable foundations used by every component:
 - `host_failures.py` is the transport-neutral closed failure and trust vocabulary.
 - `service.py` composes canonical execution, one immutable process-lifetime discovery snapshot,
   and a lazily opened ephemeral data/record session without importing a transport SDK.
+- `method_registry.py` and `plan_compiler.py` are the deprecated component-projection compiler
+  retained for compatibility while old clients migrate to `registry/` and `planning.py`.
+- `local_host_platform.py`, `worker_process.py`, and `worker_runtime.py` keep native filesystem and
+  bounded-process mechanisms behind transport-neutral interfaces.
 - `agent.py` is a compatibility-only re-export of the canonical `defined_quant_protocol` models.
 - `managed_profiles/` contains closed, packaged execution allowlists rather than component-ID
   branches in production code.
 - `plan_validation.py` validates atomic plans against those policies, component contracts, input
   models, and declarative constraints without invoking a calculation.
 
-The generic host adapter composes these catalog, validation, and rendering foundations with the
-separate `defined_quant_protocol` package. Protocol records do not become component truth: each
-component's Pydantic models remain canonical for inputs, outputs, units, and defaults. Their
-closed semantic-port extensions make field compatibility inspectable without turning
-`depends_on` into an execution graph. The direct operation adapter remains unmanaged and cannot
-mint plan approval, source-verification, or `ResearchBundle` claims.
+`DefinedQuantService` is the transport dispatch boundary and delegates the canonical surface to a
+`MethodsRuntime`: `search_methods`, `inspect_method`, `compile_plan`, `execute_plan`, `get_plan`,
+and `get_run`, alongside dataset and artifact retrieval. Explicitly named component methods remain
+migration aliases only. The methods-first path does not project an old component into a Method;
+it reads independently authored Method, Capability, Backend, Adapter, and Implementation records.
+`MethodsRuntime` retains and returns the complete immutable Run record inside core. The public
+service returns a compact execution receipt and exposes that record through deterministic bounded
+`get_run` summaries and cursor-paged views, including individually selected output fields.
+
+All seven bundled Methods are complete canonical slices. Their nine atomic DQ-native calculations
+live in a separate adapter distribution and are invoked through the exact compiled-plan path. The
+component folders and unmanaged workers remain compatibility-only until their dated removal
+milestone. Provider-backed execution and credential brokering remain outside the current runtime.
 
 `ComponentOutput` keeps assumptions, permanent disclosures, transformations, and state-dependent
 warnings in separate fields. Every comparison in a contract warning rule must depend on component
 input state; constant output context belongs in `disclosures`.
 
 Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
-separate authorization-only path introduced in 0.2.0. The packaged `simple_return_csv_v1`
+separate authorization-only path introduced in 0.2.0. The packaged `simple_return_csv`
 profile allowlists exactly `dq.market_data.simple_return` version `0.3.4`, subject
 `ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a`. It requires explicit draft
 opt-in and semantic timestamps. Validation of one immutable, one-step plan produces a deterministic
@@ -54,16 +90,18 @@ JSON. This path performs no calculation and verifies no source. Component deriva
 output indices to input indices,
 but their nullable citation IDs are not source evidence. Semantic ports prove field-level
 compatibility for the Log Return to Historical Volatility boundary and refuse Simple Return's
-different convention. They do not execute or authorize a chain. Managed multi-step composition,
-source-bound execution, populated citations, and portable `ResearchBundle` generation remain
-deferred.
+different convention. That legacy compatibility check does not execute or authorize a chain. The
+canonical executor executes registered single- and multi-step recipes through exact compiled
+bindings.
+Source-bound execution, populated citations, production non-native/provider adapters, credential
+brokering, provider I/O, and portable independent reproduction remain deferred.
 
 The folder is called `shared` so its purpose is clear when browsing the repository. Packaging maps
 it to the public Python package name `defined_quant`; component code therefore imports
 `defined_quant.validation`, `defined_quant.catalog`, `defined_quant.charts`, and
 `defined_quant.types`.
 
-The current catalog runtime is filesystem-backed. Stable-ID hashes are cached per normalized
+The legacy component catalog runtime is filesystem-backed. Stable-ID hashes are cached per normalized
 catalog root for ordinary component calls; the operation runner and managed plan validator call
 `verify_subject()` to clear the cache, recompute from disk, and seed the verified value before use.
 Path and explicit `ComponentRecord` hashes always remain fresh for authoring. Zip-imported or

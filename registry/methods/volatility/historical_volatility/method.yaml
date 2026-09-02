@@ -1,0 +1,209 @@
+schema_version: 2
+id: dq.volatility.historical_volatility
+version: 1.0.0
+title: Historical Volatility
+lifecycle: draft
+summary: >-
+  Experimental Technical Preview method for estimating sample volatility from explicit log
+  periodic returns and annualizing it with an explicit factor.
+category: volatility
+discovery:
+  slug: historical_volatility
+  website_slug: historical-volatility
+  aliases:
+    - annualized historical volatility
+    - historical standard deviation
+    - log return volatility
+    - sample return volatility
+    - sample standard deviation of returns
+    - square root annualized volatility
+  intents:
+    - annualize_log_return_volatility
+    - calculate_historical_volatility
+    - estimate_sample_return_volatility
+  input_concepts:
+    - annualization_factor
+    - log_return_series
+    - return_convention
+  output_concepts:
+    - annualized_volatility
+    - periodic_volatility
+  tags:
+    - annualized_volatility
+    - experimental_technical_preview
+    - sample_standard_deviation
+    - volatility
+  use_when:
+    - The caller needs sample standard deviation of explicit log periodic returns.
+    - The caller supplies the annualization factor explicitly and accepts square-root-of-time scaling.
+    - The requested result is descriptive periodic and annualized historical volatility.
+  do_not_use_when:
+    - The return convention is simple, unknown, or mixed.
+    - The annualization factor is missing or expected to be inferred from a frequency label.
+    - The request is for forecast, implied, downside, model-based volatility, or a confidence interval.
+    - The input series needs fetching, cleaning, sorting, alignment, outlier treatment, or gap repair.
+  unsupported_scope:
+    - Conversion between simple and log returns.
+    - Frequency, timestamp, exchange-calendar, holiday, or missing-session inference.
+    - Forecasting, GARCH-family models, implied volatility, downside risk, robust scale estimators, or confidence intervals.
+    - Data sourcing, cleaning, ordering, alignment, outlier treatment, or gap repair.
+formula: σ̂ = √(Σᵢ(rᵢ − r̄)² / (n − 1)); σ̂annual = σ̂ × √A
+methodology:
+  - Estimate periodic volatility as sample standard deviation with an n minus 1 denominator.
+  - Accept only explicitly declared log periodic returns; never convert return conventions.
+  - Scale periodic volatility by the square root of the caller-supplied periods-per-year factor.
+input_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualization_factor
+    - return_kind
+    - returns
+  properties:
+    annualization_factor:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.square_root_annualize, version: 1.0.0}
+        direction: input
+        field: annualization_factor
+    return_kind:
+      const: log
+      x-defined-quant-port:
+        direction: input
+        concept: return_convention
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: log_periodic_return
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    returns:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+        direction: input
+        field: values
+output_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+    - annualization_factor
+    - annualized_volatility
+    - degrees_of_freedom_adjustment
+    - periodic_volatility
+    - return_kind
+    - sample_size
+  properties:
+    annualization_factor:
+      type: number
+      exclusiveMinimum: 0.0
+      x-defined-quant-port:
+        direction: output
+        concept: annualization_factor
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: explicit_periods_per_year_factor
+        ordering: not_applicable
+        frequency: annual
+        provenance_requirement: not_required
+    annualized_volatility:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.square_root_annualize, version: 1.0.0}
+        direction: output
+        field: annualized_value
+    degrees_of_freedom_adjustment:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+        direction: output
+        field: degrees_of_freedom_adjustment
+    periodic_volatility:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+        direction: output
+        field: standard_deviation
+    return_kind:
+      const: log
+      x-defined-quant-port:
+        direction: output
+        concept: return_convention
+        unit: unitless
+        shape: scalar
+        cardinality: exactly_one
+        convention: log_periodic_return
+        ordering: not_applicable
+        frequency: not_applicable
+        provenance_requirement: not_required
+    sample_size:
+      x-defined-quant-capability-field:
+        capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+        direction: output
+        field: sample_size
+assumptions:
+  - Supplied observations are comparable decimal log returns for one periodic series.
+  - Sample standard deviation with an n minus 1 denominator is the intended estimator.
+  - Square-root-of-time scaling is acceptable for the supplied annualization factor.
+limitations:
+  - The method does not inspect timestamps or infer whether the factor matches sampling frequency.
+  - Serial dependence and changing variance can make square-root scaling unreliable.
+  - It does not forecast volatility, estimate uncertainty, or perform robust outlier treatment.
+interpretation: >-
+  Report decimal periodic sample volatility, the explicitly annualized result, sample size,
+  n minus 1 convention, log-return convention, and annualization factor. Do not imply inferred
+  frequency, return conversion, forecasting, or assessed statistical uncertainty.
+constraints:
+  - id: small_sample
+    target: input
+    severity: warning
+    expression:
+      all:
+        - left: {field: returns, measure: count}
+          op: ge
+          right: {value: 2}
+        - left: {field: returns, measure: count}
+          op: lt
+          right: {value: 30}
+    message: Fewer than 30 returns were supplied, so the descriptive estimate may be unstable.
+conventions:
+  - id: annualization_factor
+    field: annualization_factor
+    question: What explicit number of observation periods per year should be used?
+    materiality: The annualized result changes with this factor and it is never inferred.
+    required_from_user: true
+  - id: return_kind
+    field: return_kind
+    question: Are the supplied observations log periodic returns?
+    materiality: The method accepts only the log-return semantic convention.
+    required_from_user: true
+    allowed_values: [log]
+defaults: []
+recipe:
+  steps:
+    - step_id: estimate
+      capability: {id: statistics.sample_standard_deviation, version: 1.0.0}
+      depends_on: []
+      input_bindings:
+        - target_field: values
+          source: {kind: method_input, field: returns}
+    - step_id: annualize
+      capability: {id: statistics.square_root_annualize, version: 1.0.0}
+      depends_on: [estimate]
+      input_bindings:
+        - target_field: annualization_factor
+          source: {kind: method_input, field: annualization_factor}
+        - target_field: periodic_value
+          source: {kind: step_output, step_id: estimate, field: standard_deviation}
+  result_bindings:
+    - target_field: annualization_factor
+      source: {kind: method_input, field: annualization_factor}
+    - target_field: annualized_volatility
+      source: {kind: step_output, step_id: annualize, field: annualized_value}
+    - target_field: degrees_of_freedom_adjustment
+      source: {kind: step_output, step_id: estimate, field: degrees_of_freedom_adjustment}
+    - target_field: periodic_volatility
+      source: {kind: step_output, step_id: estimate, field: standard_deviation}
+    - target_field: return_kind
+      source: {kind: method_input, field: return_kind}
+    - target_field: sample_size
+      source: {kind: step_output, step_id: estimate, field: sample_size}

@@ -1,23 +1,163 @@
-# Defined Quant components
+# Defined Quant
 
-Defined Quant is a public catalog of deterministic, inspectable financial calculations for
-humans and agents. Each component keeps its code, contract, evidence, tests, and explanation
-together in one small folder.
+Defined Quant is an open-source, local-first computation layer between AI agents and quantitative
+data and calculation systems. It helps an agent discover the relevant financial method, validate
+material conventions, run a supported implementation, and return a structured result that can be
+inspected separately from the agent's explanation.
+
+The agent still understands the user's problem and writes the analysis. Defined Quant supplies a
+structured calculation boundary: compact discovery, explicit inputs and defaults, controlled
+execution, and records of what was calculated. This avoids loading an entire calculation catalog
+into the model's context and keeps financial logic out of prompts.
 
 > **Experimental Technical Preview**
 >
-> Components are reference implementations, not certified models, production prices, or
-> investment advice. Engineering checks, numerical evidence, provenance, and domain review are
-> reported separately.
+> The local host and bundled catalog are pre-release. The seven bundled native implementations
+> have lifecycle `draft`, author-asserted numerical evidence, and no independent domain review.
+> They are not certified models, production prices, or investment advice. Engineering checks,
+> numerical evidence, provenance, provider authentication, and domain review remain separate
+> claims.
 
-Every component currently published here has lifecycle `draft`. Its numerical evidence is
-author-asserted, not independently reviewed, and domain review is `none`. Those dimensions remain
-visible separately; passing repository checks does not upgrade a component's financial maturity.
+## How it works
 
-## Find a component
+```mermaid
+flowchart LR
+    U[User question] --> A[AI agent]
+    A --> H[Defined Quant local host]
+    H --> D[Discover and inspect Method]
+    D --> C[Compile Recipe under constraints and policy]
+    C --> I[Exact Implementation]
+    I --> T[Trusted Adapter]
+    T --> R[Canonical Step and Run records]
+    R --> A
+```
 
-Start in [`categories/`](categories/). Categories are ordinary folders with a `README.md` that
-explains their scope. The catalog currently includes seven components:
+This is the canonical path for all seven bundled Methods. Their recipes bind to nine atomic
+Capabilities and, under an explicit host policy and availability snapshot, to nine exact DQ-native
+Implementations. Simple Return remains the reference example: `dq.market_data.simple_return`
+binds `returns.simple` to `dq_native.simple_return`. Provider-backed execution is not shipped.
+
+A typical agent workflow is:
+
+1. Search compact contract metadata using the user's intent, available inputs, and desired output.
+2. Inspect only the most relevant method contracts and their limitations.
+3. Ask for any missing choice that could change the answer instead of guessing it.
+4. Carry any explicit implementation, backend, transport, locality, network, or fallback preference
+   as a bounded resolution constraint without inventing one.
+5. Compile one exact implementation per capability under policy, trust, and explicit availability.
+6. Execute only that compiled binding through a trusted adapter and publish immutable step and run
+   records.
+7. Let the agent explain the records without silently redefining the calculation.
+
+If no supported method matches, Defined Quant should refuse visibly rather than substitute a
+plausible calculation.
+
+## Methods and implementations
+
+Defined Quant separates the financial specification from the system that performs it:
+
+- A **method** defines the calculation's financial meaning: inputs, outputs, conventions,
+  constraints, assumptions, limitations, interpretation, and backend-neutral recipe.
+- A **capability** is one atomic backend-neutral typed operation referenced by a recipe step.
+- A **backend** is a local runtime, library, data provider, analytics service, HTTP API, database,
+  or external MCP system with declared operational boundaries.
+- An **implementation** is one exact registered realization of one capability using declared
+  backends.
+- An **adapter** maps Defined Quant's canonical contract to a particular implementation and maps
+  its result back into the canonical output.
+- A **provider** is an external data or analytics system. It is not itself a method.
+- A **component** is a website presentation term and temporary compatibility name for the old
+  bundled format; it is not the core storage or execution abstraction.
+
+All seven bundled calculations now use this model end to end: separate Method, Capability,
+Backend, Adapter, and Implementation records, a pure preference-aware compiler, exact
+trusted-adapter execution, and complete records. Installation alone is not trust. The host must explicitly admit the
+implementation under policy, satisfy required trust dimensions, observe exact availability, and
+verify the installed adapter artifact before loading its entry point. The adapter may not select a
+replacement or apply fallback.
+
+No production OpenBB, LSEG, statsmodels, QuantLib, database, HTTP, or external-MCP implementation is
+registered yet. Those names describe different backend kinds and will not be advertised until an
+actual independently installable adapter and its evidence exist.
+
+## Local MCP alpha
+
+The current host is a Python local STDIO MCP server. In MCP terms, the AI application is the client
+and Defined Quant is the local server. Catalog, planning, dataset, and execution operations dispatch
+through the transport-neutral `DefinedQuantService`.
+
+Today the server can:
+
+- search and inspect the canonical Method registry without importing adapters;
+- compile automatic-resolution proposals under host policy and explicit availability, and validate
+  closed implementation/provider preferences without treating an agent assertion as trusted origin;
+- execute only an exact retained compiled plan through the trusted DQ-native adapters and return
+  immutable Plan, Step, and Run records;
+- register and preview supported caller-supplied datasets;
+- retrieve plans, runs, datasets, and bounded artifacts; and
+- use explicitly named component compatibility operations only during their time-bounded removal
+  window.
+
+The canonical public direction is `search_methods`, `inspect_method`, `compile_plan`,
+`execute_plan`, `get_plan`, `get_run`, `get_dataset`, and `read_artifact`. Compatibility operations
+are migration aliases with a deletion milestone, not a parallel permanent runtime.
+
+The current MCP surface does not mint trusted user-origin receipts. A proposal containing an
+explicit implementation or provider preference therefore stops with `needs_information` until a
+future host confirmation flow verifies that origin; it never upgrades the agent's assertion.
+
+From a source checkout, install the two locked development environments and start the server:
+
+```text
+uv sync --locked
+uv sync --project mcp_server --locked
+uv run --project mcp_server defined-quant-mcp
+```
+
+The alpha targets Windows, macOS, and Linux. It is not advertised as release-supported until the
+same exact core and MCP wheel pair passes the required native matrix on Python 3.11 and 3.13. See
+[`mcp_server/README.md`](mcp_server/README.md) for development launch settings, privacy, installation,
+and platform details, and [`docs/LOCAL_MCP_ALPHA_DESIGN.md`](docs/LOCAL_MCP_ALPHA_DESIGN.md) for the
+full transport contract.
+
+### Current data inputs
+
+Current dataset registration accepts inline rows, inline JSON, and local CSV or JSON files beneath
+explicitly configured data roots. Literal values may also be supplied directly to an operation.
+
+Excel workbooks, provider or HTTP API ingestion, databases and SQL Server, and external MCP data
+sources are not supported by the current runtime. They are intended adapter or ingestion paths and
+should not be treated as available until a concrete implementation is registered and tested.
+
+### Example requests
+
+For a small inline calculation, a user can ask:
+
+> Calculate simple returns for adjusted prices 100, 103, 101, and 105 on these four dates.
+
+The agent searches the catalog, inspects the selected contract, confirms that the supplied price
+kind and timestamps satisfy it, compiles the Method under host policy, and executes the exact
+selected DQ-native Implementation.
+
+For a local file, a user can ask:
+
+> Use `prices.csv` from the configured data root and calculate simple returns from its adjusted
+> prices and timestamps.
+
+The server must already have been launched with that directory as a configured data root. The
+legacy component compatibility path registers and normalizes the CSV, exposes a bounded preview for
+field mapping, and records the dataset reference used by the operation. A prompt cannot grant access
+to another directory. Dataset-to-Method recipe binding is not yet part of the canonical
+methods-first runtime.
+
+## Canonical registry and migration catalog
+
+Start in [`registry/`](registry/). It separately authors methods, capabilities, backends, adapters,
+implementations, conformance, and evidence. All seven Methods have complete canonical execution
+slices backed by nine tested DQ-native Implementations. Category is taxonomy metadata rather than
+a code hierarchy.
+
+The preview also retains seven legacy DQ-native component folders as migration input:
 
 ```text
 categories/
@@ -33,43 +173,19 @@ categories/
     └── rolling_historical_volatility/
 ```
 
-There is no generated folder maze and no profile-specific template tree. A component always has
-the same five visible files.
+Every legacy component has the same five visible files: `component.py`, `contract.yaml`,
+`evidence.yaml`, `test_component.py`, and `README.md`. Those folders now serve only as compatibility
+inputs and preserved-behavior fixtures; they are not a source of truth and are not used for new
+backends.
 
-## Repository map
+## Legacy direct Python example
 
-```text
-components/
-├── categories/             browseable financial topics and components
-├── shared/                 types, discovery, execution, records, and host services
-├── protocol/               closed typed records installed as defined_quant_protocol
-├── mcp_server/             separate optional STDIO MCP transport distribution
-├── authoring/              one template, two schemas, and explicit Python tools
-├── docs/                   durable technical designs and machine-readable fixtures
-├── .agents/                optional repository-wide agent integration
-├── .github/                contribution and CI configuration
-├── pyproject.toml
-└── README.md
-```
-
-`categories` and `shared` are source folders. Packaging projects them into the installed Python
-namespace `defined_quant`. The same core wheel installs the separately versioned
-`defined_quant_protocol` namespace from `protocol/`. The optional `defined-quant-mcp`
-distribution lives under `mcp_server/`, pins the exact compatible core version, and contains every
-MCP SDK dependency and import. The core distribution continues to depend only on Pydantic.
-
-`.agents/` is integration metadata for agent hosts such as Codex. It is not a financial category
-and it does not implement a calculation. Its single catalog-wide skill discovers, inspects, and
-runs any component through the same canonical contracts used by Python callers. Component-specific
-formulas and guidance remain beside the component under `categories/`; the integration layer must
-not hard-code one component.
-
-## Run a working example
-
-From this folder:
+The compatibility package can still call a native component directly. This bypasses Method
+discovery, implementation resolution, trusted-adapter checks, and Run records and is not the
+canonical integration path.
 
 ```bash
-uv sync
+uv sync --locked
 uv run python - <<'PY'
 from defined_quant.market_data.simple_return.component import simple_return
 
@@ -87,139 +203,93 @@ print(result.returns)
 PY
 ```
 
-The result is a typed object, not a bare number. It includes units, assumptions, constant
+The result is a typed object rather than a bare number. It includes units, assumptions,
 disclosures, state-dependent warnings, datapoint derivations, provenance, and a renderer-neutral
-visualization specification. The shared chart renderer can turn that specification into
-deterministic SVG without adding a plotting-library dependency.
-
-## Typed generic operations
-
-The repository-wide adapter can execute any conforming component through a closed
-`defined_quant_protocol.OperationRequest`. The request binds the exact component ID, version, and
-`subject_hash`; the selected component's Pydantic `Inputs` and `Output` models still perform the
-financial validation. Runtime locations such as the catalog root and output directory are host
-settings, not serialized request fields. A successful manifest names only relative output members
-and binds their hashes. The runner refuses a pre-existing output directory, stages every member,
-and publishes the complete new directory in one rename.
-
-This direct operation path remains deliberately labeled **unmanaged**. The trusted local runner
-enforces typed component execution and records the exact request, result members, identities, and
-hashes. A
-manifest is an internally reconciled record, not a signed or independent execution attestation.
-It does not prove that caller-supplied data is true, authorize an analysis, create an approved
-`AnalysisPlan`, or produce a portable `ResearchBundle`.
-
-**Required MCP alpha release platforms:** Windows, macOS, and Linux. In-tree providers are not a
-release-support claim: the complete native six-cell filesystem, worker, installed-wheel, and
-official-client matrix must pass before the MCP alpha ships.
-
-## Local MCP alpha
-
-The in-tree Phase-4 implementation is a local STDIO server that dispatches exclusively through
-`DefinedQuantService`. From a source checkout, install the two locked development environments and
-start the transport without relying on a platform-specific virtual-environment path:
-
-```text
-uv sync --locked
-uv sync --project mcp_server --locked
-uv run --project mcp_server defined-quant-mcp
-```
-
-Release installation must use the exact compatible core and MCP wheel pair produced once by CI;
-source-checkout imports and mixing independently built wheels are not supported validation paths.
-The server is not advertised as release-supported until all six native cells pass. UNC and network
-roots fail closed. WSL2 may run the Linux build as an unsupported convenience, but never counts as
-native Windows validation. See [`mcp_server/README.md`](mcp_server/README.md) for launch settings,
-privacy, installation, and support details.
-
-Protocol 0.4.0 extends the closed semantic-port vocabulary introduced in 0.3.0 while retaining the
-atomic managed-authorization foundation introduced in 0.2.0. Its packaged
-`simple_return_csv_v1` policy allowlists only `dq.market_data.simple_return` version `0.3.4` at
-subject `ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a`, with explicit opt-in to
-its draft lifecycle. One immutable, one-step plan can be validated into a deterministic receipt,
-manually approved, and revalidated against exact plan, policy, component, dataset, receipt, and
-approval hashes. The approval model has no automatic or policy-approval mode.
-
-Resolution timestamps are operational audit metadata and do not change a plan's semantic hash;
-resolved answers do. Dataset timestamps are semantic input and are hash-bound. Because frozen
-Pydantic models are shallow, callers must treat nested JSON as immutable and revalidate after any
-nested mutation. This foundation performs no calculation and makes no source-verification claim.
-Every component publishes closed field-level semantic ports in its generated JSON Schemas. The
-catalog can therefore prove that Log Return's return series and convention are compatible with
-Historical Volatility's corresponding inputs, while Simple Return is refused at that boundary.
-Port compatibility does not execute or authorize a chain, and every consumer constraint still
-applies. Calculation derivations use nullable citation join keys; authentic source bindings,
-managed multi-step execution, and portable research bundles remain deferred.
-
-See [the catalog-wide host skill](.agents/skills/use-defined-quant/SKILL.md) for discovery,
-inspection, request construction, execution, and result-handling instructions.
-
-## Check the catalog
-
-The project intentionally exposes plain commands rather than a fictional `dq` CLI:
-
-```bash
-uv run pytest
-uv run python authoring/check_component.py
-uv run python authoring/search_catalog.py "calculate returns from prices"
-uv run python authoring/export_catalog.py
-uv run ruff check protocol shared categories authoring \
-  .agents/skills/use-defined-quant/scripts .agents/skills/use-defined-quant/tests
-uv run --no-editable mypy shared categories authoring/*.py
-uv run --no-editable mypy -p defined_quant_protocol
-```
-
-Normal development uses an editable install. The type-check command asks `uv` to check the same
-merged package layout users receive in the wheel, because static type checkers do not execute the
-small runtime path extension used by the readable two-source layout.
-
-Runtime discovery is filesystem-backed. Stable component-ID subject hashes are memoized per
-catalog root for ordinary calculations, while the runner and managed validator explicitly
-invalidate and freshly verify the installed subject at their trust boundaries. Zipimport and
-single-file frozen packaging are not currently supported because contracts must remain readable to
-both discovery and preflight.
-
-To add a component:
-
-```bash
-uv run python authoring/create_category.py --id performance --title "Performance"
-uv run python authoring/create_component.py \
-  --category performance \
-  --group risk_adjusted_performance \
-  --slug sortino_ratio \
-  --profile statistic
-```
-
-The generator copies the one canonical folder in
-[`authoring/component-template/`](authoring/component-template/). See
-[`authoring/README.md`](authoring/README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Website boundary
-
-The website is a separate private project. Components CI exports deterministic static catalog
-JSON; the website consumes a pinned copy of that artifact and never imports or executes component
-Python. Adding a component therefore requires no website code change.
+visualization specification. The shared renderer can turn that specification into deterministic
+SVG without adding a plotting-library dependency.
 
 ## Trust model
 
-- Pydantic `Inputs` and `Output` in `component.py` are canonical for types, units, and defaults.
-- `contract.yaml` contains identity, scope, declarative guidance, and display metadata, but never
-  duplicates the Pydantic interface.
-- Required discovery aliases and stable intent/input/output concepts make the same catalog
-  searchable by humans, developer tools, websites, and autonomous agents without loading every
-  calculation.
-- `evidence.yaml` supplies closed, executable fixtures and assertions and binds their passing run
-  to the exact behavior hash.
-- Every current component remains lifecycle `draft`, with author-asserted evidence and no
-  independent domain review.
-- Constraints use a closed operator vocabulary; no contract content is evaluated as Python.
-- Anything that changes the answer must be supplied or declared explicitly.
-- Closed semantic ports compare direction, concept, unit, shape, cardinality, convention,
-  ordering, frequency, and provenance requirements before fields are composed.
-- A typed operation binds what was calculated. Caller provenance records what the caller asserts;
-  it is not source authentication, authorization, or a managed verification claim.
+Defined Quant does not turn “the code ran” into a blanket claim that a financial conclusion is
+correct. It keeps these dimensions separate:
 
-See [`VALIDATION.md`](VALIDATION.md) for the exact meaning of each trust claim.
+- the financial method and its declared conventions;
+- the selected implementation and adapter or provider identity;
+- input provenance and provider authentication;
+- schema and constraint validation;
+- executable numerical evidence and test history;
+- operation-record integrity; and
+- independent domain review.
+
+For a migrated calculation, `method.yaml` owns financial meaning and the user-facing contract;
+`capability.yaml` owns the atomic interface; `conformance.yaml` owns universal known answers and
+boundaries; and Backend, Adapter, and Implementation records own their exact operational concerns.
+Capability-owned Method fields are expanded by reference and recorded as schema bindings rather
+than hand-copied into both schemas.
+
+For each retained legacy direct component path, Pydantic `Inputs` and `Output` models remain
+canonical only within that compatibility runtime. `contract.yaml` defines its identity, scope,
+discovery metadata, guidance, and limitations, and `evidence.yaml` binds fixtures to the exact
+legacy behavior hash.
+
+A canonical run separately binds Method, Capability, Backend, Adapter, Implementation, policy,
+availability, artifact, compiled Plan, Step, and complete Run identities. It records candidate
+rejections and exact preference/fallback decisions. That establishes what was selected and
+executed; it does not prove that caller-supplied data is authentic, that the Method is suitable,
+that a provider's claims are correct, or that an independent party reproduced the run.
+
+Anything that can change the answer must be supplied, visibly defaulted, or refused. Remote
+implementations and external sources must disclose their network, credential, provenance, and
+attestation boundaries before they can support stronger claims.
+
+See [`VALIDATION.md`](VALIDATION.md) for the exact meaning and limits of each trust claim.
+
+## Repository and contributing
+
+```text
+components/
+├── registry/               canonical methods-first metadata and contracts
+├── adapters/               independently installable trusted adapter distributions
+├── categories/             migration-only native components
+├── shared/                 registry, planning, execution, records, workers, and services
+├── protocol/               canonical registry, resolution, execution, and legacy records
+├── mcp_server/             optional local STDIO MCP transport distribution
+├── authoring/              registry bundle, export, validation, release, and CI tools
+├── tests/                  methods-first conformance, adapter, registry, and product tests
+├── docs/                   durable technical designs and normative fixtures
+├── .agents/                optional repository-wide agent integration
+└── .github/                contribution and CI configuration
+```
+
+Packaging projects `categories/` and `shared/` into the public `defined_quant` namespace. The core
+wheel also installs the separately versioned `defined_quant_protocol` namespace. The optional
+`defined-quant-mcp` distribution owns the production MCP SDK dependency and transport boundary;
+the core runtime continues to depend only on Pydantic. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for
+the complete package and runtime design.
+
+Canonical methods-first repository checks are:
+
+```bash
+uv run pytest
+uv run python authoring/export_component_pages.py
+```
+
+Legacy component compatibility checks are kept separate and do not discover or execute canonical
+Methods:
+
+```bash
+uv run python authoring/check_component.py
+uv run python authoring/search_catalog.py "calculate returns from prices"
+uv run python authoring/export_catalog.py
+```
+
+Do not add another five-file native component. Author or extend the separate Method, Capability,
+Backend, Adapter, Implementation, conformance, and evidence records through the full compilation,
+execution, record, and website-projection path instead.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md). The optional
+[methods-first agent skill](.agents/skills/use-defined-quant/SKILL.md) uses canonical Method
+discovery, governed plan compilation and execution, and bounded record retrieval. Its old
+component-oriented helper scripts remain explicit legacy compatibility checks only.
 
 ## Licence
 

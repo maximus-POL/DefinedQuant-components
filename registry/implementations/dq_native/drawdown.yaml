@@ -1,0 +1,21 @@
+schema_version: 2
+id: dq_native.drawdown
+version: 1.0.0
+title: DQ-native drawdown implementation
+capability: {id: performance.drawdown, version: 1.0.0}
+backend_bindings:
+  - role: runtime
+    backend: {id: dq_native, version: 1.0.0}
+    transport: in_process
+    locality: local
+adapter: {id: dq_native.drawdown, version: 1.0.0}
+artifact: {distribution: defined-quant-adapter-dq-native, version: 1.0.0, artifact_hash: 134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c}
+support_level: full
+restrictions: []
+dependency_requirements: []
+trust:
+  - {dimension: artifact_pinned, evidence: {id: evidence.implementation.dq_native.drawdown, version: 1.0.0}}
+  - {dimension: conformance_tested, evidence: {id: evidence.implementation.dq_native.drawdown, version: 1.0.0}}
+  - {dimension: deterministic, evidence: {id: evidence.implementation.dq_native.drawdown, version: 1.0.0}}
+  - {dimension: unit_tested, evidence: {id: evidence.implementation.dq_native.drawdown, version: 1.0.0}}
+evidence_refs: [{id: evidence.implementation.dq_native.drawdown, version: 1.0.0}]

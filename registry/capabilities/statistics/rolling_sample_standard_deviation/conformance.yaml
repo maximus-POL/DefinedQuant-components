@@ -1,0 +1,78 @@
+schema_version: 1
+capability:
+  id: statistics.rolling_sample_standard_deviation
+  version: 1.0.0
+numeric_model:
+  input: finite_ieee_754_binary64
+  output: finite_ieee_754_binary64
+cases:
+  - id: two_windows_known_answer
+    kind: known_answer
+    input:
+      values: [0.01, -0.01, 0.03, 0.01]
+      window_length: 3
+      timestamps: null
+    expected:
+      outcome: success
+      output:
+        standard_deviations: [0.02, 0.02]
+        window_length: 3
+        window_end_timestamps: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: one_complete_window
+    kind: boundary
+    input:
+      values: [0.01, -0.01]
+      window_length: 2
+      timestamps: null
+    expected:
+      outcome: success
+      output:
+        standard_deviations: [0.01414213562373095]
+        window_length: 2
+        window_end_timestamps: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-15}
+  - id: window_end_alignment
+    kind: boundary
+    input:
+      values: [0.01, -0.01, 0.03]
+      window_length: 2
+      timestamps:
+        - '2026-07-24T00:00:00Z'
+        - '2026-07-27T00:00:00Z'
+        - '2026-07-28T00:00:00Z'
+    expected:
+      outcome: success
+      output:
+        standard_deviations: [0.01414213562373095, 0.0282842712474619]
+        window_length: 2
+        window_end_timestamps:
+          - '2026-07-27T00:00:00Z'
+          - '2026-07-28T00:00:00Z'
+        ordering_status: verified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-15}
+  - id: window_exceeds_values
+    kind: invalid_input
+    input:
+      values: [0.01, -0.01]
+      window_length: 3
+      timestamps: null
+    expected: {outcome: failure, code: window_exceeds_values}
+  - id: reversed_timestamps
+    kind: invalid_input
+    input:
+      values: [0.01, -0.01]
+      window_length: 2
+      timestamps:
+        - '2026-07-28T00:00:00Z'
+        - '2026-07-27T00:00:00Z'
+    expected: {outcome: failure, code: non_increasing_timestamps}
+invariants:
+  - id: output_count
+    statement: A sample of length n with window length w produces n minus w plus one outputs.
+  - id: constant_windows_zero
+    statement: Every constant complete window has exact zero sample standard deviation.
+  - id: window_end_alignment
+    statement: Timestamped outputs align to the final observation of each complete window.

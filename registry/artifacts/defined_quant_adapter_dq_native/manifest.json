@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "kind": "installed_distribution_manifest",
+  "distribution": "defined-quant-adapter-dq-native",
+  "version": "1.0.0",
+  "hashing": {
+    "algorithm": "sha256",
+    "canonicalization": "defined_quant_canonical_json_v1",
+    "domain": "registry.artifact.installed_distribution_manifest"
+  },
+  "entry_points": [
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_drawdown",
+      "value": "defined_quant_adapter_dq_native.drawdown.adapter:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_log_return",
+      "value": "defined_quant_adapter_dq_native.log_return.adapter:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_monthly_calendar_matrix",
+      "value": "defined_quant_adapter_dq_native.monthly_calendar_matrix.adapter:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_rebased_price_index",
+      "value": "defined_quant_adapter_dq_native.rebased_price_index.adapter:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_rolling_sample_standard_deviation",
+      "value": "defined_quant_adapter_dq_native.statistics.rolling_sample_standard_deviation:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_sample_standard_deviation",
+      "value": "defined_quant_adapter_dq_native.statistics.sample_standard_deviation:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_simple_return",
+      "value": "defined_quant_adapter_dq_native.simple_return.adapter:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_square_root_annualize",
+      "value": "defined_quant_adapter_dq_native.statistics.square_root_annualize:execute"
+    },
+    {
+      "group": "defined_quant.adapters",
+      "name": "dq_native_square_root_annualize_series",
+      "value": "defined_quant_adapter_dq_native.statistics.square_root_annualize_series:execute"
+    }
+  ],
+  "members": [
+    {
+      "path": "defined_quant_adapter_dq_native/__init__.py",
+      "sha256": "8d2758627308ef6d7f1cc18d8afee43661ca974dda14c1de4a0b186a7ae3c2f4"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/_boundary.py",
+      "sha256": "3193c86fdf50c8e6994aaa7708daa9edd2745fb2411508c724e2dd96fe8c15de"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/drawdown/__init__.py",
+      "sha256": "eb01683e3507cc6c73ad01548b9d2fe5a7ab65c339de557884c43981c0aa1f27"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/drawdown/adapter.py",
+      "sha256": "5ce756e878d263b72f2aa310fac8747c14e3726d295e06fd6b24f444c0519b4c"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/drawdown/kernel.py",
+      "sha256": "a11bbbcdc0489bfbe3ad07a77f3aeb280dcf8efe96880f9298236013b66e002c"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/log_return/__init__.py",
+      "sha256": "91b1029924fd03212cb6e13bf7e7c650c8787f8c25a9f9323573983d40da5136"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/log_return/adapter.py",
+      "sha256": "38efeaca1c3c1ceee4507312b7ad59757d1176c98be40a44fd4aacc0de831916"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/log_return/kernel.py",
+      "sha256": "d9da4243c551bc079327ad6ada9d1fe263155fe28cdb07fd4cd922c3f0c0aeb7"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/monthly_calendar_matrix/__init__.py",
+      "sha256": "5e612174c4f7422de27c09dc497fcc8fe88e82abe170cb1b0da0eaf4eed037fb"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/monthly_calendar_matrix/adapter.py",
+      "sha256": "b40bb44415c4a9643b94627c802fd99851d70326bbc65dfcbb6cbf8f67010dda"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/monthly_calendar_matrix/kernel.py",
+      "sha256": "852d4572742bae9c817626f2ce938300a8b0f0252f14ecb085e3a6b75509732e"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/py.typed",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/rebased_price_index/__init__.py",
+      "sha256": "f37848db8c51c41e7b9104f0d8da09f6c100e672e41958dc15c27e55ef8d2a16"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/rebased_price_index/adapter.py",
+      "sha256": "75ecfaec6af7ea82021c68e1676c41a47ff2789463b60097faf811a2198074a5"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/rebased_price_index/kernel.py",
+      "sha256": "c847dc8353f25ac20faa954f454b79f8c5292db6df509ee3229278999ee64af7"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/simple_return/__init__.py",
+      "sha256": "2d9e831cc89729958f053aaeeb517dc8c7aa885d39dd14d080cf4765f2282c1b"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/simple_return/adapter.py",
+      "sha256": "4f3f7b3e0f81135cf6e5555e65f3ab09d709bf0f7b2a78afac052ae47497d005"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/simple_return/kernel.py",
+      "sha256": "86e8413fd57d5dd6c79fa01b09172209e8b982c96618847be141e596dbbd14aa"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/__init__.py",
+      "sha256": "59185122a8cd92b2894e8963359c00681b3bc1095f655014433f0f78f646e82b"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/kernel.py",
+      "sha256": "68f416caf47e58e5e30140d8b018b07095d84812d59f5911a4aa0ea7e2185720"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/rolling_sample_standard_deviation.py",
+      "sha256": "31ec9b9a82aa55783602876e2a6d35f649085d726eda7e3d32124bfdd1f270da"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/sample_standard_deviation.py",
+      "sha256": "d8eb1da1bbf13e4c00449ddd21f078a28d957c1319b201d9c8cac10d5d5f3abf"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/square_root_annualize.py",
+      "sha256": "6c63c1c7ddaccf62a98861cf7b42c037a9a628c6896a687dd6f84152391d5fa1"
+    },
+    {
+      "path": "defined_quant_adapter_dq_native/statistics/square_root_annualize_series.py",
+      "sha256": "d2dd2bbd53419c8a14ddd182b6bb0c3e4702cb28bef10bc7d6cb910cd7e76354"
+    }
+  ]
+}

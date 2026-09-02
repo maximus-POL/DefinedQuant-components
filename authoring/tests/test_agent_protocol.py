@@ -225,6 +225,12 @@ def test_tagged_canonical_object_order_and_number_equivalence() -> None:
     assert canonical_hash({}, domain="first.domain") != canonical_hash({}, domain="second.domain")
 
 
+def test_tagged_canonical_preserves_finite_binary64_outside_safe_integer_range() -> None:
+    assert canonical_json_bytes(float(9_007_199_254_740_992)) == (
+        b'["number","4340000000000000"]'
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -233,7 +239,6 @@ def test_tagged_canonical_object_order_and_number_equivalence() -> None:
         float("-inf"),
         9_007_199_254_740_992,
         -9_007_199_254_740_992,
-        float(9_007_199_254_740_992),
         "\ud800",
         {"\udfff": "invalid key"},
     ],
@@ -249,7 +254,7 @@ def test_tagged_canonical_refuses_ambiguous_or_invalid_values(value: Any) -> Non
         ("a", True),
         ("input.json", True),
         ("artifacts/simple_return.svg", True),
-        ("Artifacts-1/_return.v2.svg", True),
+        ("Artifacts-1/_return.final.svg", True),
         ("a" * 512, True),
         ("/tmp/result.json", False),
         ("C:/result.json", False),
@@ -327,7 +332,7 @@ def test_member_paths_refuse_every_windows_device_alias(path: str) -> None:
 
 
 def test_portable_member_key_is_segmentwise_ascii_case_folded() -> None:
-    assert portable_member_key("Artifacts/File.V1.JSON") == "artifacts/file.v1.json"
+    assert portable_member_key("Artifacts/Report.JSON") == "artifacts/report.json"
     assert portable_member_key("A_B-C/D.E") == "a_b-c/d.e"
     assert RunnerIdentity(name="con", version="0.1.0").name == "con"
 

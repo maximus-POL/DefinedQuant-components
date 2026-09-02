@@ -102,7 +102,7 @@ def _plan(
     parent_plan_hash: str | None = None,
     objective: str = "Calculate adjacent-period simple returns from supplied prices.",
 ) -> AnalysisPlan:
-    bound_policy = policy or load_execution_policy("simple_return_csv_v1")
+    bound_policy = policy or load_execution_policy("simple_return_csv")
     return AnalysisPlan(
         plan_id="simple_return_analysis",
         revision=revision,
@@ -111,7 +111,7 @@ def _plan(
         resolved_questions=resolutions if resolutions is not None else (_resolution(),),
         step=PlanStep(
             step_id="calculate_returns",
-            profile_id="simple_return_csv_v1",
+            profile_id="simple_return_csv",
             component=component,
             component_lifecycle=lifecycle,
             explicit_draft_opt_in=explicit_draft_opt_in,
@@ -130,7 +130,7 @@ def _authorized_chain() -> tuple[
     ApprovalRecord,
     AuthorizationBinding,
 ]:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     plan = _plan(policy=policy)
     outcome = validate_plan(plan, policy)
     assert isinstance(outcome, ValidationReceipt)
@@ -154,7 +154,7 @@ def test_plan_validation_freshly_verifies_installed_subject(
         return original(component_id, root=root)
 
     monkeypatch.setattr(plan_validation, "verify_subject", verified)
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
 
     outcome = validate_plan(_plan(policy=policy), policy)
 
@@ -169,7 +169,7 @@ def test_exact_subject_atomic_plan_receipt_and_manual_approval_authorize() -> No
     repeated = validate_plan(plan, policy)
     outcome = verify_authorization(plan, receipt, approval, binding, policy)
 
-    assert policy.policy_id == "simple_return_csv_v1"
+    assert policy.policy_id == "simple_return_csv"
     assert len(policy.components) == 1
     assert policy.components[0].component == SIMPLE_RETURN
     assert policy.components[0].allowed_lifecycle == "draft"
@@ -185,7 +185,7 @@ def test_exact_subject_atomic_plan_receipt_and_manual_approval_authorize() -> No
 
 
 def test_missing_or_unconfirmed_required_answer_needs_information_without_receipt() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     missing = validate_plan(
         _plan(policy=policy, dataset=_dataset(price_kind=None), resolutions=()),
         policy,
@@ -209,7 +209,7 @@ def test_missing_or_unconfirmed_required_answer_needs_information_without_receip
 
 
 def test_conflicting_resolved_answer_is_blocked() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     outcome = validate_plan(
         _plan(policy=policy, dataset=_dataset(price_kind="unadjusted")),
         policy,
@@ -221,7 +221,7 @@ def test_conflicting_resolved_answer_is_blocked() -> None:
 
 
 def test_required_answer_comparison_distinguishes_booleans_from_numbers() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     dataset = DatasetBinding(
         dataset_id="candidate_prices",
         input={
@@ -248,7 +248,7 @@ def test_required_answer_comparison_distinguishes_booleans_from_numbers() -> Non
 
 
 def test_invalid_input_and_blocking_component_constraints_never_issue_receipts() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     invalid_kind = validate_plan(
         _plan(
             policy=policy,
@@ -280,7 +280,7 @@ def test_invalid_input_and_blocking_component_constraints_never_issue_receipts()
 
 
 def test_large_invalid_input_fails_closed_with_a_bounded_typed_issue() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     oversized_input: dict[str, Any] = {
         **_dataset().input,
         **{f"unexpected_{index}": index for index in range(100)},
@@ -357,7 +357,7 @@ def test_resolution_time_is_operational_but_data_timestamps_are_semantic() -> No
 
 @pytest.mark.parametrize("timestamps", [None, []])
 def test_managed_profile_requires_nonempty_timestamps(timestamps: list[str] | None) -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     outcome = validate_plan(_plan(policy=policy, dataset=_dataset(timestamps=timestamps)), policy)
 
     assert isinstance(outcome, ValidationFailure)
@@ -379,7 +379,7 @@ def test_managed_profile_requires_nonempty_timestamps(timestamps: list[str] | No
     ],
 )
 def test_policy_refuses_every_nonexact_component_identity(component: ComponentRef) -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     outcome = validate_plan(_plan(policy=policy, component=component), policy)
 
     assert isinstance(outcome, ValidationFailure)
@@ -388,7 +388,7 @@ def test_policy_refuses_every_nonexact_component_identity(component: ComponentRe
 
 
 def test_unknown_profile_and_unbound_policy_are_outside_managed_scope() -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     plan = _plan(policy=policy)
     unknown_profile = plan.model_copy(
         update={"step": plan.step.model_copy(update={"profile_id": "unknown_profile"})}
@@ -405,7 +405,7 @@ def test_unknown_profile_and_unbound_policy_are_outside_managed_scope() -> None:
 
 
 def test_caller_constructed_policy_cannot_replace_the_packaged_allowlist() -> None:
-    packaged = load_execution_policy("simple_return_csv_v1")
+    packaged = load_execution_policy("simple_return_csv")
     caller_policy = ExecutionPolicy.model_validate(
         {**packaged.model_dump(mode="json"), "version": "1.0.11"}
     )
@@ -425,7 +425,7 @@ def test_draft_lifecycle_requires_truthful_identity_and_explicit_opt_in(
     lifecycle: str,
     opt_in: bool,
 ) -> None:
-    policy = load_execution_policy("simple_return_csv_v1")
+    policy = load_execution_policy("simple_return_csv")
     outcome = validate_plan(
         _plan(policy=policy, lifecycle=lifecycle, explicit_draft_opt_in=opt_in),
         policy,
@@ -633,4 +633,4 @@ def test_validation_is_catalog_wide_and_component_identity_lives_only_in_policy_
     ).read_text(encoding="utf-8")
 
     assert "dq.market_data.simple_return" not in source
-    assert "simple_return_csv_v1" not in source
+    assert "simple_return_csv" not in source

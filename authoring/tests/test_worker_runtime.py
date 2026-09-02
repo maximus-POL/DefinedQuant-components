@@ -466,7 +466,7 @@ def test_inspection_worker_uses_provider_selected_managed_scratch() -> None:
 
 
 def test_worker_executes_at_the_portable_dataset_row_ceiling(tmp_path: Path) -> None:
-    reference = load_execution_policy("simple_return_csv_v1").components[0].component
+    reference = load_execution_policy("simple_return_csv").components[0].component
     request = OperationRequest(
         component=reference,
         input={

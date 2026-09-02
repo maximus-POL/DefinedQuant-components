@@ -31,7 +31,12 @@ MCP_REQUIRED = frozenset(
         "mcp_server/tests/test_server.py",
     }
 )
-PRODUCTION_PREFIXES = ("defined_quant", "defined_quant_protocol", "defined_quant_mcp")
+PRODUCTION_PREFIXES = (
+    "defined_quant",
+    "defined_quant_adapter_dq_native",
+    "defined_quant_protocol",
+    "defined_quant_mcp",
+)
 FORBIDDEN_SOURCE_PREFIXES = ("shared", "protocol")
 _SKIPPED_REPORTS: set[str] = set()
 

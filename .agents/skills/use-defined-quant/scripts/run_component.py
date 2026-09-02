@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one unmanaged operation through the shared Defined Quant runtime."""
+"""Legacy compatibility: run one unmanaged Defined Quant component operation."""
 
 from __future__ import annotations
 
@@ -62,14 +62,15 @@ class ProtocolArgumentParser(argparse.ArgumentParser):
 def _parser() -> ProtocolArgumentParser:
     parser = ProtocolArgumentParser(
         description=(
-            "Validate and execute one exactly identified Defined Quant component. "
-            "This operation path is unmanaged."
+            "Legacy compatibility only: validate and execute one exactly identified Defined "
+            "Quant component through the unmanaged operation path. Use compile_plan and "
+            "execute_plan for canonical governed Method execution."
         )
     )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument(
         "--request",
-        help="OperationRequest JSON path, or - for stdin.",
+        help="Legacy unmanaged OperationRequest JSON path, or - for stdin.",
     )
     source.add_argument(
         "--component",

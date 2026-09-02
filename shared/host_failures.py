@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, m
 
 _MAX_SAFE_INTEGER = 9_007_199_254_740_991
 _COMPONENT_ID = re.compile(r"^dq\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+_METHOD_ID = re.compile(r"^dq(?:\.[a-z][a-z0-9_]*){2,5}$")
 _SAFE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _REFERENCE_VERSION = re.compile(r"^v[0-9]{1,3}$")
 HOST_SUCCESS_TEXT = "Defined Quant host outcome: ok; use structuredContent."
@@ -41,6 +42,8 @@ class HostFailureCode(StrEnum):
     UNSUPPORTED_HOST_SCHEMA = "unsupported_host_schema"
     UNSUPPORTED_PROTOCOL_VERSION = "unsupported_protocol_version"
     UNSUPPORTED_REFERENCE_VERSION = "unsupported_reference_version"
+    METHOD_NOT_FOUND = "method_not_found"
+    METHOD_IDENTITY_MISMATCH = "method_identity_mismatch"
     COMPONENT_NOT_FOUND = "component_not_found"
     COMPONENT_IDENTITY_MISMATCH = "component_identity_mismatch"
     MISSING_CONVENTION = "missing_convention"
@@ -82,6 +85,7 @@ class TrustLabel(StrEnum):
     PLAN_COMPILATION_ONLY = "plan_compilation_only"
     UNVERIFIED_CALLER_DATA = "unverified_caller_data"
     STRUCTURAL_COMPATIBILITY_ONLY = "structural_compatibility_only"
+    GOVERNED_EXECUTION_RECORD = "governed_execution_record"
     UNMANAGED_EXECUTION = "unmanaged_execution"
     NO_VERIFIED_RESULT = "no_verified_result"
 
@@ -104,6 +108,11 @@ _TRUST_STATEMENTS: Mapping[TrustLabel, str] = MappingProxyType(
         TrustLabel.STRUCTURAL_COMPATIBILITY_ONLY: (
             "Semantic-port compatibility is structural only; it neither transfers data nor "
             "authorizes execution."
+        ),
+        TrustLabel.GOVERNED_EXECUTION_RECORD: (
+            "Validated governed record binding a compiled plan, exact implementations, adapter "
+            "results, and canonical validations. It does not attest data authenticity, financial "
+            "correctness, provider authentication, domain review, or independent reproduction."
         ),
         TrustLabel.UNMANAGED_EXECUTION: (
             "Unsigned host-reconciled record for an unmanaged local operation; digests bind its "
@@ -152,6 +161,18 @@ HOST_FAILURE_SPECS: Mapping[HostFailureCode, HostFailureSpec] = MappingProxyType
             "The requested content-addressed reference version is not supported.",
             False,
             "Use a reference version declared by this server.",
+        ),
+        HostFailureCode.METHOD_NOT_FOUND: HostFailureSpec(
+            HostOutcome.FAILED,
+            "The requested method is not available in the active registry.",
+            False,
+            "Search the active registry and submit an available method ID.",
+        ),
+        HostFailureCode.METHOD_IDENTITY_MISMATCH: HostFailureSpec(
+            HostOutcome.REFUSED,
+            "The requested method ID or version does not match the active registry.",
+            False,
+            "Inspect the method again and submit its exact returned identity.",
         ),
         HostFailureCode.COMPONENT_NOT_FOUND: HostFailureSpec(
             HostOutcome.FAILED,
@@ -400,6 +421,15 @@ def _component_id(value: object) -> bool:
     )
 
 
+def _method_id(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and value.isascii()
+        and 1 <= len(value) <= 320
+        and _METHOD_ID.fullmatch(value) is not None
+    )
+
+
 def _safe_id(value: object) -> bool:
     return isinstance(value, str) and value.isascii() and _SAFE_ID.fullmatch(value) is not None
 
@@ -481,6 +511,13 @@ def _validate_failure_details(code: HostFailureCode, details: Mapping[str, objec
             and isinstance(value, str)
             and value.isascii()
             and _REFERENCE_VERSION.fullmatch(value) is not None
+        )
+    elif code in {
+        HostFailureCode.METHOD_NOT_FOUND,
+        HostFailureCode.METHOD_IDENTITY_MISMATCH,
+    }:
+        valid = _exact_keys(details, {"method_id"}) and _method_id(
+            details.get("method_id")
         )
     elif code in {
         HostFailureCode.COMPONENT_NOT_FOUND,

@@ -12,11 +12,22 @@ from defined_quant.data_records import (
     FieldMappingV1,
 )
 from defined_quant.discovery import FACET_NAMES
+from defined_quant.run_views import (
+    DEFAULT_ARTIFACT_CHUNK_BYTES,
+    MAX_ARTIFACT_CHUNK_BYTES,
+)
 from defined_quant_protocol import (
+    BackendRole,
     CallerProvenance,
+    CapabilityRef,
     ComponentRef,
-    PlanProposalV1,
+    PlanProposal,
+    ResolutionConstraint,
+    ResolutionConstraintSet,
     canonical_json_bytes,
+)
+from defined_quant_protocol import (
+    PlanProposalV1 as LegacyPlanProposal,
 )
 from pydantic import (
     BaseModel,
@@ -28,6 +39,7 @@ from pydantic import (
 )
 
 _COMPONENT_ID = r"^dq\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$"
+_METHOD_ID = r"^dq(?:\.[a-z][a-z0-9_]*){2,5}$"
 _SEMVER = (
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-((?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
@@ -38,12 +50,16 @@ _SHA256 = r"^[0-9a-f]{64}$"
 _SAFE_ID = r"^[a-z][a-z0-9_]{0,63}$"
 _DATASET_REF = r"^dqds:v[0-9]{1,3}:[0-9a-f]{64}$"
 _OPERATION_REF = r"^dqop:v[0-9]{1,3}:[0-9a-f]{64}$"
+_PLAN_REF = r"^dqplan:[0-9a-f]{64}$"
+_RUN_REF = r"^dqrun:[0-9a-f]{64}$"
 _CURSOR = r"^[A-Za-z0-9_-]{1,512}$"
 
 SemVer = Annotated[str, Field(max_length=128, pattern=_SEMVER)]
 Sha256 = Annotated[str, Field(pattern=_SHA256)]
 DatasetRef = Annotated[str, Field(pattern=_DATASET_REF)]
 OperationRef = Annotated[str, Field(pattern=_OPERATION_REF)]
+PlanRef = Annotated[str, Field(pattern=_PLAN_REF)]
+RunRef = Annotated[str, Field(pattern=_RUN_REF)]
 Cursor = Annotated[str, Field(pattern=_CURSOR)]
 SafeId = Annotated[str, Field(pattern=_SAFE_ID)]
 
@@ -104,6 +120,54 @@ class SearchRequest(ClosedRequest):
         return _utf8(value, maximum=512)
 
 
+class MethodSearchFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    categories: tuple[str, ...] = Field(default=(), max_length=64)
+    tags: tuple[str, ...] = Field(default=(), max_length=64)
+    intents: tuple[str, ...] = Field(default=(), max_length=64)
+    input_concepts: tuple[str, ...] = Field(default=(), max_length=64)
+    output_concepts: tuple[str, ...] = Field(default=(), max_length=64)
+    lifecycles: tuple[str, ...] = Field(default=(), max_length=64)
+
+    @field_validator(
+        "categories",
+        "tags",
+        "intents",
+        "input_concepts",
+        "output_concepts",
+        "lifecycles",
+    )
+    @classmethod
+    def _filter_values(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        for value in values:
+            _utf8(value, minimum=1, maximum=128)
+        return values
+
+
+class SearchMethodsRequest(ClosedRequest):
+    query: str
+    filters: MethodSearchFilters = Field(default_factory=MethodSearchFilters)
+    limit: Annotated[int, Field(strict=True, ge=1, le=20)] = 10
+
+    @field_validator("query")
+    @classmethod
+    def _query_bytes(cls, value: str) -> str:
+        return _utf8(value, maximum=512)
+
+
+class InspectMethodRequest(ClosedRequest):
+    method_id: str = Field(pattern=_METHOD_ID)
+    version: SemVer | None = None
+
+    @field_validator("method_id")
+    @classmethod
+    def _method_bytes(cls, value: str) -> str:
+        if not value.isascii():
+            raise ValueError("method id must be ASCII")
+        return _utf8(value, minimum=1, maximum=320)
+
+
 class InspectRequest(ClosedRequest):
     component_id: str = Field(pattern=_COMPONENT_ID)
     expected_version: SemVer | None = None
@@ -158,8 +222,149 @@ class ComparePortsRequest(ClosedRequest):
     consumer: PortRef
 
 
+class ResolutionScopeRequest(BaseModel):
+    """Caller-visible constraint scope without host receipt controls."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    all_steps: Literal[True] | None = None
+    step_id: SafeId | None = None
+    capability: CapabilityRef | None = None
+
+
+class ResolutionConstraintRequest(BaseModel):
+    """Raw user-explicit preference accepted from an agent proposal."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    constraint_id: SafeId
+    scope: ResolutionScopeRequest
+    dimension: Literal[
+        "implementation",
+        "backend",
+        "adapter_family",
+        "backend_kind",
+        "transport",
+        "locality",
+        "network",
+    ]
+    backend_role: BackendRole | None = None
+    mode: Literal["required", "preferred", "forbidden", "allowed_set"]
+    targets: tuple[Annotated[str, Field(min_length=1, max_length=320)], ...] = Field(
+        min_length=1,
+        max_length=64,
+    )
+    asserted_origin: Literal["user_explicit"]
+    fallback: Literal[
+        "forbidden",
+        "within_preferences",
+        "any_policy_eligible",
+    ] = "forbidden"
+
+    def to_protocol(self) -> ResolutionConstraint:
+        return ResolutionConstraint.model_validate(self.model_dump(mode="json"))
+
+
+class ResolutionConstraintSetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    constraints: tuple[ResolutionConstraintRequest, ...] = Field(
+        default=(),
+        max_length=128,
+    )
+
+    def to_protocol(self) -> ResolutionConstraintSet:
+        return ResolutionConstraintSet(
+            constraints=tuple(item.to_protocol() for item in self.constraints)
+        )
+
+
+class PlanProposalRequest(BaseModel):
+    """Closed non-secret raw proposal; trusted receipts are deliberately absent."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[2] = 2
+    method_id: str = Field(pattern=_METHOD_ID, max_length=320)
+    method_version: SemVer
+    financial_inputs: dict[str, JsonValue]
+    conventions: dict[str, JsonValue]
+    resolution_constraints: ResolutionConstraintSetRequest = Field(
+        default_factory=ResolutionConstraintSetRequest
+    )
+    agent_rationale: str | None = Field(default=None, min_length=1, max_length=4000)
+
+    def to_protocol(self) -> PlanProposal:
+        return PlanProposal(
+            schema_version=self.schema_version,
+            method_id=self.method_id,
+            method_version=self.method_version,
+            financial_inputs=self.financial_inputs,
+            conventions=self.conventions,
+            resolution_constraints=self.resolution_constraints.to_protocol(),
+            agent_rationale=self.agent_rationale,
+        )
+
+    @model_validator(mode="after")
+    def _validate_protocol(self) -> PlanProposalRequest:
+        self.to_protocol()
+        return self
+
+
 class CompilePlanRequest(ClosedRequest):
-    proposal: PlanProposalV1
+    proposal: PlanProposalRequest
+
+
+class CompileComponentPlanRequest(ClosedRequest):
+    """Compatibility-only request for the legacy component projection."""
+
+    proposal: LegacyPlanProposal
+
+
+class ExecutePlanRequest(ClosedRequest):
+    plan_ref: PlanRef
+
+
+class GetPlanRequest(ClosedRequest):
+    plan_ref: PlanRef
+
+
+class GetRunRequest(ClosedRequest):
+    run_ref: RunRef
+    view: Literal[
+        "summary",
+        "steps",
+        "warnings",
+        "artifacts",
+        "datasets",
+        "output_fields",
+        "output",
+    ] = "summary"
+    field: SafeId | None = None
+    cursor: Cursor | None = None
+    limit: Annotated[int, Field(strict=True, ge=1, le=1000)] | None = None
+
+    @model_validator(mode="after")
+    def _selectors(self) -> GetRunRequest:
+        if self.view == "summary":
+            if self.field is not None or self.cursor is not None or self.limit is not None:
+                raise ValueError("summary view forbids selectors")
+        elif self.view == "output":
+            if self.field is None:
+                raise ValueError("output view requires field")
+        elif self.field is not None:
+            raise ValueError("field is available only for output view")
+        return self
+
+
+class ReadArtifactRequest(ClosedRequest):
+    run_ref: RunRef
+    artifact_id: SafeId
+    cursor: Cursor | None = None
+    limit_bytes: Annotated[
+        int,
+        Field(strict=True, ge=1, le=MAX_ARTIFACT_CHUNK_BYTES),
+    ] = DEFAULT_ARTIFACT_CHUNK_BYTES
 
 
 class DatasetSource(BaseModel):
@@ -272,12 +477,22 @@ class GetOperationRequest(ClosedRequest):
 
 
 REQUEST_MODELS: dict[str, type[BaseModel]] = {
+    "search_methods": SearchMethodsRequest,
+    "inspect_method": InspectMethodRequest,
+    "compile_plan": CompilePlanRequest,
+    "execute_plan": ExecutePlanRequest,
+    "get_plan": GetPlanRequest,
+    "get_run": GetRunRequest,
+    "get_dataset": DescribeDatasetRequest,
+    "read_artifact": ReadArtifactRequest,
+    "register_dataset": RegisterDatasetRequest,
+    # Compatibility-only component surfaces. Remove no later than 2026-12-31 or the first 0.2.0
+    # release; they are intentionally named separately from the canonical methods API.
     "search_components": SearchRequest,
     "inspect_component": InspectRequest,
-    "register_dataset": RegisterDatasetRequest,
     "describe_dataset": DescribeDatasetRequest,
     "compare_ports": ComparePortsRequest,
-    "compile_plan": CompilePlanRequest,
+    "compile_component_plan": CompileComponentPlanRequest,
     "execute_component": ExecuteComponentRequest,
     "get_operation": GetOperationRequest,
 }
@@ -285,12 +500,20 @@ REQUEST_MODELS: dict[str, type[BaseModel]] = {
 
 __all__ = [
     "ComparePortsRequest",
+    "CompileComponentPlanRequest",
     "CompilePlanRequest",
     "DescribeDatasetRequest",
     "ExecuteComponentRequest",
+    "ExecutePlanRequest",
     "GetOperationRequest",
+    "GetPlanRequest",
+    "GetRunRequest",
+    "InspectMethodRequest",
     "InspectRequest",
+    "MethodSearchFilters",
     "REQUEST_MODELS",
+    "ReadArtifactRequest",
     "RegisterDatasetRequest",
+    "SearchMethodsRequest",
     "SearchRequest",
 ]

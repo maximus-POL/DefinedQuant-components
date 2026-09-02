@@ -43,8 +43,6 @@ def _number_hex(value: int | float) -> str:
     else:
         if not math.isfinite(value):
             raise ValueError("canonical numbers must be finite")
-        if value.is_integer() and abs(value) > _MAX_SAFE_INTEGER:
-            raise ValueError("integer-valued floats must be within the safe-integer range")
         normalized = value
 
     if normalized == 0.0:

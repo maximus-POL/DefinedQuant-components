@@ -30,6 +30,7 @@ from defined_quant.host_failures import (
     host_success,
 )
 from defined_quant.local_host_platform import SecureFilesystemError
+from defined_quant.registry import MethodFilters, MethodSearchResults
 from defined_quant.service import DefinedQuantService
 from defined_quant.stdio_framing import (
     BinaryFrameError,
@@ -49,11 +50,18 @@ from pydantic import BaseModel, ValidationError
 from .models import (
     REQUEST_MODELS,
     ComparePortsRequest,
+    CompileComponentPlanRequest,
     CompilePlanRequest,
     DescribeDatasetRequest,
     ExecuteComponentRequest,
+    ExecutePlanRequest,
     GetOperationRequest,
+    GetPlanRequest,
+    GetRunRequest,
+    InspectMethodRequest,
     InspectRequest,
+    ReadArtifactRequest,
+    SearchMethodsRequest,
     SearchRequest,
 )
 
@@ -67,13 +75,13 @@ MAX_STATIC_FRAME_BYTES = 256 * 1024
 MAX_RESOURCE_FRAME_BYTES = 8 * 1024 * 1024
 RESOURCE_TEMPLATE = "dqop://v1/{operation_sha256}/artifact/{artifact_id}"
 INITIALIZATION_INSTRUCTIONS = (
-    "For financial calculations, search the Defined Quant catalog, inspect only selected "
-    "canonical contracts, submit structured proposals to compile_plan when governed planning "
-    "is required, register or reference data, execute through Defined Quant tools, and read "
-    "the typed outcome. Compilation never executes a calculation. Do not inspect component "
-    "source unless the user explicitly "
-    "requests development, review, or debugging. Never infer an answer-changing convention. "
-    "Operations are unmanaged and supplied data is not authenticated."
+    "For financial calculations, search_methods and inspect_method before submitting a closed "
+    "proposal to compile_plan. Translate only explicit user implementation or provider choices; "
+    "do not invent preferences or credentials. Compilation applies host policy and availability "
+    "but never executes. execute_plan runs only the exact compiled implementations with no "
+    "runtime fallback, publishes a complete run record, and returns its compact reference. Use "
+    "get_run for bounded summaries and paged outputs. Supplied data remains unauthenticated. "
+    "Component-named tools are temporary migration compatibility surfaces."
 )
 
 _T = TypeVar("_T")
@@ -84,9 +92,17 @@ _RESOURCE_URI = re.compile(
 )
 
 _SUCCESS_TRUST = {
+    "search_methods": TrustLabel.CONTRACT_METADATA_ONLY,
+    "inspect_method": TrustLabel.CONTRACT_METADATA_ONLY,
+    "compile_plan": TrustLabel.PLAN_COMPILATION_ONLY,
+    "execute_plan": TrustLabel.GOVERNED_EXECUTION_RECORD,
+    "get_plan": TrustLabel.PLAN_COMPILATION_ONLY,
+    "get_run": TrustLabel.GOVERNED_EXECUTION_RECORD,
+    "get_dataset": TrustLabel.UNVERIFIED_CALLER_DATA,
+    "read_artifact": TrustLabel.GOVERNED_EXECUTION_RECORD,
     "search_components": TrustLabel.CONTRACT_METADATA_ONLY,
     "inspect_component": TrustLabel.INSTALLED_SUBJECT_INSPECTED,
-    "compile_plan": TrustLabel.PLAN_COMPILATION_ONLY,
+    "compile_component_plan": TrustLabel.PLAN_COMPILATION_ONLY,
     "register_dataset": TrustLabel.UNVERIFIED_CALLER_DATA,
     "describe_dataset": TrustLabel.UNVERIFIED_CALLER_DATA,
     "compare_ports": TrustLabel.STRUCTURAL_COMPATIBILITY_ONLY,
@@ -95,11 +111,35 @@ _SUCCESS_TRUST = {
 }
 _FAILURE_TRUST = {
     **{name: TrustLabel.NO_VERIFIED_RESULT for name in REQUEST_MODELS},
+    "search_methods": TrustLabel.CONTRACT_METADATA_ONLY,
+    "inspect_method": TrustLabel.CONTRACT_METADATA_ONLY,
     "search_components": TrustLabel.CONTRACT_METADATA_ONLY,
     "compare_ports": TrustLabel.STRUCTURAL_COMPATIBILITY_ONLY,
 }
 
 _ALLOWED_FAILURES = {
+    "search_methods": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "inspect_method": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.METHOD_NOT_FOUND,
+            HostFailureCode.METHOD_IDENTITY_MISMATCH,
+            HostFailureCode.COMPONENT_CONTRACT_ERROR,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
     "search_components": frozenset(
         {
             HostFailureCode.INVALID_TOOL_REQUEST,
@@ -128,6 +168,82 @@ _ALLOWED_FAILURES = {
         }
     ),
     "compile_plan": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.CACHE_FULL,
+            HostFailureCode.RECORD_PUBLICATION_FAILED,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "execute_plan": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.REFERENCE_NOT_FOUND,
+            HostFailureCode.REFERENCE_SCOPE_DENIED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.CACHE_FULL,
+            HostFailureCode.RECORD_PUBLICATION_FAILED,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "get_plan": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.REFERENCE_NOT_FOUND,
+            HostFailureCode.REFERENCE_SCOPE_DENIED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "get_run": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.REFERENCE_NOT_FOUND,
+            HostFailureCode.REFERENCE_SCOPE_DENIED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "get_dataset": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.UNSUPPORTED_REFERENCE_VERSION,
+            HostFailureCode.REFERENCE_NOT_FOUND,
+            HostFailureCode.REFERENCE_SCOPE_DENIED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "read_artifact": frozenset(
+        {
+            HostFailureCode.INVALID_TOOL_REQUEST,
+            HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
+            HostFailureCode.INPUT_LIMIT_EXCEEDED,
+            HostFailureCode.REFERENCE_NOT_FOUND,
+            HostFailureCode.REFERENCE_SCOPE_DENIED,
+            HostFailureCode.RECORD_CORRUPT,
+            HostFailureCode.ARTIFACT_NOT_FOUND,
+            HostFailureCode.RESULT_LIMIT_EXCEEDED,
+            HostFailureCode.INTERNAL_FAILURE,
+        }
+    ),
+    "compile_component_plan": frozenset(
         {
             HostFailureCode.INVALID_TOOL_REQUEST,
             HostFailureCode.UNSUPPORTED_HOST_SCHEMA,
@@ -453,7 +569,11 @@ def _tool_result_projection(result: types.CallToolResult) -> dict[str, Any]:
 
 
 def _bounded_tool_result(surface: str, result: types.CallToolResult) -> types.CallToolResult:
-    maximum = MAX_SEARCH_RESULT_BYTES if surface == "search_components" else MAX_TOOL_RESULT_BYTES
+    maximum = (
+        MAX_SEARCH_RESULT_BYTES
+        if surface in {"search_methods", "search_components"}
+        else MAX_TOOL_RESULT_BYTES
+    )
     actual = len(_compact_bytes(_tool_result_projection(result)))
     if actual <= maximum:
         return result
@@ -463,7 +583,7 @@ def _bounded_tool_result(surface: str, result: types.CallToolResult) -> types.Ca
         details={
             "limit_name": (
                 "search_response_bytes"
-                if surface == "search_components"
+                if surface in {"search_methods", "search_components"}
                 else "structured_tool_response_bytes"
             ),
             "maximum": maximum,
@@ -525,6 +645,47 @@ def _search_projection(results: SearchResults) -> dict[str, Any]:
     }
 
 
+def _method_search_projection(results: MethodSearchResults) -> dict[str, Any]:
+    return {
+        "compact": True,
+        "query": results.query,
+        "terms": list(results.terms),
+        "total_matches": results.total_matches,
+        "hits": [
+            {
+                "method_id": hit.method.id,
+                "version": hit.method.version,
+                "contract_hash": hit.method.identity_hash,
+                "title": hit.method.data["title"],
+                "lifecycle": hit.method.data["lifecycle"],
+                "summary": hit.method.data["summary"],
+                "website_slug": hit.method.data["discovery"]["website_slug"],
+                "score": hit.score,
+                "matched_terms": list(hit.matched_terms),
+                "unmatched_terms": list(hit.unmatched_terms),
+                "positive_matches": [
+                    {
+                        "field": match.field,
+                        "terms": list(match.terms),
+                        "values": list(match.values),
+                    }
+                    for match in hit.positive_matches
+                ],
+                "boundary_matches": [
+                    {
+                        "field": match.field,
+                        "terms": list(match.terms),
+                        "values": list(match.values),
+                    }
+                    for match in hit.boundary_matches
+                ],
+            }
+            for hit in results.hits
+        ],
+        "truncated": results.total_matches > len(results.hits),
+    }
+
+
 async def _cancellable_call(call: Callable[[], _T], cancel_event: Event) -> _T:
     try:
         return await anyio.to_thread.run_sync(call, abandon_on_cancel=True)
@@ -537,22 +698,49 @@ async def _dispatch(
     request: BaseModel,
 ) -> Mapping[str, Any]:
     cancel_event = Event()
+    if isinstance(request, SearchMethodsRequest):
+        method_filters = MethodFilters(
+            categories=request.filters.categories,
+            tags=request.filters.tags,
+            intents=request.filters.intents,
+            input_concepts=request.filters.input_concepts,
+            output_concepts=request.filters.output_concepts,
+            lifecycles=request.filters.lifecycles,
+        )
+        method_results = await _cancellable_call(
+            lambda: service.search_methods(
+                request.query,
+                filters=method_filters,
+                limit=request.limit,
+            ),
+            cancel_event,
+        )
+        return _method_search_projection(method_results)
+    if isinstance(request, InspectMethodRequest):
+        inspection = await _cancellable_call(
+            lambda: service.inspect_method(
+                request.method_id,
+                version=request.version,
+            ),
+            cancel_event,
+        )
+        return inspection.as_dict()
     if isinstance(request, SearchRequest):
-        filters = DiscoveryFilters(
+        component_filters = DiscoveryFilters(
             **{
                 facet: getattr(request.filters, facet)
                 for facet in FACET_NAMES
             }
         )
-        results = await _cancellable_call(
+        component_results = await _cancellable_call(
             lambda: service.search_components(
                 request.query,
-                filters=filters,
+                filters=component_filters,
                 limit=request.limit,
             ),
             cancel_event,
         )
-        return _search_projection(results)
+        return _search_projection(component_results)
     if isinstance(request, InspectRequest):
         return await _cancellable_call(
             lambda: service.inspect_component(
@@ -571,7 +759,7 @@ async def _dispatch(
         )
     if isinstance(request, DescribeDatasetRequest):
         return await _cancellable_call(
-            lambda: service.describe_dataset(
+            lambda: service.get_dataset(
                 request.dataset_ref,
                 view=request.view,
                 cursor=request.cursor,
@@ -589,14 +777,71 @@ async def _dispatch(
             cancel_event,
         )
     if isinstance(request, CompilePlanRequest):
-        outcome = await _cancellable_call(
-            lambda: service.compile_plan(
+        canonical_outcome = await _cancellable_call(
+            lambda: service.compile_plan(request.proposal.to_protocol()),
+            cancel_event,
+        )
+        result = canonical_outcome.model_dump(mode="json")
+        if canonical_outcome.status == "compiled":
+            result["plan_ref"] = canonical_outcome.ref.reference
+        return result
+    if isinstance(request, CompileComponentPlanRequest):
+        component_outcome = await _cancellable_call(
+            lambda: service.compile_component_plan(
                 request.proposal,
                 cancel_event=cancel_event,
             ),
             cancel_event,
         )
-        return outcome.model_dump(mode="json")
+        return component_outcome.model_dump(mode="json")
+    if isinstance(request, ExecutePlanRequest):
+        return await _cancellable_call(
+            lambda: service.execute_plan(request.plan_ref),
+            cancel_event,
+        )
+    if isinstance(request, GetPlanRequest):
+        plan_record = await _cancellable_call(
+            lambda: service.get_plan(request.plan_ref),
+            cancel_event,
+        )
+        result = plan_record.model_dump(mode="json")
+        result["plan_ref"] = plan_record.ref.reference
+        return result
+    if isinstance(request, GetRunRequest):
+        return await _cancellable_call(
+            lambda: service.get_run(
+                request.run_ref,
+                view=request.view,
+                field=request.field,
+                cursor=request.cursor,
+                limit=request.limit,
+            ),
+            cancel_event,
+        )
+    if isinstance(request, ReadArtifactRequest):
+        artifact = await _cancellable_call(
+            lambda: service.read_artifact(
+                request.run_ref,
+                request.artifact_id,
+                cursor=request.cursor,
+                limit_bytes=request.limit_bytes,
+            ),
+            cancel_event,
+        )
+        return {
+            "run_ref": request.run_ref,
+            "artifact_id": request.artifact_id,
+            "media_type": artifact.media_type,
+            "sha256": artifact.artifact_sha256,
+            "total_bytes": artifact.total_bytes,
+            "offset": artifact.offset,
+            "returned_bytes": len(artifact.content),
+            "chunk_sha256": artifact.chunk_sha256,
+            "complete": artifact.complete,
+            "next_cursor": artifact.next_cursor,
+            "content_encoding": "base64",
+            "content_base64": base64.b64encode(artifact.content).decode("ascii"),
+        }
     if isinstance(request, ExecuteComponentRequest):
         return await _cancellable_call(
             lambda: service.execute_component(
@@ -625,24 +870,45 @@ async def _dispatch(
 
 
 _TOOL_DESCRIPTIONS = {
+    "search_methods": "Search provider-neutral Method registry metadata.",
+    "inspect_method": "Inspect one Method and its static registry relationships.",
+    "compile_plan": "Compile a proposal under explicit policy, constraints, and availability.",
+    "execute_plan": (
+        "Execute an inline-input retained plan exactly and return a compact run reference."
+    ),
+    "get_plan": "Read one immutable compiled-plan record.",
+    "get_run": "Read bounded summary, metadata, or paged output views of a governed run.",
+    "get_dataset": "Read bounded metadata or a deliberate preview from a dataset record.",
+    "read_artifact": (
+        "Read one bounded digest-validated chunk of an artifact declared by a governed run."
+    ),
     "search_components": "Search contract-only Defined Quant catalog metadata.",
     "inspect_component": "Inspect one exact installed component identity and schema.",
     "register_dataset": "Normalize and register caller-supplied data for this session.",
     "describe_dataset": "Read bounded metadata or a deliberate preview from a dataset record.",
     "compare_ports": "Compare one exact output semantic port with one exact input port.",
-    "compile_plan": "Compile one structured proposal into a deterministic governance outcome.",
+    "compile_component_plan": "Compatibility-only compiler for a legacy component proposal.",
     "execute_component": "Execute one exact unmanaged component operation.",
     "get_operation": "Read a bounded verified projection of an operation record.",
 }
 _READ_ONLY_TOOLS = {
+    "search_methods",
+    "inspect_method",
+    "get_plan",
+    "get_run",
+    "get_dataset",
+    "read_artifact",
     "search_components",
     "inspect_component",
     "describe_dataset",
     "compare_ports",
-    "compile_plan",
+    "compile_component_plan",
     "get_operation",
 }
-_IDEMPOTENT_TOOLS = _READ_ONLY_TOOLS | {"execute_component"}
+_IDEMPOTENT_TOOLS = _READ_ONLY_TOOLS | {
+    "compile_plan",
+    "execute_component",
+}
 
 
 def _tools() -> list[types.Tool]:

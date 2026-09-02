@@ -1,0 +1,11 @@
+schema_version: 1
+id: dq_native.square_root_annualize_series
+version: 1.0.0
+title: DQ-native series square-root-annualization adapter
+family: dq_native
+backend: {id: dq_native, version: 1.0.0}
+distribution: defined-quant-adapter-dq-native
+contract_version: 1.0.0
+dispatch_key: dq_native_square_root_annualize_series
+transports: [in_process]
+evidence_refs: [{id: evidence.adapter.dq_native.square_root_annualize_series, version: 1.0.0}]

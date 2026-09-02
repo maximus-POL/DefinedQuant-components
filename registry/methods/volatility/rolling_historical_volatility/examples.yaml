@@ -1,0 +1,20 @@
+schema_version: 1
+method: {id: dq.volatility.rolling_historical_volatility, version: 1.0.0}
+examples:
+  - id: two_rolling_windows
+    title: Two three-return volatility windows
+    input:
+      returns: [0.01, -0.01, 0.03, 0.01]
+      window_length: 3
+      annualization_factor: 12.0
+      return_kind: log
+      timestamps: null
+      declared_frequency: null
+    conformance_cases:
+      - capability: {id: statistics.rolling_sample_standard_deviation, version: 1.0.0}
+        id: two_windows_known_answer
+      - capability: {id: statistics.square_root_annualize_series, version: 1.0.0}
+        id: factor_twelve_known_answer
+    interpretation: >-
+      Both three-return windows have periodic sample volatility 0.02 and annualized volatility
+      approximately 0.069282. The two estimates overlap and are not independent.

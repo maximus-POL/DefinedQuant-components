@@ -12,10 +12,7 @@ from defined_quant.types import ContractEvaluationError
 from defined_quant.validation import evaluate_expression
 from defined_quant_protocol import (
     AppliedDefaultV1,
-    AvailabilityReason,
     AvailabilitySnapshotV1,
-    AvailabilityStatus,
-    CandidateRejectionCode,
     CandidateResolutionV1,
     CapabilitySpecV1,
     CompiledPlanV1,
@@ -26,7 +23,6 @@ from defined_quant_protocol import (
     MethodSpecV1,
     NeedsInformationV1,
     PlanProposalV1,
-    PlanRefusalCode,
     PlanRefusalV1,
     PortProvenanceRequirement,
     ResolutionPolicyV1,
@@ -34,6 +30,12 @@ from defined_quant_protocol import (
     ResolutionReceiptV1,
     SemanticPort,
     canonical_json_bytes,
+)
+from defined_quant_protocol.governance import (
+    AvailabilityReason,
+    AvailabilityStatus,
+    CandidateRejectionCode,
+    PlanRefusalCode,
 )
 from pydantic import JsonValue
 

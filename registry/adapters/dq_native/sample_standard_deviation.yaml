@@ -1,0 +1,11 @@
+schema_version: 1
+id: dq_native.sample_standard_deviation
+version: 1.0.0
+title: DQ-native sample-standard-deviation adapter
+family: dq_native
+backend: {id: dq_native, version: 1.0.0}
+distribution: defined-quant-adapter-dq-native
+contract_version: 1.0.0
+dispatch_key: dq_native_sample_standard_deviation
+transports: [in_process]
+evidence_refs: [{id: evidence.adapter.dq_native.sample_standard_deviation, version: 1.0.0}]

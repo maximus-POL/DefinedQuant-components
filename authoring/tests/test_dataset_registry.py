@@ -26,7 +26,7 @@ from defined_quant.session_cas import MAX_DATASET_PAYLOAD_BYTES
 from defined_quant_protocol import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
-VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.v1.json"
+VECTORS = ROOT / "docs" / "local_mcp" / "hash_vectors.json"
 
 
 def _request(

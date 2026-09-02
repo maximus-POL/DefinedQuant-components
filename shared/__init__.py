@@ -44,9 +44,12 @@ from defined_quant.method_registry import (  # noqa: E402
     GovernedRegistry,
     project_component_inspection,
 )
+from defined_quant.method_service import MethodsRuntime  # noqa: E402
 from defined_quant.plan_compiler import (  # noqa: E402
     RESOLUTION_ALGORITHM_VERSION,
-    compile_plan,
+)
+from defined_quant.plan_compiler import (  # noqa: E402
+    compile_plan as compile_component_plan,
 )
 from defined_quant.plan_validation import (  # noqa: E402
     create_authorization_binding,
@@ -54,6 +57,13 @@ from defined_quant.plan_validation import (  # noqa: E402
     load_execution_policy,
     validate_plan,
     verify_authorization,
+)
+from defined_quant.planning import compile_plan  # noqa: E402
+from defined_quant.registry import (  # noqa: E402
+    MethodFilters,
+    inspect_method,
+    load_registry,
+    search_methods,
 )
 from defined_quant.validation import preflight  # noqa: E402
 
@@ -66,6 +76,8 @@ __all__ = [
     "FacetValue",
     "FieldMatch",
     "GovernedRegistry",
+    "MethodFilters",
+    "MethodsRuntime",
     "RESOLUTION_ALGORITHM_VERSION",
     "SearchHit",
     "SearchResults",
@@ -76,15 +88,18 @@ __all__ = [
     "create_authorization_binding",
     "create_manual_approval",
     "compile_plan",
+    "compile_component_plan",
     "invalidate_subject_cache",
     "iter_components",
     "load_component",
+    "load_registry",
     "load_execution_policy",
     "preflight",
     "project_component_inspection",
     "render_svg",
     "save_svg",
     "search_components",
+    "search_methods",
     "subject_hash",
     "subject_manifest",
     "tokenize",
@@ -92,6 +107,7 @@ __all__ = [
     "verify_subject",
     "verify_authorization",
     "visualization_hash",
+    "inspect_method",
 ]
 
 del _candidate, _entry

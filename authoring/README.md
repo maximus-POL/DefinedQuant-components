@@ -1,199 +1,122 @@
-# Component authoring
+# Registry authoring
 
-This folder contains the small set of tools used to create and check the public
-component catalog. It is intentionally separate from both the financial components
-in `categories/` and the reusable runtime in `shared/`.
+The authoring tools validate and publish Defined Quant's methods-first registry. Authored YAML is
+data only: discovery and inspection never import Adapter or Implementation code, probe credentials,
+or contact a Backend.
 
-There is no `dq` command. Every command below is an ordinary Python script run in
-the project environment. In other words, `uv run` means “use the Python version and
-dependencies locked for this project.”
+There is no `dq` command. Run the scripts below with the project environment from the repository
+root.
 
-## The one component template
+## Authored authorities
 
-`component-template/` is the canonical template. Its files have the same names as
-the files authors inspect and edit in a real component; there are no `.tmpl` files,
-profile overlays, or extension matrices.
+The registry deliberately separates concerns:
 
-| File | Purpose |
+| Path | Authority |
 |---|---|
-| `README.md` | Human explanation, formula, example, assumptions, and limitations. |
-| `component.py` | Deterministic function plus canonical Pydantic `Inputs` and `Output`. |
-| `contract.yaml` | Identity, discovery metadata, provenance, agent guidance, constraints, and display copy. |
-| `evidence.yaml` | Executable numerical fixtures, assertions, and agent adapter cases. |
-| `test_component.py` | Behaviour tests and hand-written invariant tests. |
+| `registry/methods/<category>/<method>/method.yaml` | Financial meaning, user-facing schemas, methodology, conventions, defaults, constraints, interpretation, and backend-neutral Recipe |
+| `registry/methods/<category>/<method>/README.md` | Human explanation of that Method |
+| `registry/methods/<category>/<method>/examples.yaml` | Structured Method examples |
+| `registry/capabilities/<domain>/<capability>/capability.yaml` | Atomic backend-neutral interface and constraints |
+| `registry/capabilities/<domain>/<capability>/conformance.yaml` | Universal known answers, boundaries, tolerances, and invariants |
+| `registry/backends/<backend>.yaml` | Backend identity and operational boundaries |
+| `registry/adapters/<family>/<adapter>.yaml` | Trusted Adapter family, distribution, entry point, and dispatch identity |
+| `registry/implementations/<backend>/<implementation>.yaml` | Exact Capability realization, Backend and Adapter bindings, sole artifact pin, restrictions, probes, and trust assertions |
+| `registry/evidence/` | Separate Method-, Adapter-, and Implementation-scoped claims |
 
-The `{{PLACEHOLDER}}` values are replaced by `create_component.py`. Edit the
-canonical folder itself when every future component should start differently.
+`registry/taxonomy/categories.yaml` owns discovery and website-navigation categories. A category is
+not an implementation namespace and does not imply that a Method has handwritten Python code.
 
-## Create a category
+## Author a Method and Recipe
 
-From the `components/` project root:
+Start with the financial contract. A Method owns its purpose, canonical user-facing inputs and
+outputs, methodology, interpretation, assumptions, limitations, conventions, authored defaults,
+constraints, and Recipe.
 
-```bash
-uv run python authoring/create_category.py \
-  --id statistics \
-  --title "Statistics" \
-  --summary "Deterministic descriptive statistics and diagnostics."
-```
+Each Recipe step references exactly one Capability. Backends, providers, Adapters, transports, and
+Implementations never appear in a Method or Recipe. When a Method field crosses a Capability
+boundary, author only an `x-defined-quant-capability-field` directive naming the exact Capability,
+direction, and field. The registry loader expands the Capability-owned schema and records an
+auditable binding; a Method may not override it.
 
-This creates `categories/statistics/README.md` with short YAML front matter followed
-by ordinary Markdown. The README is the category’s human index; there is no hidden
-category contract.
+Method-only fields remain authored in `method.yaml`. A convention that can change the answer must
+be a required input or a visible authored default. Constraints use the closed declarative
+vocabulary and may never execute code.
 
-## Create a component
+## Author a Capability and conformance
 
-```bash
-uv run python authoring/create_component.py \
-  --category statistics \
-  --group descriptive_statistics \
-  --slug arithmetic_mean \
-  --profile statistic \
-  --title "Arithmetic Mean" \
-  --author-name "Your Name" \
-  --author-github "your-handle"
-```
+A Capability is one reusable atomic operation. Its schemas define exact typed inputs, outputs, and
+semantic ports. Put backend-neutral domain constraints in `capability.yaml` and put known answers,
+boundary cases, tolerances, and invariants that every Implementation must pass in
+`conformance.yaml`.
 
-The generator creates exactly one direct child,
-`categories/statistics/arithmetic_mean/`, containing the five canonical files. It
-does not run Git commands and does not create anything outside this project.
+Do not place Method interpretation, Backend behavior, provider responses, or implementation-only
+evidence in Capability conformance.
 
-Every generated contract requires four discovery fields:
+## Register a Backend, Adapter, and Implementation
 
-- `aliases`: bounded natural-language names a user might supply;
-- `intents`: stable lower-snake-case task identifiers;
-- `input_concepts`: stable identifiers for the information the method consumes;
-- `output_concepts`: stable identifiers for what it produces.
+Backend records own locality, transport, network, credential, licensing, entitlement, and
+data-egress boundaries. They contain no secrets.
 
-These fields are an authored routing contract, not marketing keywords. Keep them specific, avoid
-synonym stuffing, and use `do_not_use_when` and `unsupported_scope` for adjacent requests the
-component must not answer.
+Adapter records identify the trusted distribution and dispatch surface. Adapter code lives in an
+independently installable distribution where practical and owns only canonical mapping, one exact
+Backend invocation, safe failure translation, and cleanup.
 
-Every completed component must also attach at least one input and one output semantic port with
-`defined_quant_protocol.semantic_port_metadata()`. The closed port describes direction, concept,
-unit, shape, cardinality, convention, ordering, frequency, and provenance requirement. Reuse the
-protocol vocabulary exactly; do not add loose `unit`, `convention`, or component-specific sibling
-keys to `json_schema_extra`.
+Implementation records bind one Capability to exact Backend roles and one Adapter. The
+Implementation alone owns the exact distribution version and artifact hash. Its dependency probes
+may describe realization-specific installation facts but must not duplicate Backend operational
+requirements.
 
-Treat existing intent and concept identifiers as a derived catalog vocabulary. Before introducing
-a new identifier, inspect the current facets with `search_catalog.py --json` and reuse an exact
-existing value when the semantics truly match. Put natural-language synonyms in `aliases`; do not
-create synonymous concept IDs. A new concept must describe a genuinely distinct input or output
-contract and should be justified in review.
+Do not add a production external-Backend record before the real Adapter and scoped evidence exist.
+An installed package is an availability fact, not policy admission or trust.
 
-## Search as a developer or agent
+## Validate and build the registry
 
-Search reads contract files only; it does not import component Python:
+Run the focused methods-first suite:
 
 ```bash
-uv run python authoring/search_catalog.py "calculate returns from prices"
-uv run python authoring/search_catalog.py "" \
-  --category market_data \
-  --input-concept price_series \
-  --profile time_series
-uv run python authoring/search_catalog.py "period price change" --json
+uv run pytest tests/registry tests/methods tests/capabilities tests/implementations tests/adapters tests/product
 ```
 
-Ranking is deterministic and returns explicit positive matches separately from boundary matches.
-Values within one filter facet are ORed; populated facets are ANDed. Blank search lists the
-filtered catalog. The result limit is bounded to 100. Static catalog schema version 2 binds the
-exported discovery shape and the ranking semantics it declares. The repo-local adapter responses
-remain adapter schema version 1; that transport version is separate from the static export schema.
-Changing either public shape requires an explicit version decision so clients cannot silently
-diverge.
+Compile authored YAML into the deterministic metadata-only bundle used by the core wheel:
 
-## Check the catalog
+```bash
+uv run python authoring/build_registry_bundle.py --output dist/registry.json
+```
 
-Check everything:
+The build validates closed protocol records, exact references, canonical ordering, schema
+authority, Recipe dataflow, evidence subjects, Backend/Implementation consistency, and prohibited
+secret or executable control fields. Runtime discovery reads the compiled inert JSON and does not
+need PyYAML.
+
+## Export website Component pages
+
+The website term “Component page” is a presentation projection, not an executable component. Export
+the deterministic joined record with:
+
+```bash
+uv run python authoring/export_component_pages.py
+```
+
+The exporter joins Methods, Capabilities, registered Implementations, backend kinds, separated
+evidence, and trust boundaries without importing Adapter code. It reports registered support, not
+installation-specific availability. The private website consumes only the generated static JSON.
+
+## Legacy compatibility maintenance
+
+The old five-file authoring and catalog tools are maintenance-only and are removed on
+**2026-12-31 or the first 0.2.0 release, whichever comes first**. Do not add a Method or extend the
+component hierarchy through this path. The seven folders under
+`categories/<category>/<component>/` are preserved behavior fixtures, not financial sources of
+truth.
+
+When repairing that temporary compatibility surface, the bounded old commands are:
 
 ```bash
 uv run python authoring/check_component.py
-```
-
-Check one component while editing it:
-
-```bash
-uv run python authoring/check_component.py \
-  categories/statistics/arithmetic_mean
-```
-
-The checker validates the two-level folder rule, both JSON Schemas, the Pydantic
-model declarations, closed and correctly directed semantic-port metadata, declarative constraint
-references, executable evidence inputs and output
-paths, invariant-to-test references, agent-case output fields, and a component’s subject-hash
-binding. Every `Output`
-must extend `defined_quant.types.ComponentOutput`, which supplies the shared provenance,
-interpretation, and visualization envelope. The checker also guarantees that a catalog-wide
-adapter can invoke every component uniformly: every `Inputs` field must be accepted by the
-component callable as a keyword (or through `**kwargs`), with no positional-only parameters or
-hidden required arguments. Legacy split contracts and empty optional files are rejected.
-
-Known answers, boundary cases, and cross-checks use one closed fixture and assertion vocabulary
-and are collected directly from `evidence.yaml` by pytest. The only reserved fixture objects are
-`$float` for explicitly tagged non-finite boundary values and `$repeat` for bounded repeated
-values. An input rejected by its Pydantic model uses the closed `input_validation_error` outcome
-with exact JSON-pointer field paths and stable Pydantic error types; contract `domain_error`
-violations remain a separate outcome. Agent cases provide structured adapter inputs and expected
-compute, ask, or refusal outcomes. Invariants remain hand-written property tests referenced by
-`test_id`.
-
-Once every generated evidence case and referenced invariant passes, bind the evidence to the exact
-current behaviour:
-
-```bash
-uv run python authoring/check_component.py \
-  --bless categories/statistics/arithmetic_mean
-```
-
-`--bless` refuses scaffold `TODO`s, missing evidence, failed tests, and skipped
-evidence tests.
-
-## Export static website data
-
-The website never imports or executes component Python. Component CI validates the
-catalog and creates a deterministic JSON artifact instead:
-
-```bash
-uv run python authoring/export_catalog.py \
-  --commit-sha "$GITHUB_SHA" \
-  --release-version "0.1.0" \
-  --release-label "Experimental Technical Preview"
-```
-
-The default output is `dist/catalog/catalog.json`. Catalog schema v2 contains no timestamp or
-local filesystem path, and its component order and JSON keys are stable. Each component exposes
-group, tags, discovery metadata, positive use cases, negative boundaries, assumptions,
-limitations, trust data, and deterministic JSON Schemas generated from its canonical Pydantic
-`Inputs` and `Output` models. Those schemas carry the closed `x-defined-quant-port` extensions
-consumed by websites and composition tools. The top-level `operation_protocol` record exports request, manifest,
-success, failure, and result schemas directly from `defined_quant_protocol`; the same canonical
-descriptor labels this operation path `unmanaged` and publishes its hash framing, domain, and
-verification vector. Sorted facet arrays cover categories, groups, tags, intents, input concepts,
-output concepts, lifecycles, and profiles. The private website can pin and consume that file as
-data.
-
-Schema export imports each component model only inside this authoring command. A website or other
-consumer reads the generated JSON and never imports or executes component Python.
-
-The exported `numerical: author_supplied` enum reports author-asserted numerical evidence, alongside
-`exact_sha_attestation: none` and `domain_review: none`. A future CI attestation step must derive
-and replace the exact-commit value only after proving that the checks ran for the exact release
-commit; authors cannot claim it through a command-line flag. Every current component remains
-lifecycle `draft` regardless of an export or successful engineering check.
-
-For local development, omit the release arguments:
-
-```bash
+uv run python authoring/check_component.py categories/<category>/<component>
+uv run python authoring/search_catalog.py "compatibility query"
 uv run python authoring/export_catalog.py
 ```
 
-The exporter uses the current Git commit and labels the result as a development
-catalog.
-
-## Schemas
-
-- `schemas/contract.schema.json` validates the merged component contract, including
-  nested `guidance` and `display`.
-- `schemas/evidence.schema.json` defines the closed executable numerical and agent-case DSL.
-
-The Pydantic models in `component.py` remain the source of truth for input/output
-types, units, and answer-changing defaults. Neither YAML schema duplicates them.
+Legacy `component.py`, `contract.yaml`, `evidence.yaml`, and `subject_hash` govern only the old
+direct execution path until deletion; they never define the canonical Method or Capability.

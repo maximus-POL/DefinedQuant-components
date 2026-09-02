@@ -1,0 +1,16 @@
+schema_version: 1
+id: evidence.implementation.dq_native.rebased_price_index
+version: 1.0.0
+subject: {kind: implementation, id: dq_native.rebased_price_index, version: 1.0.0}
+status: {label: Experimental Technical Preview}
+artifact: {kind: installed_distribution_manifest, distribution: defined-quant-adapter-dq-native, version: 1.0.0, manifest: registry/artifacts/defined_quant_adapter_dq_native/manifest.json, hash: {algorithm: sha256, canonicalization: defined_quant_canonical_json_v1, domain: registry.artifact.installed_distribution_manifest, value: 134285caaa1af8f3755721defa30efda12bdf556e26d3ed5477efdfee869a48c}}
+conformance:
+  capability: {id: prices.rebase, version: 1.0.0}
+  suite: registry/capabilities/prices/rebase/conformance.yaml
+  tests:
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_case
+    - tests/capabilities/test_registered_conformance.py::test_registered_conformance_invariant
+evidence: [{id: deterministic_binary64_kernel, kind: source_and_test_review, description: Local explicit-base rebasing with exact-rational fallback for avoidable binary64 range loss.}]
+migration: {legacy_component: {id: dq.market_data.rebased_price_index, version: 0.1.2, subject_hash: a282e21ee13d142c09b8e8f236fa9d0d2fcd8907db462f45929e64cdf0182c88, meaning: Migration provenance only; the legacy hash is not a methods-first identity.}}
+review: {engineering: author_reviewed, capability_conformance: author_asserted, domain: none, independent_reproduction: none}
+non_claims: [Installation alone does not make this implementation eligible under host policy., This evidence does not authenticate input data or independently reproduce a run.]

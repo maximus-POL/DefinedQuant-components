@@ -15,9 +15,13 @@ def test_core_and_mcp_dependencies_remain_separate() -> None:
     transport = tomllib.loads((MCP_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert core["project"]["dependencies"] == ["pydantic>=2.7,<3"]
     assert transport["project"]["dependencies"] == [
+        "defined-quant-adapter-dq-native==1.0.0",
         "defined-quant==0.1.3",
         "mcp==2.0.0",
     ]
+    assert transport["tool"]["uv"]["sources"]["defined-quant-adapter-dq-native"] == {
+        "path": "../adapters/dq_native"
+    }
     assert all(
         not dependency.startswith("mcp-types")
         for dependency in transport["project"]["dependencies"]

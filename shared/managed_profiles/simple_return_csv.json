@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "policy_id": "simple_return_csv",
+  "version": "1.0.10",
+  "components": [
+    {
+      "profile_id": "simple_return_csv",
+      "component": {
+        "id": "dq.market_data.simple_return",
+        "version": "0.3.4",
+        "subject_hash": "ca4790d64d5405b7444eaebeee96b2f3257d7260efeb38262194c11617b9b87a"
+      },
+      "allowed_lifecycle": "draft",
+      "require_explicit_opt_in": true,
+      "requirements": [
+        {
+          "field": "timestamps",
+          "failure_code": "managed_timestamp_required",
+          "require_non_null": true,
+          "require_non_empty": true
+        }
+      ]
+    }
+  ]
+}

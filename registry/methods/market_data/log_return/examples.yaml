@@ -1,0 +1,16 @@
+schema_version: 1
+method: {id: dq.market_data.log_return, version: 1.0.0}
+examples:
+  - id: three_adjusted_prices
+    title: Two adjacent log returns
+    input:
+      prices: [100.0, 105.0, 102.9]
+      price_kind: adjusted
+      timestamps: null
+      declared_frequency: null
+    conformance_case:
+      capability: {id: returns.log, version: 1.0.0}
+      id: three_prices_known_answer
+    interpretation: >-
+      The outputs are approximately 0.04879 and -0.02020 log units. Their sum equals the
+      terminal-to-initial log price difference within the declared tolerance.

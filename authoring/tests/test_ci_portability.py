@@ -9,9 +9,10 @@ from typing import Any
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "components.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "defined-quant.yml"
 RUNNER = ROOT / "authoring" / "run_native_wheel_matrix.py"
 ISOLATION_PLUGIN = ROOT / "authoring" / "pytest_wheel_isolation.py"
+RELEASE_EXTRAS = ROOT / "authoring" / "prepare_release_extras.py"
 
 
 def _workflow() -> tuple[str, dict[str, Any]]:
@@ -110,3 +111,14 @@ def test_native_runner_covers_every_required_behavior_from_installed_wheels() ->
         "mcp_server/tests/test_server.py",
     ):
         assert required_module in isolation
+
+
+def test_release_extras_publish_the_canonical_component_page_artifact() -> None:
+    workflow_text, _workflow_data = _workflow()
+    release_extras = RELEASE_EXTRAS.read_text(encoding="utf-8")
+
+    assert '"export_component_pages.py"' in release_extras
+    assert '"component-pages.json"' in release_extras
+    assert '"export_catalog.py"' not in release_extras
+    assert "dist/catalog/component-pages.json" in workflow_text
+    assert "dist/catalog/catalog.json" not in workflow_text

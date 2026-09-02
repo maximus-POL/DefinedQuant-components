@@ -1,0 +1,28 @@
+schema_version: 1
+id: evidence.method.dq.market_data.monthly_return_matrix
+version: 1.0.0
+subject: {kind: method, id: dq.market_data.monthly_return_matrix, version: 1.0.0}
+status:
+  label: Experimental Technical Preview
+  lifecycle: draft
+evidence:
+  - id: composed_worked_example
+    kind: author_derivation
+    description: The cross-year example is split across calculation and calendar conformance cases.
+    references:
+      - capability: {id: returns.simple, version: 1.0.0}
+        case: monthly_cross_year_known_answer
+      - capability: {id: returns.monthly_calendar_matrix, version: 1.0.0}
+        case: cross_year_known_answer
+  - id: scope_review
+    kind: authored_scope_review
+    description: Completed-month, price-kind, consecutive-month, and non-seasonality boundaries are explicit.
+review:
+  engineering: author_reviewed
+  domain: none
+  independent_reproduction: none
+non_claims:
+  - No independent domain review has been performed.
+  - Draft lifecycle and authored evidence do not establish production readiness.
+  - Method evidence does not authenticate a dataset, provider, adapter, or execution.
+  - The calendar matrix is not evidence of statistically significant seasonality.

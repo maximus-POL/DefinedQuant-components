@@ -10,8 +10,8 @@ venv/
 /dist/
 /build/
 /docs/*
-!/docs/COMPONENT_IDEAS.md
-!/docs/GOVERNED_PLAN_COMPILER_V1.md
+!/docs/METHOD_IDEAS.md
+!/docs/GOVERNED_PLAN_COMPILER.md
 !/docs/LOCAL_MCP_ALPHA_DESIGN.md
 !/docs/local_mcp/
 !/docs/local_mcp/*.json

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from defined_quant_protocol import (
-    CapabilityKind,
     CapabilitySpecV1,
     ComponentRef,
     ConstraintComparisonV1,
@@ -15,7 +14,6 @@ from defined_quant_protocol import (
     ConstraintMeasure,
     ConstraintOperandV1,
     ConstraintOperator,
-    ConstraintSeverity,
     ConstraintSpecV1,
     ConventionSpecV1,
     DefaultSpecV1,
@@ -30,9 +28,13 @@ from defined_quant_protocol import (
     SemanticPort,
     TransportLocality,
     TransportMetadataV1,
-    TrustDimension,
     TrustedAdapterV1,
     canonical_json_bytes,
+)
+from defined_quant_protocol.governance import (
+    CapabilityKind,
+    ConstraintSeverity,
+    TrustDimension,
 )
 from pydantic import JsonValue
 

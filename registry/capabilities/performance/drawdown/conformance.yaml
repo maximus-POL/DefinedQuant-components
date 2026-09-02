@@ -1,0 +1,97 @@
+schema_version: 1
+capability:
+  id: performance.drawdown
+  version: 1.0.0
+numeric_model:
+  input: finite_ieee_754_binary64
+  output: finite_ieee_754_binary64
+cases:
+  - id: recovered_episode_known_answer
+    kind: known_answer
+    input:
+      prices: [100.0, 120.0, 90.0, 84.0, 108.0, 120.0]
+      timestamps: null
+    expected:
+      outcome: success
+      output:
+        drawdowns: [0.0, 0.0, -0.25, -0.3, -0.1, 0.0]
+        maximum_drawdown: -0.3
+        running_peak_indices: [0, 1, 1, 1, 1, 5]
+        peak_index: 1
+        trough_index: 3
+        recovery_index: 5
+        recovered: true
+        drawdown_timestamps: null
+        peak_timestamp: null
+        trough_timestamp: null
+        recovery_timestamp: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: single_observation
+    kind: boundary
+    input: {prices: [42.0], timestamps: null}
+    expected:
+      outcome: success
+      output:
+        drawdowns: [0.0]
+        maximum_drawdown: 0.0
+        running_peak_indices: [0]
+        peak_index: 0
+        trough_index: 0
+        recovery_index: 0
+        recovered: true
+        drawdown_timestamps: null
+        peak_timestamp: null
+        trough_timestamp: null
+        recovery_timestamp: null
+        ordering_status: unverified
+      tolerance: {relative: 0.0, absolute: 0.0}
+  - id: unrecovered_episode
+    kind: boundary
+    input: {prices: [100.0, 80.0, 90.0], timestamps: null}
+    expected:
+      outcome: success
+      output:
+        drawdowns: [0.0, -0.2, -0.1]
+        maximum_drawdown: -0.2
+        running_peak_indices: [0, 0, 0]
+        peak_index: 0
+        trough_index: 1
+        recovery_index: null
+        recovered: false
+        drawdown_timestamps: null
+        peak_timestamp: null
+        trough_timestamp: null
+        recovery_timestamp: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: equal_high_replaces_peak
+    kind: boundary
+    input: {prices: [100.0, 100.0, 80.0], timestamps: null}
+    expected:
+      outcome: success
+      output:
+        drawdowns: [0.0, 0.0, -0.2]
+        maximum_drawdown: -0.2
+        running_peak_indices: [0, 1, 1]
+        peak_index: 1
+        trough_index: 2
+        recovery_index: null
+        recovered: false
+        drawdown_timestamps: null
+        peak_timestamp: null
+        trough_timestamp: null
+        recovery_timestamp: null
+        ordering_status: unverified
+      tolerance: {relative: 1.0e-12, absolute: 1.0e-12}
+  - id: non_positive_price
+    kind: invalid_input
+    input: {prices: [100.0, 0.0], timestamps: null}
+    expected: {outcome: failure, code: non_positive_prices}
+invariants:
+  - id: scale_invariance
+    statement: Positive price scaling leaves drawdowns and the selected episode unchanged.
+  - id: non_decreasing_zero
+    statement: A non-decreasing path has exact zero drawdowns and maximum drawdown.
+  - id: earliest_deepest_trough
+    statement: Tied deepest drawdowns select the earliest trough.

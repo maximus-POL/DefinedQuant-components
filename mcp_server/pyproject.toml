@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 dependencies = [
+  "defined-quant-adapter-dq-native==1.0.0",
   "defined-quant==0.1.3",
   "mcp==2.0.0",
 ]
@@ -16,6 +17,7 @@ defined-quant-mcp = "defined_quant_mcp.server:main"
 [dependency-groups]
 dev = [
   "mypy",
+  "pyyaml",
   "pytest",
   "ruff",
 ]
@@ -28,6 +30,7 @@ build-backend = "hatchling.build"
 packages = ["src/defined_quant_mcp"]
 
 [tool.uv.sources]
+defined-quant-adapter-dq-native = { path = "../adapters/dq_native" }
 defined-quant = { path = "..", editable = true }
 
 [tool.pytest.ini_options]

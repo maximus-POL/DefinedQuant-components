@@ -46,7 +46,7 @@ def main() -> int:
         assert MAX_WORKER_MEMORY_BYTES == 512 * 1024 * 1024
         assert utf8_lf_frame('{"ok":true}') == b'{"ok":true}\\n'
         assert local_host_platform().provider_id in {"darwin", "linux", "win32"}
-        reference = load_execution_policy("simple_return_csv_v1").components[0].component
+        reference = load_execution_policy("simple_return_csv").components[0].component
         request = OperationRequest(
             component=reference,
             input={"prices": [100, 101], "price_kind": "adjusted"},
