@@ -364,6 +364,51 @@ def test_automatic_resolution_compiles_exact_simple_return_implementation() -> N
     assert outcome.runtime_fallback_allowed is False
 
 
+@pytest.mark.parametrize("prices", ([100.0], "not a list"))
+def test_schema_invalid_financial_input_is_not_reported_as_an_invalid_convention(
+    prices: Any,
+) -> None:
+    registry = _registry()
+    proposal = PlanProposal(
+        method_id="dq.market_data.simple_return",
+        method_version="1.0.0",
+        financial_inputs={"prices": prices},
+        conventions={"price_kind": "adjusted"},
+    )
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "invalid_input"
+    assert outcome.fields == ("prices",)
+
+
+def test_schema_invalid_convention_remains_an_invalid_convention() -> None:
+    registry = _registry()
+    proposal = PlanProposal(
+        method_id="dq.market_data.simple_return",
+        method_version="1.0.0",
+        financial_inputs={"prices": [100.0, 101.0]},
+        conventions={"price_kind": "split_adjusted"},
+    )
+
+    outcome = compile_plan(
+        proposal,
+        registry=registry,
+        policy=_policy(registry),
+        availability=_availability(registry),
+    )
+
+    assert isinstance(outcome, PlanRefusal)
+    assert outcome.code.value == "invalid_convention"
+    assert outcome.fields == ("price_kind",)
+
+
 def test_user_constraint_requires_a_host_verified_origin_receipt() -> None:
     registry = _registry()
     constraint = _required_backend(registry)

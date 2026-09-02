@@ -18,7 +18,7 @@ from defined_quant.constraint_evaluation import (
     evaluate_constraint,
 )
 from defined_quant.registry import ProtocolRegistry
-from defined_quant.schema_validation import validate_instance
+from defined_quant.schema_validation import schema_matches, validate_instance
 from defined_quant_protocol import (
     AdapterSpec,
     AppliedDefault,
@@ -328,6 +328,23 @@ def _input_questions(
     )
 
 
+def _invalid_schema_fields(
+    values: Mapping[str, Any],
+    properties: Mapping[str, Any],
+    root_schema: Mapping[str, Any],
+) -> tuple[str, ...]:
+    invalid: list[str] = []
+    for field, value in values.items():
+        field_schema = properties.get(field)
+        if not isinstance(field_schema, Mapping) or not schema_matches(
+            value,
+            field_schema,
+            root_schema,
+        ):
+            invalid.append(field)
+    return tuple(sorted(invalid, key=lambda item: item.encode("utf-8")))
+
+
 def _resolved_inputs(
     proposal: PlanProposal,
     method: MethodSpec,
@@ -374,12 +391,29 @@ def _resolved_inputs(
             name=f"method {method.id} input",
         )
     except ValueError as exc:
-        code = (
-            PlanRefusalCode.INVALID_CONVENTION
-            if set(conventions) & convention_fields
-            else PlanRefusalCode.INVALID_INPUT
+        invalid_conventions = _invalid_schema_fields(
+            conventions,
+            raw_properties,
+            method.input_schema,
         )
-        return _refusal(proposal, code, str(exc))
+        invalid_inputs = _invalid_schema_fields(
+            financial_inputs,
+            raw_properties,
+            method.input_schema,
+        )
+        if invalid_conventions:
+            return _refusal(
+                proposal,
+                PlanRefusalCode.INVALID_CONVENTION,
+                str(exc),
+                fields=invalid_conventions,
+            )
+        return _refusal(
+            proposal,
+            PlanRefusalCode.INVALID_INPUT,
+            str(exc),
+            fields=invalid_inputs,
+        )
     return (
         financial_inputs,
         conventions,
